@@ -1,0 +1,2 @@
+rm -f example *.hs *.o *.hi
+
