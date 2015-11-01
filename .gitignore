@@ -37,3 +37,4 @@ testing/test_files/
 *.vrb
 *.nav
 *.toc
+dist
