@@ -8,6 +8,7 @@ module Main where
 
 %token
 	begin	{BEGIN}
+	is 	{IS}
 	end	{end}
 	skip	{SKIP}
 	read	{READ}
@@ -54,8 +55,8 @@ module Main where
 	&&	{AND}
 	||	{OR}
 
-	(	{LEFTPARENTHESIS}
-	) 	{RIGHTPARENTHESIS}
+	'('	{LEFTPARENTHESIS}
+	')' 	{RIGHTPARENTHESIS}
 	,	{PARAMSEPARATOR}
 	= 	{ASSIGN}
 	[	{LEFTBRACKET}
@@ -69,11 +70,11 @@ module Main where
 	
 %%
 
-Program : begin Func* Stat end
+Program : begin Func* Stat end				{ begin $2 $3 end } 
 
-Func : Type Ident (, Param)*
+Func : Type Ident '(' ParamList? ')' is Stat end 	{ 
 
-Param-List : Param (, Param)*
+Param-List : Param '(', Param')'*
 
 Param : Type Ident
 
@@ -97,9 +98,9 @@ Assign-LHS : Ident
 
 Assign-RHS : Expr
 	| Array-Liter
-	| newpair ( Expr , Expr )
+	| newpair '(' Expr , Expr ')'
 	| Pair-Elem
-	| call Ident ( Arg-List? )
+	| call Ident '(' Arg-List? ')'
 	
 Arg-List : Expr (, Expr)*
 
@@ -110,43 +111,61 @@ Type : Base-Type
 	| Array-Type
 	| pair
 
-Expr : Int-Liter
-	| Bool-Liter
-	| Char-Liter
-	| Str-Liter
-	| Pair-Liter
-	| Ident
-	| Array-Elem
-	| Unary-Oper Expr
-	| Expr Binary-Oper Expr
-	| ( Expr )
+BaseType : int						{Int $1}
+	| bool						{Bool $1}
+	| char 						{Char $1}
+	| string					{String $1}
 
-Unary-Oper : !|-|len|ord|chr
+ArrayType : Type [ ] 				
 
-Binary-Oper : *|/|%|+|-|>|>=|<|<=|==|!=|&&|||
+PairType : pair '(' PairElemType , PairElemType ')'
+
+PairElemType : BaseType
+	| ArrayType
+	| pair
+
+Expr : IntLiter						{IntLiter $1}
+	| BoolLiter					{BoolLiter $1}
+	| CharLiter					{CharLiter $1}
+	| StrLiter					{StrLiter $1}	
+	| PairLiter					{PairLiter $1}
+	| Ident						{Ident $1}
+	| ArrayElem					{ArrayElem $1}
+	| UnaryOper Expr				{UnaryOper $2}
+	| Expr BinaryOper Expr				{BinaryOper $1 $3}
+	| ( Expr )					{}
+
+UnaryOper : !|-|len|ord|chr
+
+BinaryOper : *|/|%|+|-|>|>=|<|<=|==|!=|&&|||
 
 Ident : (_|a-z|A-Z)(_|a-z|A-Z|0-9)*
 
-Array-Elem : Ident [ Expr ] + 
+ArrayElem : Ident ([ Expr ])+ 
 
-Int-Liter : Int-Sign? Digit+
+IntLiter : IntSign? Digit+
 
-Digit : 0-9
+Digit : (0-9)
 
-Int-Sign : +|-
+IntSign : +|-
 
-Bool-Liter : true|false
+BoolLiter : true|false
 
-Char-Liter : 'Character'
+CharLiter : 'Character'
 
-Str-Liter : " Character* "
+StrLiter : " Character* "
 
 Character : ???
 
-Escaped-Char : 0|b|t|n|f|r|"|'|\
+EscapedChar : 0|b|t|n|f|r|"|'|\
 
-Array-Liter : [ Expr (, Expr)*)? ]
+ArrayLiter : [ (Expr (, Expr)*)? ]
 
-Pair-Liter : null
+PairLiter : null
 
 Comment : #()*
+
+parseError :: [Token] -> a
+parseError _ = error "Parse Error"
+
+d
