@@ -7,37 +7,60 @@ module Main (main) where
 $digit = 0-9			-- digits
 $alpha = [a-zA-Z]		-- alphabetic characters
 $underscore = \_
--- $binOp = [ \* \/ \% \+ \- \> \>= \< \<= \== \!= \&& \|| ]
--- $binOp = \* | \/ | \% | \+ | \- | \> | \>= | \< | \<= | \== | \!= | \&& | \|| 
+
+
 tokens :-
+
+-- Whitespace
   $white+				;
-  \! | \- | len | ord | chr		{ \s -> UnaryOp s }
---   $binOp						{ \s -> BinOp s}
-  "--".*				;
-  \* | \/ | \% | \+ | \- | \> | \>= | \< | \<= | \== | \!= | \&& | \|\|	{ \s -> BinOp s}
-  let					{ \s -> Let }
-  in					{ \s -> In }
-  $digit+				{ \s -> Int (read s) }
-  [\=\+\-\*\/\(\)]			{ \s -> Sym (head s) }
-  j{5}					{ \s -> MUCHASJOTAS}
-  [\! \-]	{ \s -> UnaryOp s }
+
+-- Symbols
+  "," 			{ \s -> TokComma }
+  ";"			{ \s -> TokSemicol }
+  "["			{ \s -> TokLBrack }
+  "]"			{ \s -> TokRBrack }
+  "("			{ \s -> TokLParen }
+  ")"			{ \s -> TokRParen }
+
+-- Operators
+  \! | \* | \/ | \% | \+ | \- | \> | \>= | \< | \<= | \== | \!= | \&& 
+	| \|\|													{ \s -> TokOp s}
+
+-- Assign Operator
+  "="			{\s -> TokEqual }
+
+-- Program Keywords
+  begin | end | is | skip | read | free | return | exit | print | println 
+	| if | then | else | fi | while | do | done | newpair | call | fst | snd | int 
+	| bool | char | string | pair | len | ord | chr | null | true | false
+		{ \s -> TokKeyword s}
+
+-- Identifier
+  ($underscore | $alpha) ($underscore | $alpha | $digit)* 	{ \s -> TokIdent s}
   
-  $alpha [$alpha $digit \_ \']*		{ \s -> Var s }
+-- Comments
+  "#".*(\n)				;	
+
+-- Integer
+  $digit+				{ \s -> TokInt s }
+  
 
 {
 -- Each action has type :: String -> Token
 
 -- The token type:
 data Token =
-	UnaryOp String |
-	BinOp String |
-	Let 		|
-	In  		|
-	Sym Char	|
-	Var String	|
-	Int Int		|
-	Underscore	|
-	MUCHASJOTAS
+	TokOp String	|
+	TokIdent String |
+	TokKeyword String |
+	TokInt String | 
+	TokComma   | 
+	TokSemicol |
+	TokLBrack  |
+	TokRBrack  |
+	TokLParen  |
+	TokEqual   |
+	TokRParen 
 	deriving (Eq,Show)
 
 main = do
