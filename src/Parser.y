@@ -70,18 +70,20 @@ module Main where
 	
 %%
 
-Program : begin Func* Stat end				{ begin $2 $3 end } 
+FuncList : Func FuncList | nil 
 
-Func : Type Ident '(' ParamList? ')' is Stat end 	{ 
+Program : begin FuncList Stat end				{ begin $2 $3 end } 
 
-Param-List : Param '(', Param')'*
+Func : Type Ident '(' ParamList ')' is Stat end 
+
+ParamList : Param , ParamList | 
 
 Param : Type Ident
 
 Stat : skip
-	| Type Ident = Assign-RHS
-	| Assign-LHS = Assign-RHS
-	| read Assign-LHS
+	| Type Ident = AssignRHS
+	| AssignLHS = AssignRHS
+	| read AssignLHS
 	| free Expr
 	| return Expr	
 	| exit Expr
@@ -92,23 +94,25 @@ Stat : skip
 	| begin Stat end
 	| Stat ; Stat
 
-Assign-LHS : Ident
-	| Array-Elem
-	| Pair-Elem
+AssignLHS : Ident
+	| ArrayElem
+	| PairElem
 
-Assign-RHS : Expr
-	| Array-Liter
+AssignRHS : Expr
+	| ArrayLiter
 	| newpair '(' Expr , Expr ')'
 	| Pair-Elem
-	| call Ident '(' Arg-List? ')'
+	| call Ident '(' ArgList ')'
 	
-Arg-List : Expr (, Expr)*
+ExprList : Expr ExprList | 
 
-Pair-Elem : fst Expr
+ArgList : Expr , ExprList
+
+PairElem : fst Expr
 	| snd Expr
 
-Type : Base-Type
-	| Array-Type
+Type : BaseType
+	| ArrayType
 	| pair
 
 BaseType : int						{Int $1}
@@ -151,9 +155,9 @@ IntSign : +|-
 
 BoolLiter : true|false
 
-CharLiter : 'Character'
+CharLiter : ' Character '
 
-StrLiter : " Character* "
+StrLiter : " Characters "
 
 Character : ???
 
@@ -168,4 +172,10 @@ Comment : #()*
 parseError :: [Token] -> a
 parseError _ = error "Parse Error"
 
-d
+data Expr 
+  = LitExpr | VarExpr String | ArrayExpr [Expr] | UnExpr String | BinExpr String
+
+data Statement
+  = Skip | VarState | AssignState | ReadState | MemFreeState | Return | Exit | Print | CondBranch | While | ScopingState | SequentialComp
+
+    
