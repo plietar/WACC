@@ -7,7 +7,8 @@ module Main (main) where
 $digit = 0-9			-- digits
 $alpha = [a-zA-Z]		-- alphabetic characters
 $underscore = \_
-
+$graphic    = $printable # $white
+@string     = \" ($graphic # \")* \"
 
 tokens :-
 
@@ -28,6 +29,12 @@ tokens :-
 
 -- Assign Operator
   "="			{\s -> TokEqual }
+
+-- Boolean Literals
+  true | false 		{ \s -> TokBool s }
+
+-- Character Literals
+  @string 	{ \"'":s:"'":rest -> TokString s } 
 
 -- Program Keywords
   begin | end | is | skip | read | free | return | exit | print | println 
@@ -59,8 +66,10 @@ data Token =
 	TokLBrack  |
 	TokRBrack  |
 	TokLParen  |
+	TokRParen  |
 	TokEqual   |
-	TokRParen 
+	TokBool String |
+	TokString String
 	deriving (Eq,Show)
 
 main = do
