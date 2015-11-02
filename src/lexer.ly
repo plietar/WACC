@@ -7,65 +7,65 @@ module Main where
 %error { parseError }
 
 %token
-	begin	{BEGIN}
-	is 	{IS}
-	end	{end}
-	skip	{SKIP}
-	read	{READ}
-	free	{FREE}
-	return	{RETURN}
-	exit	{EXIT}
-	print	{PRINT}
-	println	{PRINTLN}
-	is	{IS}
-	if	{IF}
-	then	{THEN}
-	else	{ELSE}
-	fi	{FINISH}		
-	while	{WHILE}	
-	do	{DO}
-	done	{DONE}	
-	newpair	{NEWPAIR}
-	call	{CALL}
-	fst	{FST}
-	snd	{SND}
-	int	{INT}
-	bool	{BOOL}
-	char	{CHAR}
-	string	{STRING}
-	pair	{PAIR}
+	begin	{TokBegin}
+	is 	{TokIs}
+	end	{TokEnd}
+	skip	{TokSkip}
+	read	{TokRead}
+	free	{TokFree}
+	return	{TokReturn}
+	exit	{TokExit}
+	print	{TokPrint}
+	println	{TokPrintln}
+	is	{TokIs}
+	if	{TokIf}
+	then	{TokThen}
+	else	{TokElse}
+	fi	{TokFinish}		
+	while	{TokWhile}	
+	do	{TokDo}
+	done	{TokDone}	
+	newpair	{TokNewpair}
+	call	{TokCall}
+	fst	{TokFst}
+	snd	{TokSnd}
+	int	{TokInt}
+	bool	{TokBool}
+	char	{TokChar}
+	string	{TokString}
+	pair	{TokPair}
 	
-	!	{NOT}
-	-	{NEGATIVE}
-	len	{LEN}
-	ord	{ORD}
-	chr	{CHR}
+	!	{TokNot}
+	-	{TokNegative}
+	len	{TokLen}
+	ord	{TokOrd}
+	chr	{TokChr}
 	
-	*	{MULTIPLY}
-	/	{DIV}
-	%	{MOD}
-	+	{ADD}
-	-	{MINUS}
-	>	{GREATERTHAN}
-	>=	{GREATEROREQUAL}
-	<	{LESSTHAN}
-	<=	{LESSTHANOREQUAL}
-	==	{EQUAL}
-	!=	{NOTEQUAL}
-	&&	{AND}
-	||	{OR}
+	*	{TokMultiply}
+	/	{TokDiv}
+	%	{TokMod}
+	+	{TokAdd}
+	-	{TokMinus}
+	>	{TokGT}
+	>=	{TokGTE}
+	<	{TokLT}
+	<=	{TokLTE}
+	==	{TokDoubleEqual}
+	!=	{TokNotEqual}
+	&&	{TokAnd}
+	||	{TokOr}
 
-	'('	{LEFTPARENTHESIS}
-	')' 	{RIGHTPARENTHESIS}
-	,	{PARAMSEPARATOR}
-	= 	{ASSIGN}
-	[	{LEFTBRACKET}
-	] 	{RIGHTBRACKET}
+	'('	{TokLParen}
+	')' 	{TokRParen}
+	,	{TokComma}
+	= 	{TokEqual}
+	[	{TokLBracket}
+	] 	{TokRBracket}
 
-	#	{COMMENT}
+	#	{TokComment}
 
-	true 	{TRUE}
-	false 	{FALSE}
+	true 	{TokTrue}
+	false 	{TokFalse}
 
 	
 %%
