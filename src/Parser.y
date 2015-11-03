@@ -81,93 +81,112 @@ module Parser where
 
 %%
 
-Program: begin FuncList_rev Block end { Program (reverse $2) $3 }
+Program
+  : begin FuncList_rev Block end { Program (reverse $2) $3 }
 
 -- For some reason many(Func) causes a shift-reduce conflict when used in Program
-FuncList_rev: FuncList_rev Func { $2 : $1 }
-            | { [] }
+FuncList_rev
+  : FuncList_rev Func { $2 : $1 }
+  | { [] }
 
-Func :: { FuncDef }
-Func : Type IDENT '(' sepBy(Param, ',') ')' is Block end
-      { FuncDef $1 $2 $4 $7 }
+Func
+  : Type IDENT '(' sepBy(Param, ',') ')' is Block end { FuncDef $1 $2 $4 $7 }
 
-BaseType: int { TyInt }
-        | bool { TyBool }
-        | char { TyChar }
-        | string { TyString }
+BaseType
+  : int { TyInt }
+  | bool { TyBool }
+  | char { TyChar }
+  | string { TyString }
 
-PairElemType: BaseType { $1 }
-            | ArrayType { $1 }
-            | pair { TyNestedPair }
+PairElemType
+  : BaseType { $1 }
+  | ArrayType { $1 }
+  | pair { TyNestedPair }
 
-ArrayType: Type '[' ']' { TyArray $1 }
-PairType: pair '(' PairElemType ',' PairElemType ')' { TyPair $3 $5 }
+ArrayType
+  : Type '[' ']' { TyArray $1 }
 
-Type: BaseType  { $1 }
-    | ArrayType { $1 }
-    | PairType  { $1 }
+PairType
+  : pair '(' PairElemType ',' PairElemType ')' { TyPair $3 $5 }
 
-Param: Type IDENT { ($1, $2) }
+Type
+  : BaseType  { $1 }
+  | ArrayType { $1 }
+  | PairType  { $1 }
 
-Block: sepBy1(Stmt, ';') { $1 }
-Stmt: skip { StmtSkip }
-    | Type IDENT '=' AssignRHS { StmtVar $1 $2 $4 }
-    | AssignLHS '=' AssignRHS { StmtAssign $1 $3 }
-    | read AssignLHS { StmtRead $2 }
-    | free Expr { StmtFree $2 }
-    | return Expr { StmtReturn $2 }
-    | exit Expr { StmtExit $2 }
-    | print Expr { StmtPrint False $2 }
-    | println Expr { StmtPrint True $2 }
-    | if Expr then Block else Block fi { StmtIf $2 $4 $6 }
-    | while Expr do Block done { StmtWhile $2 $4 }
+Param
+  : Type IDENT { ($1, $2) }
 
-Expr: INTLIT    { ExprLit (LitInt $1) }
-    | BOOLLIT   { ExprLit (LitBool $1) }
-    | CHARLIT   { ExprLit (LitChar $1) }
-    | STRLIT    { ExprLit (LitString $1) }
-    | IDENT     { ExprVar $1 }
-    | null      { ExprNull }
-    | ArrayElem { ExprArrayElem $1 }
+Block
+  : sepBy1(Stmt, ';') { $1 }
 
-    | '!' Expr  { ExprUnOp UnOpNot $2 }
-    | '-' Expr %prec NEG { ExprUnOp UnOpNeg $2 }
-    | len Expr  { ExprUnOp UnOpLen $2 }
-    | ord Expr  { ExprUnOp UnOpOrd $2 }
-    | chr Expr  { ExprUnOp UnOpChr $2 }
+Stmt
+  : skip { StmtSkip }
+  | Type IDENT '=' AssignRHS { StmtVar $1 $2 $4 }
+  | AssignLHS '=' AssignRHS { StmtAssign $1 $3 }
+  | read AssignLHS { StmtRead $2 }
+  | free Expr { StmtFree $2 }
+  | return Expr { StmtReturn $2 }
+  | exit Expr { StmtExit $2 }
+  | print Expr { StmtPrint False $2 }
+  | println Expr { StmtPrint True $2 }
+  | if Expr then Block else Block fi { StmtIf $2 $4 $6 }
+  | while Expr do Block done { StmtWhile $2 $4 }
 
-    | Expr '+' Expr  { ExprBinOp BinOpAdd $1 $3 }
-    | Expr '-' Expr  { ExprBinOp BinOpSub $1 $3 }
-    | Expr '*' Expr  { ExprBinOp BinOpMul $1 $3 }
-    | Expr '/' Expr  { ExprBinOp BinOpDiv $1 $3 }
-    | Expr '%' Expr  { ExprBinOp BinOpRem $1 $3 }
-    | Expr '>' Expr  { ExprBinOp BinOpGT  $1 $3 }
-    | Expr '>=' Expr { ExprBinOp BinOpGE  $1 $3 }
-    | Expr '<' Expr  { ExprBinOp BinOpLT  $1 $3 }
-    | Expr '<=' Expr { ExprBinOp BinOpLE  $1 $3 }
-    | Expr '==' Expr { ExprBinOp BinOpEQ  $1 $3 }
-    | Expr '!=' Expr { ExprBinOp BinOpNE  $1 $3 }
-    | Expr '&&' Expr { ExprBinOp BinOpAnd $1 $3 }
-    | Expr '||' Expr { ExprBinOp BinOpOr  $1 $3 }
+Expr
+  : INTLIT    { ExprLit (LitInt $1) }
+  | BOOLLIT   { ExprLit (LitBool $1) }
+  | CHARLIT   { ExprLit (LitChar $1) }
+  | STRLIT    { ExprLit (LitString $1) }
+  | IDENT     { ExprVar $1 }
+  | null      { ExprNull }
+  | ArrayElem { ExprArrayElem $1 }
 
-AssignLHS: IDENT     { LHSVar $1 }
-         | PairElem  { LHSPair $1 }
-         | ArrayElem { LHSArray $1 }
+  | '!' Expr  { ExprUnOp UnOpNot $2 }
+  | '-' Expr %prec NEG { ExprUnOp UnOpNeg $2 }
+  | len Expr  { ExprUnOp UnOpLen $2 }
+  | ord Expr  { ExprUnOp UnOpOrd $2 }
+  | chr Expr  { ExprUnOp UnOpChr $2 }
 
-AssignRHS: Expr     { RHSExpr $1 }
-         | ArrayLit { RHSArrayLit $1 }
-         | newpair '(' Expr ',' Expr ')' { RHSNewPair $3 $5 }
-         | PairElem { RHSPair $1 }
-         | call IDENT '(' sepBy(Expr, ',') ')' { RHSCall $2 $4 }
+  | Expr '+' Expr  { ExprBinOp BinOpAdd $1 $3 }
+  | Expr '-' Expr  { ExprBinOp BinOpSub $1 $3 }
+  | Expr '*' Expr  { ExprBinOp BinOpMul $1 $3 }
+  | Expr '/' Expr  { ExprBinOp BinOpDiv $1 $3 }
+  | Expr '%' Expr  { ExprBinOp BinOpRem $1 $3 }
+  | Expr '>' Expr  { ExprBinOp BinOpGT  $1 $3 }
+  | Expr '>=' Expr { ExprBinOp BinOpGE  $1 $3 }
+  | Expr '<' Expr  { ExprBinOp BinOpLT  $1 $3 }
+  | Expr '<=' Expr { ExprBinOp BinOpLE  $1 $3 }
+  | Expr '==' Expr { ExprBinOp BinOpEQ  $1 $3 }
+  | Expr '!=' Expr { ExprBinOp BinOpNE  $1 $3 }
+  | Expr '&&' Expr { ExprBinOp BinOpAnd $1 $3 }
+  | Expr '||' Expr { ExprBinOp BinOpOr  $1 $3 }
 
-ArrayElemIndex: '[' Expr ']' ArrayElemIndex { $2 : $4 }
-              | '[' Expr ']' { $2 : [] }
-ArrayElem: IDENT ArrayElemIndex { ArrayElem $1 $2 }
+AssignLHS
+  : IDENT     { LHSVar $1 }
+  | PairElem  { LHSPair $1 }
+  | ArrayElem { LHSArray $1 }
 
-PairElem : fst Expr { PairFst $2 }
-         | snd Expr { PairSnd $2 }
+AssignRHS
+  : Expr     { RHSExpr $1 }
+  | ArrayLit { RHSArrayLit $1 }
+  | newpair '(' Expr ',' Expr ')' { RHSNewPair $3 $5 }
+  | PairElem { RHSPair $1 }
+  | call IDENT '(' sepBy(Expr, ',') ')' { RHSCall $2 $4 }
 
-ArrayLit: '[' sepBy(Expr, ',') ']' { $2 }
+ArrayElemIndex
+  : '[' Expr ']' ArrayElemIndex { $2 : $4 }
+  | '[' Expr ']' { $2 : [] }
+
+ArrayElem
+  : IDENT ArrayElemIndex { ArrayElem $1 $2 }
+
+PairElem
+  : fst Expr { PairFst $2 }
+  | snd Expr { PairSnd $2 }
+
+ArrayLit
+  : '[' sepBy(Expr, ',') ']' { $2 }
 
 many_rev1(p)
   : p               { [$1] }
