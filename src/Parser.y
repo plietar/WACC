@@ -81,46 +81,46 @@ module Parser where
 
 %%
 
-Program
+Program :: { Program }
   : begin FuncList_rev Block end { Program (reverse $2) $3 }
 
 -- For some reason many(Func) causes a shift-reduce conflict when used in Program
-FuncList_rev
+FuncList_rev :: { [FuncDef] }
   : FuncList_rev Func { $2 : $1 }
   | { [] }
 
-Func
+Func :: { FuncDef }
   : Type IDENT '(' sepBy(Param, ',') ')' is Block end { FuncDef $1 $2 $4 $7 }
 
-BaseType
+BaseType :: { Type }
   : int { TyInt }
   | bool { TyBool }
   | char { TyChar }
   | string { TyString }
 
-PairElemType
+PairElemType :: { Type }
   : BaseType { $1 }
   | ArrayType { $1 }
   | pair { TyNestedPair }
 
-ArrayType
+ArrayType :: { Type }
   : Type '[' ']' { TyArray $1 }
 
-PairType
+PairType :: { Type }
   : pair '(' PairElemType ',' PairElemType ')' { TyPair $3 $5 }
 
-Type
+Type :: { Type }
   : BaseType  { $1 }
   | ArrayType { $1 }
   | PairType  { $1 }
 
-Param
+Param :: { (Type, String) }
   : Type IDENT { ($1, $2) }
 
-Block
+Block :: { [Stmt] }
   : sepBy1(Stmt, ';') { $1 }
 
-Stmt
+Stmt :: { Stmt }
   : skip { StmtSkip }
   | Type IDENT '=' AssignRHS { StmtVar $1 $2 $4 }
   | AssignLHS '=' AssignRHS { StmtAssign $1 $3 }
@@ -133,7 +133,7 @@ Stmt
   | if Expr then Block else Block fi { StmtIf $2 $4 $6 }
   | while Expr do Block done { StmtWhile $2 $4 }
 
-Expr
+Expr :: { Expr }
   : INTLIT    { ExprLit (LitInt $1) }
   | BOOLLIT   { ExprLit (LitBool $1) }
   | CHARLIT   { ExprLit (LitChar $1) }
@@ -162,30 +162,29 @@ Expr
   | Expr '&&' Expr { ExprBinOp BinOpAnd $1 $3 }
   | Expr '||' Expr { ExprBinOp BinOpOr  $1 $3 }
 
-AssignLHS
+AssignLHS :: { AssignLHS }
   : IDENT     { LHSVar $1 }
   | PairElem  { LHSPair $1 }
   | ArrayElem { LHSArray $1 }
 
-AssignRHS
+AssignRHS :: { AssignRHS }
   : Expr     { RHSExpr $1 }
   | ArrayLit { RHSArrayLit $1 }
   | newpair '(' Expr ',' Expr ')' { RHSNewPair $3 $5 }
   | PairElem { RHSPair $1 }
   | call IDENT '(' sepBy(Expr, ',') ')' { RHSCall $2 $4 }
 
-ArrayElemIndex
-  : '[' Expr ']' ArrayElemIndex { $2 : $4 }
-  | '[' Expr ']' { $2 : [] }
+ArrayIndex :: { Expr }
+  : '[' Expr ']' { $2 }
 
-ArrayElem
-  : IDENT ArrayElemIndex { ArrayElem $1 $2 }
+ArrayElem :: { ArrayElem }
+  : IDENT many1(ArrayIndex) { ArrayElem $1 $2 }
 
-PairElem
+PairElem :: { PairElem }
   : fst Expr { PairFst $2 }
   | snd Expr { PairSnd $2 }
 
-ArrayLit
+ArrayLit :: { [Expr] }
   : '[' sepBy(Expr, ',') ']' { $2 }
 
 many_rev1(p)
