@@ -1,8 +1,9 @@
 {
 module Parser where
+import Lexer
 }
 
-%name wacc
+%name waccParser
 %tokentype { Token }
 %error { parseError }
 
@@ -298,15 +299,6 @@ data Expr = ExprLit Literal
           | ExprArrayElem ArrayElem
           | ExprUnOp UnOp Expr
           | ExprBinOp BinOp Expr Expr
-    deriving (Show)
-
-data Token = TokKeyword String
-           | TokIdent String
-           | TokOp String
-           | TokLBracket | TokRBracket | TokEqual | TokSemiColon
-           | TokComma | TokLParen | TokRParen
-           | TokBoolLit Bool | TokStrLit String | TokCharLit Char
-           | TokIntLit Integer
     deriving (Show)
 }
 

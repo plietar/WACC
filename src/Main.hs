@@ -1,5 +1,7 @@
 module Main where
 import Parser
+import Lexer
 
-main :: IO ()
-main = putStrLn "Foo"
+main = do
+  s <- getContents
+  print (waccParser (waccLexer s))

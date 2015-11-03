@@ -1,2 +1,0 @@
-rm -f Tokens *.hs *.o *.hi
-
