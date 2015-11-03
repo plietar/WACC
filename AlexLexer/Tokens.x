@@ -4,43 +4,54 @@ module Main (main) where
 
 %wrapper "basic"
 
-$digit = 0-9			-- digits
-$alpha = [a-zA-Z]		-- alphabetic characters
+$digit 		= 0-9			-- digits
+$alpha 		= [a-zA-Z]		-- alphabetic characters
 $underscore = \_
 $graphic    = $printable # $white
-@string     = \" ($graphic # \")* \"
+$non_character 	= [ \\ \' \" ]
+$escaped_char 	= [ '0' 'b' 't' 'n' 'f' 'r' \" \' \\]
+$int_sign = [\+ \-]
+--$binary_op = '*'  '/'  '%'  '+'  '-'  '>'  '>='  '<'  '<='  '=='  '!='  '&&'  '||'
+
+@character 	= ($graphic # $non_character) | (\\ $escaped_char)
+@string_literal 	= \" (@character)* \"
+@character_literal 	= \' @character  \'
+@integer_literal 	= ($int_sign)? ($digit)+
 
 tokens :-
 
 -- Whitespace
   $white+				;
+ -- $binary_op {\s -> TokOp s}
 
 -- Symbols
   "," 			{ \s -> TokComma }
   ";"			{ \s -> TokSemicol }
-  "["			{ \s -> TokLBrack }
-  "]"			{ \s -> TokRBrack }
+  "["			{ \s -> TokLBracket }
+  "]"			{ \s -> TokRBracket }
   "("			{ \s -> TokLParen }
-  ")"			{ \s -> TokRParen }
-
+  ")"			{ \s -> TokRParen } 
 -- Operators
-  \! | \* | \/ | \% | \+ | \- | \> | \>= | \< | \<= | \== | \!= | \&& 
-	| \|\|													{ \s -> TokOp s}
+  "!" | "*" | "/" | "%" | "+" | "-" | ">" | ">=" | "<" | "<=" | "==" | "!=" | "&&" | "||"
+						{ \s -> TokOp s}
 
 -- Assign Operator
-  "="			{\s -> TokEqual }
+  "="					{\s -> TokEqual }
 
 -- Boolean Literals
-  true | false 		{ \s -> TokBool s }
+  "true" | "false" 			{ \s -> TokBool s }
 
--- Character Literals
-  @string 	{ \"'":s:"'":rest -> TokString s } 
+-- String Literals
+  @string_literal	 	{ \s -> removeQuotes (TokStrLit s) } 
+
+-- Character Literal
+  @character_literal	{ \s -> removeQuotes (TokCharLit s) } 
 
 -- Program Keywords
   begin | end | is | skip | read | free | return | exit | print | println 
 	| if | then | else | fi | while | do | done | newpair | call | fst | snd | int 
 	| bool | char | string | pair | len | ord | chr | null | true | false
-		{ \s -> TokKeyword s}
+						{ \s -> TokKeyword s}
 
 -- Identifier
   ($underscore | $alpha) ($underscore | $alpha | $digit)* 	{ \s -> TokIdent s}
@@ -48,8 +59,10 @@ tokens :-
 -- Comments
   "#".*(\n)				;	
 
+-- Integer Literal
+  
 -- Integer
-  $digit+				{ \s -> TokInt s }
+  @integer_literal				{ \s -> TokIntLit s }
   
 
 {
@@ -63,15 +76,20 @@ data Token =
 	TokInt String | 
 	TokComma   | 
 	TokSemicol |
-	TokLBrack  |
-	TokRBrack  |
+	TokLBracket  |
+	TokRBracket  |
 	TokLParen  |
 	TokRParen  |
 	TokEqual   |
 	TokBool String |
-	TokString String
+	TokStrLit String |
+	TokCharLit String | 
+	TokIntLit String 
 	deriving (Eq,Show)
 
+removeQuotes :: Token -> Token
+removeQuotes (TokStrLit s) = TokStrLit $ tail $ take (length s - 1) s
+removeQuotes (TokCharLit s) = TokCharLit $ tail $ take (length s - 1) s
 main = do
   s <- getContents
   print (alexScanTokens s)
