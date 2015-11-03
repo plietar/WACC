@@ -81,11 +81,15 @@ module Parser where
 
 %%
 
-Program: begin many(Func) Block end { Program $2 $3 }
+Program: begin FuncList_rev Block end { Program (reverse $2) $3 }
 
-Func: begin Type IDENT '(' sepBy(Param, ',') ')' is Block end
-      { FuncDef $2 $3 $5 $8 }
-      --{ FuncDef $1 $2 $4 $7 }
+-- For some reason many(Func) causes a shift-reduce conflict when used in Program
+FuncList_rev: FuncList_rev Func { $2 : $1 }
+            | { [] }
+
+Func :: { FuncDef }
+Func : Type IDENT '(' sepBy(Param, ',') ')' is Block end
+      { FuncDef $1 $2 $4 $7 }
 
 BaseType: int { TyInt }
         | bool { TyBool }
@@ -197,7 +201,7 @@ endBy1(p,q)
 
 {
 parseError :: [Token] -> a
-parseError _ = error "Parse Error"
+parseError ts = error ("Parse Error " ++ show ts)
 
 data Program = Program [FuncDef] [Stmt]
     deriving (Show)
