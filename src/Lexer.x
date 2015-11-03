@@ -1,6 +1,7 @@
 {
 {-# OPTIONS_GHC -fno-warn-tabs #-}
 module Lexer where
+import Tokens
 }
 
 %wrapper "basic"
@@ -69,24 +70,6 @@ tokens :-
 
 {
 -- Each action has type :: String -> Token
-
--- The token type:
-data Token =
-    TokKeyword String | 
-    TokOp String      | 
-    TokLParen         | 
-    TokRParen         | 
-    TokComma          | 
-    TokEqual          | 
-    TokLBracket       | 
-    TokRBracket       | 
-    TokSemiColon      | 
-    TokIdent String   | 
-    TokBoolLit Bool   | 
-    TokStrLit String  | 
-    TokCharLit Char   | 
-    TokIntLit Integer 
-    deriving (Eq,Show)
 
 waccLexer = alexScanTokens
 
