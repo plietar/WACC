@@ -33,13 +33,11 @@ module Parser where
     char    { TokKeyword "char" }
     string  { TokKeyword "string" }
     pair    { TokKeyword "pair" }
+    null    { TokKeyword "null" }
 
     len     { TokKeyword "len" }
     ord     { TokKeyword "ord" }
     chr     { TokKeyword "chr" }
-
-    true    { TokKeyword "true" }
-    false   { TokKeyword "false" }
 
     '!'     { TokOp "!" }
     '*'     { TokOp "*" }
@@ -65,14 +63,49 @@ module Parser where
     ';'     { TokSemiColon }
 
     IDENT   { TokIdent $$ }
+    BOOLLIT { TokBoolLit $$ }
+    STRLIT  { TokStrLit $$ }
+    CHARLIT { TokCharLit $$ }
+    INTLIT  { TokIntLit $$ }
+
+%left '||'
+%left '&&'
+%nonassoc '==' '!='
+%nonassoc '<='
+%nonassoc '<'
+%nonassoc '>='
+%nonassoc '>'
+%left '+' '-'
+%left '*' '/' '%'
+%nonassoc '!' NEG len ord chr
 
 %%
 
-Program: begin  StmtList end { Program [] $2 }
+Program: begin many(Func) Block end { Program $2 $3 }
 
-StmtList: Stmt { [$1] }
-        | Stmt ';' StmtList { $1 : $3 }
+Func: begin Type IDENT '(' sepBy(Param, ',') ')' is Block end
+      { FuncDef $2 $3 $5 $8 }
+      --{ FuncDef $1 $2 $4 $7 }
 
+BaseType: int { TyInt }
+        | bool { TyBool }
+        | char { TyChar }
+        | string { TyString }
+
+PairElemType: BaseType { $1 }
+            | ArrayType { $1 }
+            | pair { TyNestedPair }
+
+ArrayType: Type '[' ']' { TyArray $1 }
+PairType: pair '(' PairElemType ',' PairElemType ')' { TyPair $3 $5 }
+
+Type: BaseType  { $1 }
+    | ArrayType { $1 }
+    | PairType  { $1 }
+
+Param: Type IDENT { ($1, $2) }
+
+Block: sepBy1(Stmt, ';') { $1 }
 Stmt: skip { StmtSkip }
     | Type IDENT '=' AssignRHS { StmtVar $1 $2 $4 }
     | AssignLHS '=' AssignRHS { StmtAssign $1 $3 }
@@ -82,134 +115,120 @@ Stmt: skip { StmtSkip }
     | exit Expr { StmtExit $2 }
     | print Expr { StmtPrint False $2 }
     | println Expr { StmtPrint True $2 }
+    | if Expr then Block else Block fi { StmtIf $2 $4 $6 }
+    | while Expr do Block done { StmtWhile $2 $4 }
 
+Expr: INTLIT    { ExprLit (LitInt $1) }
+    | BOOLLIT   { ExprLit (LitBool $1) }
+    | CHARLIT   { ExprLit (LitChar $1) }
+    | STRLIT    { ExprLit (LitString $1) }
+    | IDENT     { ExprVar $1 }
+    | null      { ExprNull }
+    | ArrayElem { ExprArrayElem $1 }
 
-Func: Type IDENT '(' ParamList ')' is StmtList end
-      { FuncDef $1 $2 $4 $7 }
-FuncList : Func FuncList { $1 : $2 }
-         | { [] }
+    | '!' Expr  { ExprUnOp UnOpNot $2 }
+    | '-' Expr %prec NEG { ExprUnOp UnOpNeg $2 }
+    | len Expr  { ExprUnOp UnOpLen $2 }
+    | ord Expr  { ExprUnOp UnOpOrd $2 }
+    | chr Expr  { ExprUnOp UnOpChr $2 }
 
-Type: int { TyInt }
+    | Expr '+' Expr  { ExprBinOp BinOpAdd $1 $3 }
+    | Expr '-' Expr  { ExprBinOp BinOpSub $1 $3 }
+    | Expr '*' Expr  { ExprBinOp BinOpMul $1 $3 }
+    | Expr '/' Expr  { ExprBinOp BinOpDiv $1 $3 }
+    | Expr '%' Expr  { ExprBinOp BinOpRem $1 $3 }
+    | Expr '>' Expr  { ExprBinOp BinOpGT  $1 $3 }
+    | Expr '>=' Expr { ExprBinOp BinOpGE  $1 $3 }
+    | Expr '<' Expr  { ExprBinOp BinOpLT  $1 $3 }
+    | Expr '<=' Expr { ExprBinOp BinOpLE  $1 $3 }
+    | Expr '==' Expr { ExprBinOp BinOpEQ  $1 $3 }
+    | Expr '!=' Expr { ExprBinOp BinOpNE  $1 $3 }
+    | Expr '&&' Expr { ExprBinOp BinOpAnd $1 $3 }
+    | Expr '||' Expr { ExprBinOp BinOpOr  $1 $3 }
 
-Param: Type IDENT { ($1, $2) }
-ParamList: { [] }
-         | Param ',' ParamList { $1 : $3 }
+AssignLHS: IDENT     { LHSVar $1 }
+         | PairElem  { LHSPair $1 }
+         | ArrayElem { LHSArray $1 }
 
-Expr: IDENT { ExprVar $1 }
-AssignLHS: IDENT { LHSVar $1 }
-AssignRHS: Expr { RHSExpr $1 }
+AssignRHS: Expr     { RHSExpr $1 }
+         | ArrayLit { RHSArrayLit $1 }
+         | newpair '(' Expr ',' Expr ')' { RHSNewPair $3 $5 }
+         | PairElem { RHSPair $1 }
+         | call IDENT '(' sepBy(Expr, ',') ')' { RHSCall $2 $4 }
 
--- 
--- Stat : skip {}
---      | Type IDENT '=' AssignRHS {}
---      | AssignLHS '=' AssignRHS {}
---      | read AssignLHS {}
---      | free Expr {}
---      | return Expr {}
---      | exit Expr {}
---      | print Expr {}
---      | println Expr {}
---      | if Expr then Stat else Stat fi {}
---      | while Expr do Stat done {}
---      | begin Stat end {}
---      | Stat ';' Stat {}
--- 
--- AssignLHS : IDENT {}
---           | ArrayElem {}
---           | PairElem {}
--- 
--- AssignRHS : Expr {}
---           | ArrayLiter {}
---           | newpair '(' Expr ',' Expr ')' {}
---           | PairElem {}
---           | call IDENT '(' ArgList ')' {}
--- 
--- ExprList : Expr ExprList {}
---          | {}
--- 
--- ArgList : Expr ',' ExprList {}
--- 
--- PairElem : fst Expr {}
---          | snd Expr {}
--- 
--- Type : BaseType {}
---      | ArrayType {}
---      | pair {}
--- 
--- BaseType : int    {Int $1}
---          | bool   {Bool $1}
---          | char   {Char $1}
---          | string {String $1}
--- 
--- ArrayType : Type '[' ']' {}
--- 
--- PairType : pair '(' PairElemType ',' PairElemType ')' {}
--- 
--- PairElemType : BaseType {}
---              | ArrayType {}
---              | pair {}
--- 
--- Expr : IntLiter  {IntLiter $1}
---      | BoolLiter {BoolLiter $1}
---      | CharLiter {CharLiter $1}
---      | StrLiter  {StrLiter $1} 
---      | PairLiter {PairLiter $1}
---      | IDENT     {Ident $1}
---      | ArrayElem {ArrayElem $1}
---      | UnaryOper Expr {UnaryOper $2}
---      | Expr BinaryOper Expr {BinaryOper $1 $3}
---      | '(' Expr ')' {}
--- 
--- UnaryOper : '!' {}
---           | '-' {}
---           | len {}
---           | ord {}
---           | chr {}
--- 
--- BinaryOper : '*' {}
---            | '/' {}
---            | '%' {}
---           |+|-|>|>=|<|<=|==|!=|&&|||
+ArrayElemIndex: '[' Expr ']' ArrayElemIndex { $2 : $4 }
+              | '[' Expr ']' { $2 : [] }
+ArrayElem: IDENT ArrayElemIndex { ArrayElem $1 $2 }
 
--- Ident : (_|a-z|A-Z)(_|a-z|A-Z|0-9)*
+PairElem : fst Expr { PairFst $2 }
+         | snd Expr { PairSnd $2 }
 
--- ArrayElem : Ident ([ Expr ])+ 
--- 
--- IntLiter : IntSign? Digit+
--- 
--- Digit : (0-9)
--- 
--- IntSign : +|-
--- 
--- BoolLiter : true|false
--- 
--- CharLiter : ' Character '
--- 
--- StrLiter : " Characters "
--- 
--- Character : ???
--- 
--- EscapedChar : 0|b|t|n|f|r|"|'|\
--- 
--- ArrayLiter : [ (Expr (, Expr)*)? ]
--- 
--- PairLiter : null
--- 
--- Comment : #()*
+ArrayLit: '[' sepBy(Expr, ',') ']' { $2 }
+
+many_rev1(p)
+  : p               { [$1] }
+  | many_rev1(p) p  { $2 : $1 }
+
+many1(p)
+  : many_rev1(p)    { reverse $1 }
+
+many(p)
+  : many1(p)        { $1 }
+  |                 { [] }
+
+sepR(p,q)
+  : p q             { $2 }
+
+sepL(p,q)
+  : p q             { $1 }
+
+sepBy1(p,q)
+  : p many(sepR(q,p)) { $1 : $2 }
+
+sepBy(p,q)
+  : sepBy1(p,q)       { $1 }
+  |                   { [] }
+
+endBy(p,q)
+  : many (sepL(p,q))  { $1 }
+
+endBy1(p,q)
+  : many1 (sepL(p,q)) { $1 }
 
 {
 parseError :: [Token] -> a
 parseError _ = error "Parse Error"
 
 data Program = Program [FuncDef] [Stmt]
+    deriving (Show)
 data FuncDef = FuncDef Type String [(Type, String)] [Stmt]
+    deriving (Show)
 data Type = TyInt
+          | TyBool
+          | TyChar
           | TyString
           | TyPair Type Type
           | TyNestedPair
+          | TyArray Type
+    deriving (Show)
+
+data ArrayElem = ArrayElem String [Expr]
+    deriving (Show)
+data PairElem  = PairFst Expr | PairSnd Expr
+    deriving (Show)
 
 data AssignLHS = LHSVar String
+               | LHSPair PairElem
+               | LHSArray ArrayElem
+    deriving (Show)
+
 data AssignRHS = RHSExpr Expr
+               | RHSArrayLit [Expr]
+               | RHSNewPair Expr Expr
+               | RHSPair PairElem
+               | RHSCall String [Expr]
+    deriving (Show)
+
 data Stmt = StmtSkip
           | StmtVar Type String AssignRHS
           | StmtAssign AssignLHS AssignRHS
@@ -221,20 +240,24 @@ data Stmt = StmtSkip
           | StmtIf Expr [Stmt] [Stmt]
           | StmtWhile Expr [Stmt]
           | StmtScope [Stmt]
+    deriving (Show)
 
 data Literal = LitInt Integer
              | LitBool Bool
              | LitChar Char
              | LitString String
+    deriving (Show)
 
 data UnOp = UnOpNot
           | UnOpNeg
           | UnOpLen
           | UnOpOrd
           | UnOpChr
+    deriving (Show)
 
 data BinOp = BinOpAdd
            | BinOpSub
+           | BinOpMul
            | BinOpDiv
            | BinOpRem
            | BinOpGT
@@ -245,18 +268,23 @@ data BinOp = BinOpAdd
            | BinOpNE
            | BinOpAnd
            | BinOpOr
+    deriving (Show)
 
 data Expr = ExprLit Literal
           | ExprNull
           | ExprVar String
-          | ExprArrayElem Expr Expr
+          | ExprArrayElem ArrayElem
           | ExprUnOp UnOp Expr
           | ExprBinOp BinOp Expr Expr
+    deriving (Show)
 
 data Token = TokKeyword String
            | TokIdent String
            | TokOp String
            | TokLBracket | TokRBracket | TokEqual | TokSemiColon
            | TokComma | TokLParen | TokRParen
+           | TokBoolLit Bool | TokStrLit String | TokCharLit Char
+           | TokIntLit Integer
+    deriving (Show)
 }
 
