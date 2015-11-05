@@ -5,6 +5,9 @@ import Common
 
 import System.Environment
 import System.Exit
+import SemCheck
+import AST
+import Data.Map
 
 exitCodeForResult :: WACCResult a -> ExitCode
 exitCodeForResult (OK _)                  = ExitSuccess
@@ -21,9 +24,14 @@ compile source = do
 main = do
   filename <- fmap head getArgs
   contents <- readFile filename
+--Testing
+  let table = Scope (fromList [("z",TyBool),("x",TyInt),("y",TyArray(TyArray TyInt))]) Root
+  print $ fmap (\e -> typeCheckExpr e table) $ waccParseExpr =<< waccLexer contents
+  print $ waccLexer contents
+  print $ waccParseExpr =<< waccLexer contents
+--Testing
   let result = compile contents
   case result of
     OK _           -> putStrLn "Success !"
     Error kind msg -> putStrLn ("Error " ++ show kind ++ " " ++ msg)
   exitWith (exitCodeForResult result)
-

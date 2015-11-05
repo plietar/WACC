@@ -9,6 +9,7 @@ data ErrorKind = LexicalError
 
 data WACCResult a = OK a
                   | Error ErrorKind String
+                  deriving (Show)
 
 instance Functor WACCResult where
   fmap f (OK value)       = OK (f value)
