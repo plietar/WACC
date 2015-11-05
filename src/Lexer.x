@@ -2,6 +2,7 @@
 {-# OPTIONS_GHC -fno-warn-tabs #-}
 module Lexer where
 import Tokens
+import Common
 }
 
 %wrapper "basic"
@@ -70,7 +71,14 @@ tokens :-
 {
 -- Each action has type :: String -> Token
 
-waccLexer = alexScanTokens
+--waccLexer = alexScanTokens
+waccLexer str = go ('\n',[],str)
+  where go inp@(_,_bs,s) =
+          case alexScan inp 0 of
+                AlexEOF -> OK []
+                AlexError _ -> Error LexicalError "lexical error"
+                AlexSkip  inp' len     -> go inp'
+                AlexToken inp' len act -> fmap (\tokens -> act (take len s) : tokens) (go inp')
 
 }
 

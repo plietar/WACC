@@ -226,6 +226,6 @@ endBy1(p,q)
 
 {
 parseError :: [Token] -> WACCResult a
-parseError ts = Error SyntaxError
+parseError ts = Error SyntaxError "Syntax Error"
 }
 

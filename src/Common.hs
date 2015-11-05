@@ -8,21 +8,21 @@ data ErrorKind = LexicalError
                deriving (Show)
 
 data WACCResult a = OK a
-                  | Error ErrorKind
+                  | Error ErrorKind String
 
 instance Functor WACCResult where
-  fmap f (OK value)   = OK (f value)
-  fmap _ (Error kind) = Error kind
+  fmap f (OK value)       = OK (f value)
+  fmap _ (Error kind msg) = Error kind msg
 
 instance Applicative WACCResult where
   pure value = OK value
 
-  (OK f)       <*> (OK value) = OK (f value)
-  (Error kind) <*> _          = Error kind
+  (OK f)           <*> (OK value) = OK (f value)
+  (Error kind msg) <*> _          = Error kind msg
 
 instance Monad WACCResult where
   return = pure
 
-  (OK value)   >>= f = f value
-  (Error kind) >>= _ = Error kind
+  (OK value)       >>= f = f value
+  (Error kind msg) >>= _ = Error kind msg
 
