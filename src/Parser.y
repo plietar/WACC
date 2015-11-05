@@ -5,7 +5,8 @@ import AST
 import Common
 }
 
-%name waccParser
+%name waccParser Program
+%name waccParseExpr Expr
 %monad { WACCResult } { (>>=) } { return }
 %tokentype { Token }
 %error { parseError }

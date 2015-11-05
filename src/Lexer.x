@@ -50,17 +50,17 @@ tokens :-
   -- Assign Operator
   "="                  { \s -> TokEqual }
 
+  -- Boolean Literals
+  "true"               { \s -> TokBoolLit True }
+  "false"              { \s -> TokBoolLit False }
+
+
   -- Identifier
   ($underscore | $alpha) ($underscore | $alpha | $digit)*
                        { \s -> TokIdent s}
  
   -- Integer Literal
   @integer_literal     { \s -> TokIntLit (read s) }
- 
-  -- Boolean Literals
-  "true"               { \s -> TokBoolLit True }
-  "false"              { \s -> TokBoolLit False }
-
   -- Character Literal
   @character_literal   { \s -> TokCharLit (read s) }
 

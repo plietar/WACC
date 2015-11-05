@@ -11,7 +11,8 @@ data Type = TyInt
           | TyPair Type Type
           | TyNestedPair
           | TyArray Type
-    deriving (Show)
+          | TyNull
+    deriving (Eq,Show)
 
 data ArrayElem = ArrayElem String [Expr]
     deriving (Show)
