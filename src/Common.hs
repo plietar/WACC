@@ -1,5 +1,7 @@
 module Common where
 
+import Control.Applicative
+
 data ErrorKind = LexicalError
                | SyntaxError
                | SemanticError
