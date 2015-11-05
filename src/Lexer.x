@@ -9,13 +9,12 @@ import Tokens
 $digit             = 0-9
 $alpha             = [a-zA-Z]
 $underscore        = \_
-$graphic           = $printable # $white
 $non_character     = [ \\ \' \" ]
 $escaped_char      = [ '0' 'b' 't' 'n' 'f' 'r' \" \' \\]
 $int_sign          = [\+ \-]
 
-@character         = ($graphic # $non_character) | (\\ $escaped_char)
-@string_literal    = \" (@character | $white)* \"
+@character         = (. # $non_character) | (\\ $escaped_char)
+@string_literal    = \" (@character)* \"
 @character_literal = \' @character  \'
 @integer_literal   = ($int_sign)? ($digit)+
 @whitespace        = ($white | (\\ $escaped_char))+
