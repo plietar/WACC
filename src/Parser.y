@@ -2,9 +2,11 @@
 module Parser where
 import Tokens
 import AST
+import Common
 }
 
 %name waccParser
+%monad { WACCResult } { (>>=) } { return }
 %tokentype { Token }
 %error { parseError }
 
@@ -223,7 +225,7 @@ endBy1(p,q)
   : many1 (sepL(p,q)) { $1 }
 
 {
-parseError :: [Token] -> a
-parseError ts = error ("Parse Error " ++ show ts)
+parseError :: [Token] -> WACCResult a
+parseError ts = Error SyntaxError
 }
 
