@@ -38,7 +38,7 @@ tokens :-
   -- Program Keywords
   begin | end | is | skip | read | free | return | exit | print | println | if
     | then | else | fi | while | do | done | newpair | call | fst | snd | int
-    | bool | char | string | pair | len | ord | chr | null | true | false
+    | bool | char | string | pair | len | ord | chr | null
                        { \s -> TokKeyword s}
  
   -- Operators
