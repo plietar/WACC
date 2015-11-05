@@ -134,6 +134,7 @@ Stmt :: { Stmt }
   | println Expr { StmtPrint True $2 }
   | if Expr then Block else Block fi { StmtIf $2 $4 $6 }
   | while Expr do Block done { StmtWhile $2 $4 }
+  | begin Block end { StmtScope $2 }
 
 Expr :: { Expr }
   : INTLIT    { ExprLit (LitInt $1) }
