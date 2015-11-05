@@ -144,6 +144,8 @@ Expr :: { Expr }
   | null      { ExprNull }
   | ArrayElem { ExprArrayElem $1 }
 
+  | '(' Expr ')'   { $2 }
+
   | '!' Expr  { ExprUnOp UnOpNot $2 }
   | '-' Expr %prec NEG { ExprUnOp UnOpNeg $2 }
   | len Expr  { ExprUnOp UnOpLen $2 }
