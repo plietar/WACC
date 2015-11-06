@@ -2,49 +2,83 @@ module SemCheck where
 import Data.Map as Map
 import AST
 
-
-
 data SymbolTable = Scope (Map String Type) SymbolTable | Root
+addSymbol :: String -> Type -> SymbolTable -> Maybe SymbolTable
+addSymbol varname typ (Scope table nextScope)
+ = if Map.notMember varname table
+   then Just (Scope (Map.insert varname typ table) nextScope)
+   else Nothing
+addSymbol _ _ Root = error "Cannot add symbols to root"
 
+symbolLookUp :: String -> SymbolTable -> Maybe Type
+symbolLookUp varname (Scope table nextScope)
+  = case Map.lookup varname table of
+    Nothing -> symbolLookUp varname nextScope
+    Just ty -> Just ty
+symbolLookUp varname Root
+  = Nothing
 
 
 typeCheckExpr :: Expr -> SymbolTable -> Maybe Type
 typeCheckExpr (ExprLit (LitInt _)) _ = Just TyInt
-
 typeCheckExpr (ExprLit (LitBool _)) _ = Just TyBool
 typeCheckExpr (ExprLit (LitChar _)) _ = Just TyChar
 typeCheckExpr (ExprLit (LitString _)) _ = Just TyString
-
 typeCheckExpr (ExprNull) _ = Just TyNull
+
 typeCheckExpr (ExprVar varname) symboltable
   = symbolLookUp varname symboltable
-typeCheckExpr (ExprArrayElem (ArrayElem str exprs)) table
-  = symbolLookUp str table >>= (\arrtype -> checkArrayIndexing arrtype exprs table)
+
+typeCheckExpr (ExprArrayElem (ArrayElem varname exprs)) table
+  = symbolLookUp varname table >>= (\arrtype -> checkArrayIndexing arrtype exprs table)
+
 typeCheckExpr (ExprUnOp op expr) table
   = typeCheckExpr expr table >>= checkUnOp op
+typeCheckExpr (ExprBinOp op e1 e2) table = do
+  t1 <- typeCheckExpr e1 table
+  t2 <- typeCheckExpr e2 table
+  checkBinOp op t1 t2
 
-checkUnOp UnOpNot t
-  = typesToMaybe t TyBool
-checkUnOp UnOpNeg t
-  = typesToMaybe t TyInt
-checkUnOp UnOpOrd t
-  = typesToMaybe t TyChar
-checkUnOp UnOpChr t
-  = typesToMaybe t TyInt
--- len is valid for any array. Is this okay?
-checkUnOp UnOpLen (TyArray t)
-  = Just (TyArray t)
-checkUnOp UnOpLen _
-  = Nothing
---checkUnOp UnOpLen t
---  = typesToMaybe t (TyArray arrayt)
+unOpType UnOpNot = (compatibleType TyBool, TyBool)
+unOpType UnOpNeg = (compatibleType TyInt, TyInt)
+unOpType UnOpOrd = (compatibleType TyChar, TyInt)
+unOpType UnOpChr = (compatibleType TyChar, TyInt)
+unOpType UnOpLen = (isArrayType, TyInt)
+
+checkUnOp op typ
+  = let (predicate, result) = unOpType op
+    in if predicate typ then Just result else Nothing
+
+binOpType BinOpAdd = arithmeticOp
+binOpType BinOpSub = arithmeticOp
+binOpType BinOpMul = arithmeticOp
+binOpType BinOpDiv = arithmeticOp
+binOpType BinOpRem = arithmeticOp
+binOpType BinOpGT = orderOp
+binOpType BinOpGE = orderOp
+binOpType BinOpLT = orderOp
+binOpType BinOpLE = orderOp
+binOpType BinOpEQ = equalityOp
+binOpType BinOpNE = equalityOp
+binOpType BinOpAnd = booleanOp
+binOpType BinOpOr = booleanOp
+
+arithmeticOp = (\t1 t2 -> compatibleType TyInt t1 && compatibleType TyInt t2, TyInt)
+booleanOp    = (\t1 t2 -> compatibleType TyBool t1 && compatibleType TyBool t2, TyBool)
+orderOp      = (\t1 t2 -> compatibleType t1 t2 && isOrderedType t1 && isOrderedType t2, TyBool)
+equalityOp   = (compatibleType, TyBool)
+
+checkBinOp op t1 t2
+  = let (predicate, result) = binOpType op
+    in if predicate t1 t2 then Just result else Nothing
 
 
-typesToMaybe typeTest typeResult
-  = case compatibleType typeTest typeResult of
-    True -> Just typeResult
-    False -> Nothing
-
+checkArrayIndexing :: Type -> [Expr] -> SymbolTable -> Maybe Type
+checkArrayIndexing (TyArray t) (e : es) table
+  | Just ty <- (typeCheckExpr e table), ty == TyInt = checkArrayIndexing t es table
+  | otherwise = Nothing
+checkArrayIndexing t [] _ = Just t
+checkArrayIndexing _ _ _ = Nothing
 
 
 compatibleType :: Type -> Type -> Bool
@@ -60,20 +94,14 @@ compatibleType t1 t2
   = t1 == t2
 
 
-symbolLookUp varname (Scope table nextScope)
-  = case Map.lookup varname table of
-    Nothing -> symbolLookUp varname nextScope
-    Just ty -> Just ty
-symbolLookUp varname Root
-  = Nothing
+isArrayType :: Type -> Bool
+isArrayType (TyArray _) = True
+isArrayType _           = False
 
 
-checkArrayIndexing :: Type -> [Expr] -> SymbolTable -> Maybe Type
-checkArrayIndexing (TyArray t) (e : es) table
-  | Just ty <- (typeCheckExpr e table), ty == TyInt = checkArrayIndexing t es table
-  | otherwise = Nothing
-checkArrayIndexing t [] _ = Just t
-checkArrayIndexing _ _ _ = Nothing
-
+isOrderedType :: Type -> Bool
+isOrderedType TyInt  = True
+isOrderedType TyChar = True
+isOrderedType _      = False
 
 
