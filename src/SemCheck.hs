@@ -23,7 +23,29 @@ typeCheckExpr (ExprArrayElem (ArrayElem str exprs)) table
 typeCheckExpr (ExprUnOp op expr) table
   = typeCheckExpr expr table >>= checkUnOp op
 
-checkUnOp UnOpNot t = if compatibleType t TyBool then Just TyBool else Nothing
+checkUnOp UnOpNot t
+  = typesToMaybe t TyBool
+checkUnOp UnOpNeg t
+  = typesToMaybe t TyInt
+checkUnOp UnOpOrd t
+  = typesToMaybe t TyChar
+checkUnOp UnOpChr t
+  = typesToMaybe t TyInt
+-- len is valid for any array. Is this okay?
+checkUnOp UnOpLen (TyArray t)
+  = Just (TyArray t)
+checkUnOp UnOpLen _
+  = Nothing
+--checkUnOp UnOpLen t
+--  = typesToMaybe t (TyArray arrayt)
+
+
+typesToMaybe typeTest typeResult
+  = case compatibleType typeTest typeResult of
+    True -> Just typeResult
+    False -> Nothing
+
+
 
 compatibleType :: Type -> Type -> Bool
 compatibleType (TyPair _ _) (TyNull) = True
