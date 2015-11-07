@@ -74,7 +74,7 @@ unOpType :: UnOp -> (Type -> Bool, Type)
 unOpType UnOpNot = (compatibleType TyBool, TyBool)
 unOpType UnOpNeg = (compatibleType TyInt, TyInt)
 unOpType UnOpOrd = (compatibleType TyChar, TyInt)
-unOpType UnOpChr = (compatibleType TyChar, TyInt)
+unOpType UnOpChr = (compatibleType TyInt, TyChar)
 unOpType UnOpLen = (isArrayType, TyInt)
 
 checkUnOp :: UnOp -> Type -> WACCResult Type
