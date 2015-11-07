@@ -158,6 +158,16 @@ isOrderedType TyChar = True
 isOrderedType TyAny  = True
 isOrderedType _      = False
 
+isReadableType :: Type -> Bool
+isReadableType TyInt  = True
+isReadableType TyChar = True
+isReadableType TyAny  = True
+isReadableType _      = False
+
+isVoidType :: Type -> Bool
+isVoidType TyVoid = True
+isVoidType _      = False
+
 typeCheckPairElem :: PairElem -> Context -> WACCResult Type
 typeCheckPairElem (PairElem side e) context = do
   t <- typeCheckExpr e context
@@ -187,7 +197,7 @@ typeCheckAssignRHS (RHSNewPair e1 e2) context = do
 typeCheckAssignRHS (RHSPair pairElem) context
   = typeCheckPairElem pairElem context
 typeCheckAssignRHS (RHSCall fname args) context = do
-  (expectedArgsType, returnType) <- undefined
+  (expectedArgsType, returnType) <- getFunction fname context
   let checkArgs _ [] [] = OK ()
       checkArgs n (a1:as1) (a2:as2)
         = if compatibleType a1 a2
@@ -223,6 +233,13 @@ typeCheckStmt (StmtAssign lhs rhs) = do
        (lift (Error SemanticError ("Cannot assign RHS of type " ++ show rhsType ++ " to LHS of type " ++ show lhsType)))
   return TyVoid
 
+typeCheckStmt (StmtRead lhs) = do
+  context <- get
+  lhsType <- lift $ typeCheckAssignLHS lhs context
+  when (not (isReadableType lhsType))
+       (lift (Error SemanticError ("Cannot read variable of type " ++ show lhsType)))
+  return TyVoid
+
 typeCheckStmt (StmtFree e) = do
   context <- get
   t <- lift $ typeCheckExpr e context
@@ -233,6 +250,13 @@ typeCheckStmt (StmtFree e) = do
 typeCheckStmt (StmtReturn e) = do
   context <- get
   lift $ typeCheckExpr e context
+
+typeCheckStmt (StmtExit e) = do
+  context <- get
+  t <- lift $ typeCheckExpr e context
+  when (not (compatibleType TyInt t))
+       (lift (Error SemanticError ("Expected Int in exit statement, got " ++ show t)))
+  return TyAny
 
 typeCheckStmt (StmtPrint _ e) = do
   context <- get
@@ -246,7 +270,9 @@ typeCheckStmt (StmtIf predicate b1 b2) = do
        (lift (Error SemanticError ("Condition cannot be of type " ++ show predicateType)))
   t1 <- lift $ typeCheckBlock b1 context
   t2 <- lift $ typeCheckBlock b2 context
-  lift $ mergeTypes t1 t2
+  if isVoidType t1 || isVoidType t2
+  then return TyVoid
+  else lift $ mergeTypes t1 t2
 
 typeCheckStmt (StmtWhile predicate block) = do
   context <- get
@@ -263,7 +289,7 @@ typeCheckFunction (FuncDef expectedReturnType name args block) context = do
   let addArgs = forM_ args (\(argType, argName) -> addVariable argName argType)
   context <- execStateT addArgs context
   actualReturnType <- typeCheckBlock block context
-  when (actualReturnType == TyVoid)
+  when (isVoidType actualReturnType)
        (Error SyntaxError ("Function \"" ++ name ++ "\" does not return anything"))
   when (not (compatibleType expectedReturnType actualReturnType))
        (Error SemanticError ("Function \"" ++ name ++ "\" should return type " ++ show expectedReturnType ++ " but returns " ++ show actualReturnType ++ " instead"))
