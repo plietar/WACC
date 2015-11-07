@@ -111,16 +111,22 @@ checkArrayIndexing TyAny _ _ = OK TyAny
 checkArrayIndexing t [] _    = OK t
 checkArrayIndexing t _ _     = Error SemanticError ("Cannot index variable of type " ++ show t)
 
-
 compatibleType :: Type -> Type -> Bool
-compatibleType _ TyAny = True
-compatibleType TyAny _ = True
-compatibleType (TyPair f1 s1) (TyPair f2 s2)
-  = compatibleType f1 f2 && compatibleType s1 s2
-compatibleType (TyArray t1) (TyArray t2)
-  = compatibleType t1 t2
 compatibleType t1 t2
-  = t1 == t2
+  = case mergeTypes t1 t2 of
+    OK _      -> True
+    Error _ _ -> False
+
+mergeTypes :: Type -> Type -> WACCResult Type
+mergeTypes t1 TyAny = OK t1
+mergeTypes TyAny t2 = OK t2
+mergeTypes (TyArray t1) (TyArray t2)
+  = TyArray <$> mergeTypes t1 t2
+mergeTypes (TyPair f1 s1) (TyPair f2 s2)
+  = TyPair <$> mergeTypes f1 f2 <*> mergeTypes s1 s2
+mergeTypes t1 t2
+  | t1 == t2  = OK t1
+  | otherwise = Error SemanticError ("Types " ++ show t1 ++ " and " ++ show t2 ++ " are not compatible")
 
 isArrayType :: Type -> Bool
 isArrayType (TyArray _) = True
@@ -158,10 +164,8 @@ typeCheckAssignLHS (LHSArray array) context
 typeCheckAssignRHS :: AssignRHS -> Context -> WACCResult Type
 typeCheckAssignRHS (RHSExpr expr) context
   = typeCheckExpr expr context
-typeCheckAssignRHS (RHSArrayLit []) context
-  = OK TyAny
 typeCheckAssignRHS (RHSArrayLit exprs) context
-  = undefined -- TODO
+  = foldM (\t e -> typeCheckExpr e context >>= mergeTypes t) TyAny exprs
 typeCheckAssignRHS (RHSNewPair e1 e2) context = do
   t1 <- typeCheckExpr e1 context
   t2 <- typeCheckExpr e2 context
@@ -199,9 +203,9 @@ typeCheckStmt (StmtAssign lhs rhs) = do
 typeCheckStmt (StmtFree e) = do
   context <- get
   t <- lift $ typeCheckExpr e context
-  if isPairType t
-  then return TyVoid
-  else lift (Error SemanticError ("Cannot free variable of type " ++ show t))
+  when (not (isPairType t))
+       (lift (Error SemanticError ("Cannot free variable of type " ++ show t)))
+  return TyVoid
 
 typeCheckStmt (StmtReturn e) = do
   context <- get
@@ -219,9 +223,7 @@ typeCheckStmt (StmtIf predicate b1 b2) = do
        (lift (Error SemanticError ("Condition cannot be of type " ++ show predicateType)))
   t1 <- lift $ typeCheckBlock b1 context
   t2 <- lift $ typeCheckBlock b2 context
-  when (not (compatibleType t1 t2))
-       (lift (Error SemanticError ("Then and Else branches do not return the same type")))
-  return t1
+  lift $ mergeTypes t1 t2
 
 typeCheckStmt (StmtWhile predicate block) = do
   context <- get
