@@ -1,5 +1,7 @@
 {
 module Parser where
+import Data.Int
+
 import Tokens
 import AST
 import Common
@@ -141,7 +143,9 @@ Stmt :: { Stmt }
   | begin Block end { StmtScope $2 }
 
 Expr :: { Expr }
-  : INTLIT    { ExprLit (LitInt $1) }
+  : INTLIT    {% if $1 > toInteger (maxBound :: Int32)
+                 then Error SyntaxError "Integer litteral too large"
+                 else OK (ExprLit (LitInt $1)) }
   | BOOLLIT   { ExprLit (LitBool $1) }
   | CHARLIT   { ExprLit (LitChar $1) }
   | STRLIT    { ExprLit (LitString $1) }
