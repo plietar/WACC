@@ -1,32 +1,46 @@
 {-# LANGUAGE LambdaCase #-}
 
 module SemCheck where
-import Data.Map as Map
+import qualified Data.Map as Map
 import Control.Monad.State
 
 import ScopedMap
 import AST
 import Common
 import Control.Monad.Trans
+import Control.Applicative
 
 data Context = Context
   { variables :: ScopedMap String Type
-  , functions :: Map String ([Type], Type)
+  , functions :: Map.Map String ([Type], Type)
   }
 type ContextState a = StateT Context WACCResult a
 
 addVariable :: String -> Type -> ContextState ()
 addVariable name value = do
-  state <- get
-  case ScopedMap.insertIfNotExists name value (variables state) of
-    Just table -> put state { variables = table }
+  context <- get
+  case ScopedMap.insertIfNotExists name value (variables context) of
+    Just table -> put context { variables = table }
     Nothing -> lift $ Error SemanticError ("Variable \"" ++ name ++ "\" already exists")
 
 getVariable :: String -> Context -> WACCResult Type
-getVariable name state
-  = case ScopedMap.lookup name (variables state) of
+getVariable name context
+  = case ScopedMap.lookup name (variables context) of
       Just value -> OK value
       Nothing    -> Error SemanticError ("Unknown variable \"" ++ name ++ "\"")
+
+addFunction :: String -> ([Type], Type) -> ContextState ()
+addFunction name typ = do
+  context <- get
+  case Map.lookup name (functions context) of
+    Just _  -> lift $ Error SemanticError ("Function \"" ++ name ++ "\" already exists")
+    Nothing -> put context { functions = Map.insert name typ (functions context) }
+
+getFunction :: String -> Context -> WACCResult ([Type], Type)
+getFunction name context
+  = case Map.lookup name (functions context) of
+      Just value -> OK value
+      Nothing    -> Error SemanticError ("Unknown function \"" ++ name ++ "\"")
 
 emptyContext :: Context
 emptyContext = Context ScopedMap.empty Map.empty
@@ -172,8 +186,17 @@ typeCheckAssignRHS (RHSNewPair e1 e2) context = do
   return (TyPair t1 t2)
 typeCheckAssignRHS (RHSPair pairElem) context
   = typeCheckPairElem pairElem context
-typeCheckAssignRHS (RHSCall fname args) context
-  = undefined -- TODO
+typeCheckAssignRHS (RHSCall fname args) context = do
+  (expectedArgsType, returnType) <- undefined
+  let checkArgs _ [] [] = OK ()
+      checkArgs n (a1:as1) (a2:as2)
+        = if compatibleType a1 a2
+          then checkArgs (n+1) as1 as2
+          else Error SemanticError ("Expected type " ++ show a2 ++ " but got type " ++ show a1 ++ " for argument " ++ show (n + 1)++ " of call to function \"" ++ fname ++ "\"")
+      checkArgs n _ _ = Error SemanticError ("Wrong number of arguments in call to function \"" ++ fname ++ "\". Expected " ++ show (length expectedArgsType) ++ " but got " ++ show n)
+  actualArgsType <- mapM (\e -> typeCheckExpr e context) args
+  checkArgs 0 expectedArgsType actualArgsType
+  return returnType
 
 typeCheckBlock :: [Stmt] -> Context -> WACCResult Type
 typeCheckBlock block parent
@@ -236,6 +259,20 @@ typeCheckStmt (StmtScope block) = do
   context <- get
   lift $ typeCheckBlock block context
 
-typeCheckProgram (Program func block) = typeCheckBlock block
+typeCheckFunction (FuncDef expectedReturnType name args block) context = do
+  let addArgs = forM_ args (\(argType, argName) -> addVariable argName argType)
+  context <- execStateT addArgs context
+  actualReturnType <- typeCheckBlock block context
+  when (actualReturnType == TyVoid)
+       (Error SyntaxError ("Function \"" ++ name ++ "\" does not return anything"))
+  when (not (compatibleType expectedReturnType actualReturnType))
+       (Error SemanticError ("Function \"" ++ name ++ "\" should return type " ++ show expectedReturnType ++ " but returns " ++ show actualReturnType ++ " instead"))
 
+typeCheckProgram (Program funcs block) = do
+  let defineFunc (FuncDef returnType name args _)
+        = addFunction name (map fst args, returnType)
+      defineAllFuncs = forM_ funcs defineFunc
+  context <- execStateT defineAllFuncs emptyContext
+  forM_ funcs (\f -> typeCheckFunction f context)
+  typeCheckBlock block context
 

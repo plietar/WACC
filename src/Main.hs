@@ -21,7 +21,7 @@ compile :: String -> WACCResult ()
 compile source = do
   tokens <- waccLexer source
   ast <- waccParser tokens
-  typeCheckProgram ast emptyContext
+  typeCheckProgram ast
   return ()
 
 test contents = do
