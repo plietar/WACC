@@ -13,6 +13,7 @@ import Control.Applicative
 data Context = Context
   { variables :: ScopedMap String Type
   , functions :: Map.Map String ([Type], Type)
+  , returnAllowed :: Bool
   }
 type ContextState a = StateT Context WACCResult a
 
@@ -43,14 +44,11 @@ getFunction name context
       Nothing    -> Error SemanticError ("Unknown function \"" ++ name ++ "\"")
 
 emptyContext :: Context
-emptyContext = Context ScopedMap.empty Map.empty
+emptyContext = Context ScopedMap.empty Map.empty False
 
 newContext :: Context -> Context
 newContext parent
-  = Context
-    { variables = newScope (variables parent)
-    , functions = functions parent
-    }
+  = parent { variables = newScope (variables parent) }
 
 typeCheckExpr :: Expr -> Context -> WACCResult Type
 typeCheckExpr (ExprLit (LitInt _)) _    = OK TyInt
@@ -249,6 +247,8 @@ typeCheckStmt (StmtFree e) = do
 
 typeCheckStmt (StmtReturn e) = do
   context <- get
+  when (not (returnAllowed context))
+       (lift (Error SemanticError ("Cannot return from global context")))
   lift $ typeCheckExpr e context
 
 typeCheckStmt (StmtExit e) = do
@@ -285,20 +285,22 @@ typeCheckStmt (StmtScope block) = do
   context <- get
   lift $ typeCheckBlock block context
 
-typeCheckFunction (FuncDef expectedReturnType name args block) context = do
-  let addArgs = forM_ args (\(argType, argName) -> addVariable argName argType)
-  context <- execStateT addArgs context
-  actualReturnType <- typeCheckBlock block context
+typeCheckFunction (FuncDef expectedReturnType name args block) = do
+  modify (\c -> c { returnAllowed = True })
+  forM_ args (\(argType, argName) -> addVariable argName argType)
+  context <- get
+  actualReturnType <- lift $ typeCheckBlock block context
   when (isVoidType actualReturnType)
-       (Error SyntaxError ("Function \"" ++ name ++ "\" does not return anything"))
+       (lift (Error SyntaxError ("Function \"" ++ name ++ "\" does not return anything")))
   when (not (compatibleType expectedReturnType actualReturnType))
-       (Error SemanticError ("Function \"" ++ name ++ "\" should return type " ++ show expectedReturnType ++ " but returns " ++ show actualReturnType ++ " instead"))
+       (lift (Error SemanticError ("Function \"" ++ name ++ "\" should return type " ++ show expectedReturnType ++ " but returns " ++ show actualReturnType ++ " instead")))
 
 typeCheckProgram (Program funcs block) = do
   let defineFunc (FuncDef returnType name args _)
         = addFunction name (map fst args, returnType)
       defineAllFuncs = forM_ funcs defineFunc
   context <- execStateT defineAllFuncs emptyContext
-  forM_ funcs (\f -> typeCheckFunction f context)
+
+  forM_ funcs (\f -> evalStateT (typeCheckFunction f) context)
   typeCheckBlock block context
 
