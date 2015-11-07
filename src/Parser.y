@@ -6,6 +6,7 @@ import Common
 }
 
 %name waccParser Program
+%name waccParseStmt Stmt
 %name waccParseExpr Expr
 %monad { WACCResult } { (>>=) } { return }
 %tokentype { Token }
@@ -106,7 +107,7 @@ BaseType :: { Type }
 PairElemType :: { Type }
   : BaseType { $1 }
   | ArrayType { $1 }
-  | pair { TyNestedPair }
+  | pair { TyAny }
 
 ArrayType :: { Type }
   : Type '[' ']' { TyArray $1 }
@@ -189,8 +190,8 @@ ArrayElem :: { ArrayElem }
   : IDENT many1(ArrayIndex) { ArrayElem $1 $2 }
 
 PairElem :: { PairElem }
-  : fst Expr { PairFst $2 }
-  | snd Expr { PairSnd $2 }
+  : fst Expr { PairElem PairFst $2 }
+  | snd Expr { PairElem PairSnd $2 }
 
 ArrayLit :: { [Expr] }
   : '[' sepBy(Expr, ',') ']' { $2 }

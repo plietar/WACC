@@ -9,14 +9,17 @@ data Type = TyInt
           | TyChar
           | TyString
           | TyPair Type Type
-          | TyNestedPair
           | TyArray Type
           | TyNull
+          | TyAny
+          | TyVoid
     deriving (Eq,Show)
 
 data ArrayElem = ArrayElem String [Expr]
     deriving (Show)
-data PairElem  = PairFst Expr | PairSnd Expr
+data PairSide  = PairFst | PairSnd
+    deriving (Show)
+data PairElem  = PairElem PairSide Expr
     deriving (Show)
 
 data AssignLHS = LHSVar String
