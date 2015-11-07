@@ -179,7 +179,7 @@ typeCheckAssignRHS :: AssignRHS -> Context -> WACCResult Type
 typeCheckAssignRHS (RHSExpr expr) context
   = typeCheckExpr expr context
 typeCheckAssignRHS (RHSArrayLit exprs) context
-  = foldM (\t e -> typeCheckExpr e context >>= mergeTypes t) TyAny exprs
+  = fmap TyArray (foldM (\t e -> typeCheckExpr e context >>= mergeTypes t) TyAny exprs)
 typeCheckAssignRHS (RHSNewPair e1 e2) context = do
   t1 <- typeCheckExpr e1 context
   t2 <- typeCheckExpr e2 context
