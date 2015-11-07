@@ -56,7 +56,7 @@ typeCheckExpr :: Expr -> Context -> WACCResult Type
 typeCheckExpr (ExprLit (LitInt _)) _    = OK TyInt
 typeCheckExpr (ExprLit (LitBool _)) _   = OK TyBool
 typeCheckExpr (ExprLit (LitChar _)) _   = OK TyChar
-typeCheckExpr (ExprLit (LitString _)) _ = OK TyString
+typeCheckExpr (ExprLit (LitString _)) _ = OK (TyArray TyChar)
 typeCheckExpr (ExprNull) _              = OK TyAny
 
 typeCheckExpr (ExprVar varname) context

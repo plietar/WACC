@@ -7,7 +7,6 @@ data FuncDef = FuncDef Type String [(Type, String)] [Stmt]
 data Type = TyInt
           | TyBool
           | TyChar
-          | TyString
           | TyPair Type Type
           | TyArray Type
           | TyNull

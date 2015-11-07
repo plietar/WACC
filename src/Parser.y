@@ -102,7 +102,7 @@ BaseType :: { Type }
   : int { TyInt }
   | bool { TyBool }
   | char { TyChar }
-  | string { TyString }
+  | string { TyArray TyChar }
 
 PairElemType :: { Type }
   : BaseType { $1 }
