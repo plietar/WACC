@@ -157,10 +157,11 @@ isArrayType (TyArray _) = True
 isArrayType TyAny       = True
 isArrayType _           = False
 
-isPairType :: Type -> Bool
-isPairType (TyPair _ _) = True
-isPairType TyAny        = True
-isPairType _            = False
+isHeapType :: Type -> Bool
+isHeapType (TyPair _ _) = True
+isHeapType (TyArray _)  = True
+isHeapType TyAny        = True
+isHeapType _            = False
 
 isOrderedType :: Type -> Bool
 isOrderedType TyInt  = True
@@ -267,7 +268,7 @@ typeCheckStmt (StmtRead lhs) = do
 typeCheckStmt (StmtFree e) = do
   context <- get
   t <- lift $ typeCheckExpr e context
-  when (not (isPairType t))
+  when (not (isHeapType t))
        (lift (Error SemanticError ("Cannot free variable of type " ++ show t)))
   return TyVoid
 
