@@ -83,24 +83,25 @@ checkUnOp op typ
        else Error SemanticError ("Cannot apply unary operator " ++ show op ++ " to type " ++ show typ)
 
 binOpType :: BinOp -> (Type -> Type -> Bool, Type)
-binOpType BinOpAdd = arithmeticOp
-binOpType BinOpSub = arithmeticOp
-binOpType BinOpMul = arithmeticOp
-binOpType BinOpDiv = arithmeticOp
-binOpType BinOpRem = arithmeticOp
-binOpType BinOpGT  = orderOp
-binOpType BinOpGE  = orderOp
-binOpType BinOpLT  = orderOp
-binOpType BinOpLE  = orderOp
-binOpType BinOpEQ  = equalityOp
-binOpType BinOpNE  = equalityOp
-binOpType BinOpAnd = booleanOp
-binOpType BinOpOr  = booleanOp
-
-arithmeticOp = (\t1 t2 -> compatibleType TyInt t1 && compatibleType TyInt t2, TyInt)
-booleanOp    = (\t1 t2 -> compatibleType TyBool t1 && compatibleType TyBool t2, TyBool)
-orderOp      = (\t1 t2 -> compatibleType t1 t2 && isOrderedType t1 && isOrderedType t2, TyBool)
-equalityOp   = (compatibleType, TyBool)
+binOpType op = case op of
+  BinOpAdd -> arithmeticOp
+  BinOpSub -> arithmeticOp
+  BinOpMul -> arithmeticOp
+  BinOpDiv -> arithmeticOp
+  BinOpRem -> arithmeticOp
+  BinOpGT  -> orderOp
+  BinOpGE  -> orderOp
+  BinOpLT  -> orderOp
+  BinOpLE  -> orderOp
+  BinOpEQ  -> equalityOp
+  BinOpNE  -> equalityOp
+  BinOpAnd -> booleanOp
+  BinOpOr  -> booleanOp
+  where
+    arithmeticOp = (\t1 t2 -> compatibleType TyInt t1 && compatibleType TyInt t2, TyInt)
+    booleanOp    = (\t1 t2 -> compatibleType TyBool t1 && compatibleType TyBool t2, TyBool)
+    orderOp      = (\t1 t2 -> compatibleType t1 t2 && isOrderedType t1 && isOrderedType t2, TyBool)
+    equalityOp   = (compatibleType, TyBool)
 
 checkBinOp :: BinOp -> Type -> Type -> WACCResult Type
 checkBinOp op t1 t2
@@ -170,10 +171,10 @@ typeCheckPairElem :: PairElem -> Context -> WACCResult Type
 typeCheckPairElem (PairElem side e) context = do
   t <- typeCheckExpr e context
   case (side, t) of
-    (PairFst, TyPair fst _) -> OK fst
-    (PairSnd, TyPair _ snd) -> OK snd
-    (_, TyAny             ) -> OK TyAny
-    (_, _                 ) -> Error SemanticError ("Type " ++ show t ++ " is not pair")
+    (PairFst, TyPair f _) -> OK f
+    (PairSnd, TyPair _ s) -> OK s
+    (_, TyAny           ) -> OK TyAny
+    (_, _               ) -> Error SemanticError ("Type " ++ show t ++ " is not pair")
 
 typeCheckAssignLHS :: AssignLHS -> Context -> WACCResult Type
 typeCheckAssignLHS (LHSVar name) context
@@ -196,7 +197,8 @@ typeCheckAssignRHS (RHSPair pairElem) context
   = typeCheckPairElem pairElem context
 typeCheckAssignRHS (RHSCall fname args) context = do
   (expectedArgsType, returnType) <- getFunction fname context
-  let checkArgs _ [] [] = OK ()
+  let checkArgs :: Integer -> [Type] -> [Type] -> WACCResult ()
+      checkArgs _ [] [] = OK ()
       checkArgs n (a1:as1) (a2:as2)
         = if compatibleType a1 a2
           then checkArgs (n+1) as1 as2
@@ -260,7 +262,7 @@ typeCheckStmt (StmtExit e) = do
 
 typeCheckStmt (StmtPrint _ e) = do
   context <- get
-  lift $ typeCheckExpr e context
+  _ <- lift $ typeCheckExpr e context
   return TyVoid
 
 typeCheckStmt (StmtIf predicate b1 b2) = do
@@ -285,22 +287,25 @@ typeCheckStmt (StmtScope block) = do
   context <- get
   lift $ typeCheckBlock block context
 
-typeCheckFunction (FuncDef expectedReturnType name args block) = do
-  modify (\c -> c { returnAllowed = True })
-  forM_ args (\(argType, argName) -> addVariable argName argType)
-  context <- get
-  actualReturnType <- lift $ typeCheckBlock block context
+typeCheckFunction :: FuncDef -> Context -> WACCResult ()
+typeCheckFunction (FuncDef expectedReturnType name args block) globalContext = do
+  let allowReturn = modify (\c -> c { returnAllowed = True })
+  let addArguments = forM_ args (\(argType, argName) -> addVariable argName argType)
+  context <- execStateT (allowReturn >> addArguments) globalContext 
+  actualReturnType <- typeCheckBlock block context
   when (isVoidType actualReturnType)
-       (lift (Error SyntaxError ("Function \"" ++ name ++ "\" does not return anything")))
+       (Error SyntaxError ("Function \"" ++ name ++ "\" does not return anything"))
   when (not (compatibleType expectedReturnType actualReturnType))
-       (lift (Error SemanticError ("Function \"" ++ name ++ "\" should return type " ++ show expectedReturnType ++ " but returns " ++ show actualReturnType ++ " instead")))
+       (Error SemanticError ("Function \"" ++ name ++ "\" should return type " ++ show expectedReturnType ++ " but returns " ++ show actualReturnType ++ " instead"))
 
+typeCheckProgram :: Program -> WACCResult ()
 typeCheckProgram (Program funcs block) = do
   let defineFunc (FuncDef returnType name args _)
         = addFunction name (map fst args, returnType)
       defineAllFuncs = forM_ funcs defineFunc
   context <- execStateT defineAllFuncs emptyContext
 
-  forM_ funcs (\f -> evalStateT (typeCheckFunction f) context)
-  typeCheckBlock block context
+  forM_ funcs (\f -> typeCheckFunction f context)
+  _ <- typeCheckBlock block context
+  return ()
 

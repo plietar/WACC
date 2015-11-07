@@ -31,6 +31,9 @@ lookup key (Leaf table parent)
 lookup key (Root table)
   = Map.lookup key table
 
+empty :: ScopedMap k v
 empty = Root Map.empty
+
+newScope :: ScopedMap k v -> ScopedMap k v
 newScope parent = Leaf Map.empty parent
 

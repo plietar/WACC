@@ -3,7 +3,6 @@ version:             0.1.0.0
 synopsis:            WACC Compiler
 -- description:
 -- license:
-license-file:        LICENSE
 author:              Ignacio Navarro <in714@ic.ac.uk>,
                      Jaime Rodriguez <jr1713@ic.ac.uk>,
                      Leanne Lyons <ll5914@ic.ac.uk>,

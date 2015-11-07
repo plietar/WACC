@@ -18,8 +18,9 @@ instance Functor WACCResult where
 instance Applicative WACCResult where
   pure value = OK value
 
-  (OK f)           <*> (OK value) = OK (f value)
-  (Error kind msg) <*> _          = Error kind msg
+  (OK f)           <*> (OK value)       = OK (f value)
+  (OK _)           <*> (Error kind msg) = Error kind msg
+  (Error kind msg) <*> _                = Error kind msg
 
 instance Monad WACCResult where
   return = pure
