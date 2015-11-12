@@ -11,70 +11,70 @@ import Common
 %name waccParseStmt Stmt
 %name waccParseExpr Expr
 %monad { WACCResult } { (>>=) } { return }
-%tokentype { Token }
+%tokentype { (Int, Int, Token) }
 %error { parseError }
 
 %token
-    begin   { TokKeyword "begin" }
-    end     { TokKeyword "end" }
-    skip    { TokKeyword "skip" }
-    read    { TokKeyword "read" }
-    free    { TokKeyword "free" }
-    return  { TokKeyword "return" }
-    exit    { TokKeyword "exit" }
-    print   { TokKeyword "print" }
-    println { TokKeyword "println" }
-    is      { TokKeyword "is" }
-    if      { TokKeyword "if" }
-    then    { TokKeyword "then" }
-    else    { TokKeyword "else" }
-    fi      { TokKeyword "fi" }
-    while   { TokKeyword "while" }
-    do      { TokKeyword "do" }
-    done    { TokKeyword "done" }
-    newpair { TokKeyword "newpair" }
-    call    { TokKeyword "call" }
-    fst     { TokKeyword "fst" }
-    snd     { TokKeyword "snd" }
-    int     { TokKeyword "int" }
-    bool    { TokKeyword "bool" }
-    char    { TokKeyword "char" }
-    string  { TokKeyword "string" }
-    pair    { TokKeyword "pair" }
-    null    { TokKeyword "null" }
+    begin   { (_, _, TokKeyword "begin" ) }
+    end     { (_, _, TokKeyword "end" ) }
+    skip    { (_, _, TokKeyword "skip" ) }
+    read    { (_, _, TokKeyword "read" ) }
+    free    { (_, _, TokKeyword "free" ) }
+    return  { (_, _, TokKeyword "return" ) }
+    exit    { (_, _, TokKeyword "exit" ) }
+    print   { (_, _, TokKeyword "print" ) }
+    println { (_, _, TokKeyword "println" ) }
+    is      { (_, _, TokKeyword "is" ) }
+    if      { (_, _, TokKeyword "if" ) }
+    then    { (_, _, TokKeyword "then" ) }
+    else    { (_, _, TokKeyword "else" ) }
+    fi      { (_, _, TokKeyword "fi" ) }
+    while   { (_, _, TokKeyword "while" ) }
+    do      { (_, _, TokKeyword "do" ) }
+    done    { (_, _, TokKeyword "done" ) }
+    newpair { (_, _, TokKeyword "newpair" ) }
+    call    { (_, _, TokKeyword "call" ) }
+    fst     { (_, _, TokKeyword "fst" ) }
+    snd     { (_, _, TokKeyword "snd" ) }
+    int     { (_, _, TokKeyword "int" ) }
+    bool    { (_, _, TokKeyword "bool" ) }
+    char    { (_, _, TokKeyword "char" ) }
+    string  { (_, _, TokKeyword "string" ) }
+    pair    { (_, _, TokKeyword "pair" ) }
+    null    { (_, _, TokKeyword "null" ) }
 
-    len     { TokKeyword "len" }
-    ord     { TokKeyword "ord" }
-    chr     { TokKeyword "chr" }
+    len     { (_, _, TokKeyword "len" ) }
+    ord     { (_, _, TokKeyword "ord" ) }
+    chr     { (_, _, TokKeyword "chr" ) }
 
-    '!'     { TokOp "!" }
-    '*'     { TokOp "*" }
-    '/'     { TokOp "/" }
-    '%'     { TokOp "%" }
-    '+'     { TokOp "+" }
-    '-'     { TokOp "-" }
-    '>'     { TokOp ">" }
-    '>='    { TokOp ">=" }
-    '<'     { TokOp "<" }
-    '<='    { TokOp "<=" }
-    '=='    { TokOp "==" }
-    '!='    { TokOp "!=" }
-    '&&'    { TokOp "&&" }
-    '||'    { TokOp "||" }
+    '!'     { (_, _, TokOp "!" ) }
+    '*'     { (_, _, TokOp "*" ) }
+    '/'     { (_, _, TokOp "/" ) }
+    '%'     { (_, _, TokOp "%" ) }
+    '+'     { (_, _, TokOp "+" ) }
+    '-'     { (_, _, TokOp "-" ) }
+    '>'     { (_, _, TokOp ">" ) }
+    '>='    { (_, _, TokOp ">=" ) }
+    '<'     { (_, _, TokOp "<" ) }
+    '<='    { (_, _, TokOp "<=" ) }
+    '=='    { (_, _, TokOp "==" ) }
+    '!='    { (_, _, TokOp "!=" ) }
+    '&&'    { (_, _, TokOp "&&" ) }
+    '||'    { (_, _, TokOp "||" ) }
 
-    '('     { TokLParen }
-    ')'     { TokRParen }
-    ','     { TokComma }
-    '='     { TokEqual }
-    '['     { TokLBracket }
-    ']'     { TokRBracket }
-    ';'     { TokSemiColon }
+    '('     { (_, _, TokLParen ) }
+    ')'     { (_, _, TokRParen ) }
+    ','     { (_, _, TokComma ) }
+    '='     { (_, _, TokEqual ) }
+    '['     { (_, _, TokLBracket ) }
+    ']'     { (_, _, TokRBracket ) }
+    ';'     { (_, _, TokSemiColon ) }
 
-    IDENT   { TokIdent $$ }
-    BOOLLIT { TokBoolLit $$ }
-    STRLIT  { TokStrLit $$ }
-    CHARLIT { TokCharLit $$ }
-    INTLIT  { TokIntLit $$ }
+    IDENT   { (_, _, TokIdent $$ ) }
+    BOOLLIT { (_, _, TokBoolLit $$ ) }
+    STRLIT  { (_, _, TokStrLit $$ ) }
+    CHARLIT { (_, _, TokCharLit $$ ) }
+    INTLIT  { (_, _, TokIntLit $$ ) }
 
 %left '||'
 %left '&&'
@@ -231,7 +231,7 @@ endBy1(p,q)
   : many1 (sepL(p,q)) { $1 }
 
 {
-parseError :: [Token] -> WACCResult a
+parseError :: [(Int, Int, Token)] -> WACCResult a
 parseError ts = Error SyntaxError "Syntax Error"
 }
 
