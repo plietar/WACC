@@ -5,7 +5,7 @@ import Tokens
 import Common
 }
 
-%wrapper "basic"
+%wrapper "posn"
 
 $digit             = 0-9
 $alpha             = [a-zA-Z]
@@ -29,56 +29,53 @@ tokens :-
   "#".*(\n)            ;
  
   -- Symbols
-  ","                  { \s -> TokComma }
-  ";"                  { \s -> TokSemiColon }
-  "["                  { \s -> TokLBracket }
-  "]"                  { \s -> TokRBracket }
-  "("                  { \s -> TokLParen }
-  ")"                  { \s -> TokRParen }
+  ","                  { \p s -> TokComma }
+  ";"                  { \p s -> TokSemiColon }
+  "["                  { \p s -> TokLBracket }
+  "]"                  { \p s -> TokRBracket }
+  "("                  { \p s -> TokLParen }
+  ")"                  { \p s -> TokRParen }
 
   -- Program Keywords
   begin | end | is | skip | read | free | return | exit | print | println | if
     | then | else | fi | while | do | done | newpair | call | fst | snd | int
     | bool | char | string | pair | len | ord | chr | null
-                       { \s -> TokKeyword s}
+                       { \p s-> TokKeyword s}
  
   -- Operators
   "!" | "*" | "/" | "%" | "+" | "-" | ">" | ">=" | "<" | "<="
     | "==" | "!=" | "&&" | "||"
-                       { \s -> TokOp s}
+                       { \p s-> TokOp s}
 
   -- Assign Operator
-  "="                  { \s -> TokEqual }
+  "="                  { \p s-> TokEqual }
 
   -- Boolean Literals
-  "true"               { \s -> TokBoolLit True }
-  "false"              { \s -> TokBoolLit False }
+  "true"               { \p s-> TokBoolLit True }
+  "false"              { \p s-> TokBoolLit False }
 
 
   -- Identifier
   ($underscore | $alpha) ($underscore | $alpha | $digit)*
-                       { \s -> TokIdent s}
+                       { \p s-> TokIdent s}
  
   -- Integer Literal
-  @integer_literal     { \s -> TokIntLit (read s) }
+  @integer_literal     { \p s-> TokIntLit (read s) }
   -- Character Literal
-  @character_literal   { \s -> TokCharLit (read s) }
+  @character_literal   { \p s-> TokCharLit (read s) }
 
   -- String Literals
-  @string_literal      { \s -> TokStrLit (read s) }
+  @string_literal      { \p s-> TokStrLit (read s) }
 
 
 {
--- Each action has type :: String -> Token
-
---waccLexer = alexScanTokens
-waccLexer str = go ('\n',[],str)
-  where go inp@(_,_bs,s) =
+--alexScanTokens :: String -> [token]
+waccLexer str = go (alexStartPos,'\n',[],str)
+  where go inp@(pos,_,_,str) =
           case alexScan inp 0 of
                 AlexEOF -> OK []
-                AlexError _ -> Error LexicalError "lexical error"
+                AlexError ((AlexPn _ line column),_,_,_) 
+					-> Error LexicalError $ "at " ++ (show line) ++  ":"  ++ (show column)
                 AlexSkip  inp' len     -> go inp'
-                AlexToken inp' len act -> fmap (\tokens -> act (take len s) : tokens) (go inp')
-
+                AlexToken inp' len act -> fmap (\tokens -> act pos (take len str) : tokens) (go inp')
 }
-
