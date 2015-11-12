@@ -74,8 +74,17 @@ waccLexer str = go (alexStartPos,'\n',[],str)
   where go inp@(pos,_,_,str) =
           case alexScan inp 0 of
                 AlexEOF -> OK []
-                AlexError ((AlexPn _ line column),_,_,_) 
-                  -> Error LexicalError $ "at " ++ (show line) ++  ":"  ++ (show column)
+                AlexError ((AlexPn _ line column),chr,_,str) 
+					        -> Error LexicalError $ "at " ++ (show line) ++  ":"  ++ (show column)
+                                                ++ " -- token recognition error at: " ++ (chr : firstWord str)
                 AlexSkip  inp' len     -> go inp'
                 AlexToken inp' len act -> fmap (\tokens -> act pos (take len str) : tokens) (go inp')
+
+
+firstWord str = takeWhile (/= ' ') str
+
 }
+
+
+
+
