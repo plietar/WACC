@@ -22,7 +22,8 @@ addVariable name value = do
   context <- get
   case ScopedMap.insertIfNotExists name value (variables context) of
     Just table -> put context { variables = table }
-    Nothing -> lift $ Error SemanticError ("Variable \"" ++ name ++ "\" already exists")
+    Nothing -> lift $ Error SemanticError ("Variable \"" ++ name 
+                                                         ++ "\" already exists")
 
 getVariable :: String -> Context -> WACCResult Type
 getVariable name context
@@ -34,7 +35,8 @@ addFunction :: String -> ([Type], Type) -> ContextState ()
 addFunction name typ = do
   context <- get
   case Map.lookup name (functions context) of
-    Just _  -> lift $ Error SemanticError ("Function \"" ++ name ++ "\" already exists")
+    Just _  -> lift $ Error SemanticError ("Function \"" ++ name 
+                                                         ++ "\" already exists")
     Nothing -> put context { functions = Map.insert name typ (functions context) }
 
 getFunction :: String -> Context -> WACCResult ([Type], Type)
@@ -80,7 +82,8 @@ checkUnOp op typ
   = let (predicate, result) = unOpType op
     in if predicate typ
        then OK result
-       else Error SemanticError ("Cannot apply unary operator " ++ show op ++ " to type " ++ show typ)
+       else Error SemanticError ("Cannot apply unary operator " 
+                                          ++ show op ++ " to type " ++ show typ)
 
 binOpType :: BinOp -> (Type -> Type -> Bool, Type)
 binOpType op = case op of
@@ -98,9 +101,12 @@ binOpType op = case op of
   BinOpAnd -> booleanOp
   BinOpOr  -> booleanOp
   where
-    arithmeticOp = (\t1 t2 -> compatibleType TyInt t1 && compatibleType TyInt t2, TyInt)
-    booleanOp    = (\t1 t2 -> compatibleType TyBool t1 && compatibleType TyBool t2, TyBool)
-    orderOp      = (\t1 t2 -> compatibleType t1 t2 && isOrderedType t1 && isOrderedType t2, TyBool)
+    arithmeticOp = (\t1 t2 -> compatibleType TyInt t1 
+                                            && compatibleType TyInt t2, TyInt)
+    booleanOp    = (\t1 t2 -> compatibleType TyBool t1 
+                                            && compatibleType TyBool t2, TyBool)
+    orderOp      = (\t1 t2 -> compatibleType t1 t2 && isOrderedType t1 
+                                            && isOrderedType t2, TyBool)
     equalityOp   = (compatibleType, TyBool)
 
 checkBinOp :: BinOp -> Type -> Type -> WACCResult Type
@@ -108,11 +114,14 @@ checkBinOp op t1 t2
   = let (predicate, result) = binOpType op
     in if predicate t1 t2
        then OK result
-       else Error SemanticError ("Cannot apply binary operator " ++ show op ++ " to types " ++ show t1 ++ " and " ++ show t2)
+       else Error SemanticError ("Cannot apply binary operator " ++ show op 
+                                                   ++ " to types " ++ show t1 
+                                                          ++ " and " ++ show t2)
 
 checkArrayElem :: ArrayElem -> Context -> WACCResult Type
 checkArrayElem (ArrayElem varname exprs) context
-  = getVariable varname context >>= (\arrtype -> checkArrayIndexing arrtype exprs context)
+  = getVariable varname context >>= (\arrtype -> checkArrayIndexing arrtype 
+                                                                  exprs context)
 
 checkArrayIndexing :: Type -> [Expr] -> Context -> WACCResult Type
 checkArrayIndexing (TyArray innerType) (e : es) context = do
@@ -122,7 +131,8 @@ checkArrayIndexing (TyArray innerType) (e : es) context = do
   else Error SemanticError ("Cannot index array with type " ++ show indexType)
 checkArrayIndexing TyAny _ _ = OK TyAny
 checkArrayIndexing t [] _    = OK t
-checkArrayIndexing t _ _     = Error SemanticError ("Cannot index variable of type " ++ show t)
+checkArrayIndexing t _ _     = Error SemanticError 
+                                    ("Cannot index variable of type " ++ show t)
 
 compatibleType :: Type -> Type -> Bool
 compatibleType t1 t2
@@ -139,7 +149,8 @@ mergeTypes (TyPair f1 s1) (TyPair f2 s2)
   = TyPair <$> mergeTypes f1 f2 <*> mergeTypes s1 s2
 mergeTypes t1 t2
   | t1 == t2  = OK t1
-  | otherwise = Error SemanticError ("Types " ++ show t1 ++ " and " ++ show t2 ++ " are not compatible")
+  | otherwise = Error SemanticError ("Types " ++ show t1 ++ " and " ++ 
+                                      show t2 ++ " are not compatible")
 
 isArrayType :: Type -> Bool
 isArrayType (TyArray _) = True
@@ -174,7 +185,8 @@ typeCheckPairElem (PairElem side e) context = do
     (PairFst, TyPair f _) -> OK f
     (PairSnd, TyPair _ s) -> OK s
     (_, TyAny           ) -> OK TyAny
-    (_, _               ) -> Error SemanticError ("Type " ++ show t ++ " is not pair")
+    (_, _               ) -> Error SemanticError ("Type " ++ show t 
+                                                          ++ " is not pair")
 
 typeCheckAssignLHS :: AssignLHS -> Context -> WACCResult Type
 typeCheckAssignLHS (LHSVar name) context
@@ -188,7 +200,8 @@ typeCheckAssignRHS :: AssignRHS -> Context -> WACCResult Type
 typeCheckAssignRHS (RHSExpr expr) context
   = typeCheckExpr expr context
 typeCheckAssignRHS (RHSArrayLit exprs) context
-  = fmap TyArray (foldM (\t e -> typeCheckExpr e context >>= mergeTypes t) TyAny exprs)
+  = fmap TyArray 
+          (foldM (\t e -> typeCheckExpr e context >>= mergeTypes t) TyAny exprs)
 typeCheckAssignRHS (RHSNewPair e1 e2) context = do
   t1 <- typeCheckExpr e1 context
   t2 <- typeCheckExpr e2 context
@@ -202,8 +215,15 @@ typeCheckAssignRHS (RHSCall fname args) context = do
       checkArgs n (a1:as1) (a2:as2)
         = if compatibleType a1 a2
           then checkArgs (n+1) as1 as2
-          else Error SemanticError ("Expected type " ++ show a2 ++ " but got type " ++ show a1 ++ " for argument " ++ show (n + 1)++ " of call to function \"" ++ fname ++ "\"")
-      checkArgs n _ _ = Error SemanticError ("Wrong number of arguments in call to function \"" ++ fname ++ "\". Expected " ++ show (length expectedArgsType) ++ " but got " ++ show n)
+          else Error SemanticError ("Expected type " ++ show a2 
+                                      ++ " but got type " ++ show a1 
+                                      ++ " for argument " ++ show (n + 1)
+                                      ++ " of call to function \"" 
+                                      ++ fname ++ "\"")
+      checkArgs n _ _ = Error SemanticError ("Wrong number of arguments in call"
+                                ++ "to function \"" ++ fname ++ "\". Expected " 
+                                ++ show (length expectedArgsType) ++ " but got "
+                                                                  ++ show n)
   actualArgsType <- mapM (\e -> typeCheckExpr e context) args
   checkArgs 0 expectedArgsType actualArgsType
   return returnType
@@ -221,7 +241,9 @@ typeCheckStmt (StmtVar varType varname rhs) = do
   context <- get
   rhsType <- lift $ typeCheckAssignRHS rhs context
   when (not (compatibleType varType rhsType))
-       (lift (Error SemanticError ("Cannot assign RHS of type " ++ show rhsType ++ " to LHS of type " ++ show varType)))
+       (lift (Error SemanticError ("Cannot assign RHS of type " 
+                                         ++ show rhsType ++ " to LHS of type " 
+                                                         ++ show varType)))
   addVariable varname varType
   return TyVoid
 
@@ -230,14 +252,16 @@ typeCheckStmt (StmtAssign lhs rhs) = do
   lhsType <- lift $ typeCheckAssignLHS lhs context
   rhsType <- lift $ typeCheckAssignRHS rhs context
   when (not (compatibleType lhsType rhsType))
-       (lift (Error SemanticError ("Cannot assign RHS of type " ++ show rhsType ++ " to LHS of type " ++ show lhsType)))
+       (lift (Error SemanticError ("Cannot assign RHS of type " 
+                        ++ show rhsType ++ " to LHS of type " ++ show lhsType)))
   return TyVoid
 
 typeCheckStmt (StmtRead lhs) = do
   context <- get
   lhsType <- lift $ typeCheckAssignLHS lhs context
   when (not (isReadableType lhsType))
-       (lift (Error SemanticError ("Cannot read variable of type " ++ show lhsType)))
+       (lift (Error SemanticError ("Cannot read variable of type " 
+                                                             ++ show lhsType)))
   return TyVoid
 
 typeCheckStmt (StmtFree e) = do
