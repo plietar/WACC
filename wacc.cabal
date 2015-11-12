@@ -17,8 +17,8 @@ executable wacc
   main-is:             Main.hs
   -- other-modules:
   -- other-extensions:
-  build-depends:       base >=4.6 && <4.9, array, containers, mtl
+  build-depends:       base >=4.6 && <4.9, array, containers, mtl, parsec
   hs-source-dirs:      src
   default-language:    Haskell2010
   Build-tools:         alex, happy
-  other-modules:       Parser, Lexer
+  other-modules:       Lexer
