@@ -11,6 +11,10 @@ import Tokens
 import Common
 import AST
 
+infixl 4 $>
+($>) :: Functor f => f a -> b -> f b
+($>) = flip (<$)
+
 type Parser = P.Parsec [(Pos, Token)] ()
 
 showTok :: (Pos, Token) -> String
@@ -76,7 +80,7 @@ brackets = between (token TokLBracket) (token TokRBracket)
 expr :: Parser Expr
 expr = buildExpressionParser exprTable term <?> "expression"
   where
-    term = parens expr <|> literal <?> "term"
+    term = parens expr <|> literal <|> (ExprVar <$> identifier) <?> "term"
     binary   p typ assoc = Infix (do{ _ <- p; return (ExprBinOp typ) }) assoc
     left     p typ       = binary p typ AssocLeft
     nonassoc p typ       = binary p typ AssocNone
@@ -105,17 +109,16 @@ param = do
   return (t, i)
 
 parseType :: Parser Type
-parseType = baseType {-<|> arrayType -} <|> pairType <?> "type"
+parseType = buildExpressionParser table term <?> "type"
   where
-    baseType = (TyInt  <$ keyword "int") <|>
-               (TyBool <$ keyword "bool") <|>
-               (TyChar <$ keyword "char") <|>
-               (TyArray TyChar <$ keyword "string")
-    arrayType = parseType <* token TokLBracket <* token TokRBracket
-    pairType :: Parser Type
+    table = [[ Postfix (do { _ <- token TokLBracket; _ <- token TokRBracket; return TyArray }) ]]
+    term = baseType <|> pairType
+    baseType = (keyword "int"    $> TyInt) <|>
+               (keyword "bool"   $> TyBool) <|>
+               (keyword "char"   $> TyChar) <|>
+               (keyword "string" $> TyArray TyChar)
     pairType = keyword "pair" *> parens (TyPair <$> pairElemType <* comma <*> pairElemType)
-    pairElemType = baseType <|> arrayType <|>
-                   (TyPair TyAny TyAny <$ keyword "pair")
+    pairElemType = parseType <|> (keyword "pair" $> TyPair TyAny TyAny)
 
 arrayLit :: Parser AssignRHS
 arrayLit = do
@@ -127,7 +130,8 @@ arrayLit = do
 assignRHS :: Parser AssignRHS
 assignRHS = RHSExpr <$> expr <|>
             arrayLit <|>
-            RHSPair <$> pairElem   
+            RHSPair <$> pairElem <|>
+            rhsCall
 
 pairElem :: Parser PairElem
 pairElem = do
@@ -226,19 +230,27 @@ assignStmt = do
 
 readStmt :: Parser Stmt
 readStmt = do
+  _ <- keyword "read"
   l <- assignLHS
   return (StmtRead l)
 
 freeStmt :: Parser Stmt
 freeStmt = do
+  _ <- keyword "free"
   e <- expr
   return (StmtFree e)
 
 exitStmt :: Parser Stmt
 exitStmt = do
+  _ <- keyword "exit"
   e <- expr
   return (StmtExit e)
 
+returnStmt :: Parser Stmt
+returnStmt = do
+  _ <- keyword "return"
+  e <- expr
+  return (StmtReturn e)
 
 stmt :: Parser Stmt
 stmt = skipStmt  <|>
@@ -251,6 +263,7 @@ stmt = skipStmt  <|>
        readStmt  <|>
        freeStmt  <|>
        exitStmt  <|>
+       returnStmt <|>
        varStmt   <?> "statement"
 
 block :: Parser [Stmt]
@@ -259,16 +272,15 @@ block = sepBy1 stmt semi <?> "block"
 program :: Parser Program
 program = do
   _ <- keyword "begin"
+  f <- many function
   b <- block
   _ <- keyword "end"
-  return (Program [] b)
+  return (Program f b)
 
 function :: Parser FuncDef
 function = do
-  t <- parseType
-  i <- identifier
-  _ <- token TokLParen
-  x <- sepBy param comma 
+  (t,i) <- P.try ((,) <$> parseType <*> identifier <* token TokLParen)
+  x <- sepBy param comma
   _ <- token TokRParen
   _ <- keyword "is"
   b <- block
