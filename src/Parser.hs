@@ -114,10 +114,13 @@ skipStmt :: Parser Stmt
 skipStmt = StmtSkip <$ keyword "skip"
 
 parseType :: Parser Type
-parseType = buildExpressionParser table term <?> "type"
+parseType = (do
+  t <- notArrayType
+  arr <- chainl (token TokLBracket *> token TokRBracket $> TyArray) (return (.)) id
+  return (arr t)
+  ) <?> "type"
   where
-    table = [[ Postfix (do { _ <- token TokLBracket; _ <- token TokRBracket; return TyArray }) ]]
-    term = baseType <|> pairType
+    notArrayType = baseType <|> pairType
     baseType = (keyword "int"    $> TyInt) <|>
                (keyword "bool"   $> TyBool) <|>
                (keyword "char"   $> TyChar) <|>
