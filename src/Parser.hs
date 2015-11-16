@@ -122,22 +122,9 @@ parseType = (do
                (keyword "char"   $> TyChar) <|>
                (keyword "string" $> TyArray TyChar)
     pairType = do
-      _ <- P.try (keyword "pair" >> token TokLParen)
-      f <- pairElemType
-      _ <- comma
-      s <- pairElemType
-      token TokRParen
-      return (TyPair f s)
+      _ <- P.try (keyword "pair" <* P.lookAhead (token TokLParen))
+      parens (TyPair <$> pairElemType <* comma <*> pairElemType)
     pairElemType = parseType <|> (keyword "pair" $> TyPair TyAny TyAny)
-
-arrayLit :: Parser AssignRHS
-arrayLit = RHSArrayLit <$> brackets (sepBy expr comma) <?> "array literal"
-
-
-rhsNewPair :: Parser AssignRHS
-rhsNewPair = do
-  _ <- keyword "newpair"
-  parens (RHSNewPair <$> expr <* comma <*> expr)
 
 pairElem :: Parser PairElem
 pairElem = do
@@ -154,26 +141,28 @@ arrayElem = do
   where 
     arrayIndex = brackets expr  
 
-rhsCall :: Parser AssignRHS
-rhsCall = do
-  _  <- keyword "call"  
-  i  <- identifier
-  _  <- token TokLParen
-  es <- sepBy expr comma
-  _  <- token TokRParen
-  return (RHSCall i es)
-
 assignLHS :: Parser AssignLHS
 assignLHS = LHSArray <$> arrayElem <|>
             LHSPair <$> pairElem <|>
             LHSVar <$> identifier
 
 assignRHS :: Parser AssignRHS
-assignRHS = RHSExpr <$> expr <|>
-            arrayLit <|>
-            RHSPair <$> pairElem <|>
-            rhsCall <|>
-            rhsNewPair
+assignRHS
+  = rhsExpr <|>
+    rhsArrayLit <|>
+    rhsPairElem <|>
+    rhsCall <|>
+    rhsNewPair
+    where
+      rhsExpr = RHSExpr <$> expr
+      rhsArrayLit = RHSArrayLit <$> brackets (sepBy expr comma) <?> "array literal"
+      rhsPairElem = RHSPair <$> pairElem
+      rhsNewPair = keyword "newpair" *> parens (RHSNewPair <$> expr <* comma <*> expr)
+      rhsCall = do
+        _  <- keyword "call"  
+        i  <- identifier
+        es <- parens (sepBy expr comma)
+        return (RHSCall i es)
 
 varStmt :: Parser Stmt
 varStmt = do 
@@ -254,21 +243,33 @@ returnStmt = do
   return (StmtReturn e)
 
 stmt :: Parser Stmt
-stmt = skipStmt  <|>
-       whileStmt <|>
-       ifStmt    <|>
-       scopeStmt <|>
-       printStmt <|>
+stmt = skipStmt    <|>
+       whileStmt   <|>
+       ifStmt      <|>
+       scopeStmt   <|>
+       printStmt   <|>
        printlnStmt <|>
        assignStmt  <|>
-       readStmt  <|>
-       freeStmt  <|>
-       exitStmt  <|>
-       returnStmt <|>
-       varStmt   <?> "statement"
+       readStmt    <|>
+       freeStmt    <|>
+       exitStmt    <|>
+       returnStmt  <|>
+       varStmt     <?> "statement"
 
 block :: Parser [Stmt]
 block = sepBy1 stmt semi
+
+param :: Parser (Type, String)
+param = (,) <$> parseType <*> identifier
+
+function :: Parser FuncDef
+function = do
+  (t,i) <- P.try ((,) <$> parseType <*> identifier <* lookAhead (token TokLParen))
+  x <- parens (sepBy param comma)
+  _ <- keyword "is"
+  b <- block
+  _ <- keyword "end"
+  return (FuncDef t i x b)
 
 program :: Parser Program
 program = do
@@ -277,19 +278,6 @@ program = do
   b <- block
   _ <- keyword "end"
   return (Program f b)
-
-function :: Parser FuncDef
-function = do
-  (t,i) <- P.try ((,) <$> parseType <*> identifier <* token TokLParen)
-  x <- sepBy param comma
-  _ <- token TokRParen
-  _ <- keyword "is"
-  b <- block
-  _ <- keyword "end"
-  return (FuncDef t i x b)
-
-param :: Parser (Type, String)
-param = (,) <$> parseType <*> identifier
 
 waccParser :: String -> [(Pos, Token)] -> WACCResult Program
 waccParser fname tokens
