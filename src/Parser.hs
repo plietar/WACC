@@ -10,6 +10,7 @@ import Text.Parsec.Expr
 import Tokens
 import Common
 import AST
+import Data.Int
 
 infixl 4 $>
 ($>) :: Functor f => f a -> b -> f b
@@ -56,13 +57,20 @@ op expected = P.token showTok posTok matchTok
       = Nothing
 
 literal :: Parser Expr
-literal = P.token showTok posTok (\t -> ExprLit <$> matchTok t) <?> "literal"
+literal = ExprLit <$> (lit >>= check)
   where
+    lit = P.token showTok posTok matchTok <?> "litteral"
     matchTok (_, TokIntLit l)  = Just (LitInt l)
     matchTok (_, TokBoolLit l) = Just (LitBool l)
     matchTok (_, TokCharLit l) = Just (LitChar l)
     matchTok (_, TokStrLit l)  = Just (LitString l)
     matchTok _                 = Nothing
+
+    check :: Literal -> Parser Literal
+    check x@(LitInt l) = if l > toInteger (maxBound :: Int32)
+                         then (fail "Integer litteral too large")
+                         else return x
+    check x = return x
 
 parseNull :: Parser Expr
 parseNull = keyword "null" $> ExprNull <?> "null"
@@ -155,8 +163,8 @@ rhsNewPair = do
 
 pairElem :: Parser PairElem
 pairElem = do
-  side <- (PairFst <$ keyword "fst") <|>
-          (PairSnd <$ keyword "snd")
+  side <- (keyword "fst" $> PairFst) <|>
+          (keyword "snd" $> PairSnd)
   e <- expr
   return (PairElem side e) 
 
@@ -300,7 +308,7 @@ param = (,) <$> parseType <*> identifier
 
 waccParser :: String -> [(Pos, Token)] -> WACCResult Program
 waccParser fname tokens
-  = case P.runParser program () fname tokens of 
+  = case P.runParser (program <* eof) () fname tokens of 
       Left e -> Error SyntaxError (show e)
       Right p -> OK p
 
