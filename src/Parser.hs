@@ -69,6 +69,9 @@ equal = token TokEqual
 parens :: Parser p -> Parser p
 parens = between (token TokLParen) (token TokRParen)
 
+brackets :: Parser p -> Parser p
+brackets = between (token TokLBracket) (token TokRBracket)
+
 expr :: Parser Expr
 expr = buildExpressionParser exprTable term <?> "expression"
   where
@@ -93,6 +96,12 @@ expr = buildExpressionParser exprTable term <?> "expression"
 
 skipStmt :: Parser Stmt
 skipStmt = StmtSkip <$ keyword "skip"
+
+param :: Parser (Type, String)
+param = do 
+  t <- parseType
+  i <- identifier
+  return (t, i)
 
 parseType :: Parser Type
 parseType = baseType {-<|> arrayType -} <|> pairType <?> "type"
@@ -132,7 +141,7 @@ arrayElem = do
   a <- many1 arrayIndex
   return (ArrayElem i a)
   where 
-    arrayIndex = between (token TokLBracket) (token TokRBracket) expr  
+    arrayIndex = brackets expr  
 
 rhsNewPair :: Parser AssignRHS
 rhsNewPair = do
@@ -253,9 +262,21 @@ program = do
   _ <- keyword "end"
   return (Program [] b)
 
+function :: Parser FuncDef
+function = do
+  t <- parseType
+  i <- identifier
+  _ <- token TokLParen
+  x <- sepBy param comma 
+  _ <- token TokRParen
+  _ <- keyword "is"
+  b <- block
+  _ <- keyword "end"
+  return (FuncDef t i x b)
+
 waccParser :: [(Pos, Token)] -> WACCResult Program
 waccParser tokens
-  = case P.runParser program () "<input>" tokens of
+  = case P.runParser program () "<input>" tokens of 
       Left e -> Error SyntaxError (show e)
       Right p -> OK p
 
