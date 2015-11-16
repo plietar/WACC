@@ -29,6 +29,10 @@ main = do
   filename <- fmap head getArgs
   contents <- readFile filename
 
+  let (OK tokens) = waccLexer filename contents
+      (OK ast) = waccParser filename tokens
+  putStrLn (show ast)
+
   let result = frontend contents filename
   case result of
     OK _           -> putStrLn "Success !"

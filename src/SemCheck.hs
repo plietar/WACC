@@ -229,10 +229,10 @@ typeCheckAssignRHS (RHSCall fname args) context = do
   checkArgs 0 expectedArgsType actualArgsType
   return returnType
 
-typeCheckBlock :: [Stmt] -> Context -> WACCResult Type
+typeCheckBlock :: Block -> Context -> WACCResult Type
 typeCheckBlock block parent
   = let context = newContext parent
-    in fmap last (evalStateT (forM block typeCheckStmt) context)
+    in fmap last (evalStateT (forM (map snd block) typeCheckStmt) context)
 
 
 typeCheckStmt :: Stmt -> ContextState Type

@@ -256,8 +256,13 @@ stmt = skipStmt    <|>
        returnStmt  <|>
        varStmt     <?> "statement"
 
-block :: Parser [Stmt]
-block = sepBy1 stmt semi
+block :: Parser Block
+block = sepBy1 posStmt semi
+  where
+    posStmt = do
+      p <- P.getPosition
+      s <- stmt
+      return ((sourceLine p, sourceColumn p, sourceName p), s)
 
 param :: Parser (Type, String)
 param = (,) <$> parseType <*> identifier

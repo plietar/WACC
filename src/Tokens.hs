@@ -32,5 +32,3 @@ instance Show Token where
   show (TokStrLit _)    = "string literal"
   show (TokCharLit _)   = "character literal"
   show (TokIntLit _)    = "integer literal"
-
-type Pos = (Int, Int, String)

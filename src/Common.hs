@@ -28,3 +28,5 @@ instance Monad WACCResult where
   (OK value)       >>= f = f value
   (Error kind msg) >>= _ = Error kind msg
 
+type Pos = (Int, Int, String)
+

@@ -1,8 +1,10 @@
 module AST where
 
-data Program = Program [FuncDef] [Stmt]
+import Common
+
+data Program = Program [FuncDef] Block
     deriving (Show)
-data FuncDef = FuncDef Type String [(Type, String)] [Stmt]
+data FuncDef = FuncDef Type String [(Type, String)] Block
     deriving (Show)
 data Type = TyInt
           | TyBool
@@ -41,10 +43,12 @@ data Stmt = StmtSkip
           | StmtReturn Expr
           | StmtExit Expr
           | StmtPrint Bool Expr
-          | StmtIf Expr [Stmt] [Stmt]
-          | StmtWhile Expr [Stmt]
-          | StmtScope [Stmt]
+          | StmtIf Expr Block Block
+          | StmtWhile Expr Block
+          | StmtScope Block
     deriving (Show)
+
+type Block = [(Pos, Stmt)]
 
 data Literal = LitInt Integer
              | LitBool Bool
