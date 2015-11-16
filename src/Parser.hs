@@ -19,8 +19,6 @@ infixl 4 $>
 type Parser = P.Parsec [(Pos, Token)] ()
 
 showTok :: (Pos, Token) -> String
-showTok (_, TokLParen) = "("
-showTok (_, TokRParen) = ")"
 showTok (_, tok) = show tok
 
 posTok :: (Pos, Token) -> SourcePos
@@ -30,7 +28,7 @@ identifier :: Parser String
 identifier = P.token showTok posTok matchTok <?> "identifier"
   where
     matchTok (_, TokIdent ident) = Just ident
-    matchTok _                = Nothing
+    matchTok _                   = Nothing
 
 token :: Token -> Parser Token
 token expected = P.token showTok posTok matchTok <?> show expected
@@ -40,26 +38,16 @@ token expected = P.token showTok posTok matchTok <?> show expected
     matchTok _
       = Nothing
 
-keyword :: String -> Parser String
-keyword expected = P.token showTok posTok matchTok <?> expected
-  where
-    matchTok (_, TokKeyword actual)
-      | actual == expected = Just actual
-    matchTok _
-      = Nothing
+keyword :: String -> Parser Token
+keyword expected = token (TokKeyword expected)
 
-op :: String -> Parser String
-op expected = P.token showTok posTok matchTok 
-  where
-    matchTok (_, TokOp actual)
-      | actual == expected = Just actual
-    matchTok _
-      = Nothing
+op :: String -> Parser Token
+op expected = token (TokOp expected)
 
 literal :: Parser Expr
-literal = ExprLit <$> (lit >>= check)
+literal = ExprLit <$> (lit >>= check) <?> "literal"
   where
-    lit = P.token showTok posTok matchTok <?> "litteral"
+    lit = P.token showTok posTok matchTok
     matchTok (_, TokIntLit l)  = Just (LitInt l)
     matchTok (_, TokBoolLit l) = Just (LitBool l)
     matchTok (_, TokCharLit l) = Just (LitChar l)
@@ -73,7 +61,7 @@ literal = ExprLit <$> (lit >>= check)
     check x = return x
 
 parseNull :: Parser Expr
-parseNull = keyword "null" $> ExprNull <?> "null"
+parseNull = keyword "null" $> ExprNull
 
 semi :: Parser Token
 semi = token TokSemiColon
@@ -119,7 +107,7 @@ expr = buildExpressionParser exprTable term <?> "expression"
                 ]
 
 skipStmt :: Parser Stmt
-skipStmt = StmtSkip <$ keyword "skip"
+skipStmt = keyword "skip" $> StmtSkip
 
 parseType :: Parser Type
 parseType = (do
@@ -143,18 +131,8 @@ parseType = (do
     pairElemType = parseType <|> (keyword "pair" $> TyPair TyAny TyAny)
 
 arrayLit :: Parser AssignRHS
-arrayLit = do
-  _  <- token TokLBracket
-  es <- sepBy expr comma
-  _  <- token TokRBracket
-  return (RHSArrayLit es) 
+arrayLit = RHSArrayLit <$> brackets (sepBy expr comma) <?> "array literal"
 
-assignRHS :: Parser AssignRHS
-assignRHS = RHSExpr <$> expr <|>
-            arrayLit <|>
-            RHSPair <$> pairElem <|>
-            rhsCall <|>
-            rhsNewPair
 
 rhsNewPair :: Parser AssignRHS
 rhsNewPair = do
@@ -189,6 +167,13 @@ assignLHS :: Parser AssignLHS
 assignLHS = LHSArray <$> arrayElem <|>
             LHSPair <$> pairElem <|>
             LHSVar <$> identifier
+
+assignRHS :: Parser AssignRHS
+assignRHS = RHSExpr <$> expr <|>
+            arrayLit <|>
+            RHSPair <$> pairElem <|>
+            rhsCall <|>
+            rhsNewPair
 
 varStmt :: Parser Stmt
 varStmt = do 
@@ -283,7 +268,7 @@ stmt = skipStmt  <|>
        varStmt   <?> "statement"
 
 block :: Parser [Stmt]
-block = sepBy1 stmt semi <?> "block"
+block = sepBy1 stmt semi
 
 program :: Parser Program
 program = do
