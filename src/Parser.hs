@@ -64,6 +64,9 @@ literal = P.token showTok posTok (\t -> ExprLit <$> matchTok t) <?> "literal"
     matchTok (_, TokStrLit l)  = Just (LitString l)
     matchTok _                 = Nothing
 
+parseNull :: Parser Expr
+parseNull = keyword "null" $> ExprNull <?> "null"
+
 semi :: Parser Token
 semi = token TokSemiColon
 comma :: Parser Token
@@ -80,11 +83,14 @@ brackets = between (token TokLBracket) (token TokRBracket)
 expr :: Parser Expr
 expr = buildExpressionParser exprTable term <?> "expression"
   where
-    term = parens expr <|> literal <|> (ExprVar <$> identifier) <?> "term"
-    binary   p typ assoc = Infix (do{ _ <- p; return (ExprBinOp typ) }) assoc
+    term = parens expr <|> literal <|> parseNull <|> (ExprVar <$> identifier) <?> "term"
+
+    binary   p typ assoc = Infix (p $> ExprBinOp typ) assoc
+    prefix   p typ       = Prefix (p $> ExprUnOp typ)
+
     left     p typ       = binary p typ AssocLeft
     nonassoc p typ       = binary p typ AssocNone
-    prefix   p typ       = Prefix (do{ _ <- p; return (ExprUnOp typ) })
+
     exprTable = [ [ prefix (op "!") UnOpNot, prefix (op "-") UnOpNeg
                   , prefix (keyword "len") UnOpLen, prefix (keyword "ord") UnOpOrd
                   , prefix (keyword "chr") UnOpChr ]
@@ -102,12 +108,6 @@ expr = buildExpressionParser exprTable term <?> "expression"
 skipStmt :: Parser Stmt
 skipStmt = StmtSkip <$ keyword "skip"
 
-param :: Parser (Type, String)
-param = do 
-  t <- parseType
-  i <- identifier
-  return (t, i)
-
 parseType :: Parser Type
 parseType = buildExpressionParser table term <?> "type"
   where
@@ -117,7 +117,13 @@ parseType = buildExpressionParser table term <?> "type"
                (keyword "bool"   $> TyBool) <|>
                (keyword "char"   $> TyChar) <|>
                (keyword "string" $> TyArray TyChar)
-    pairType = keyword "pair" *> parens (TyPair <$> pairElemType <* comma <*> pairElemType)
+    pairType = do
+      _ <- P.try (keyword "pair" >> token TokLParen)
+      f <- pairElemType
+      _ <- comma
+      s <- pairElemType
+      token TokRParen
+      return (TyPair f s)
     pairElemType = parseType <|> (keyword "pair" $> TyPair TyAny TyAny)
 
 arrayLit :: Parser AssignRHS
@@ -131,7 +137,13 @@ assignRHS :: Parser AssignRHS
 assignRHS = RHSExpr <$> expr <|>
             arrayLit <|>
             RHSPair <$> pairElem <|>
-            rhsCall
+            rhsCall <|>
+            rhsNewPair
+
+rhsNewPair :: Parser AssignRHS
+rhsNewPair = do
+  _ <- keyword "newpair"
+  parens (RHSNewPair <$> expr <* comma <*> expr)
 
 pairElem :: Parser PairElem
 pairElem = do
@@ -147,16 +159,6 @@ arrayElem = do
   return (ArrayElem i a)
   where 
     arrayIndex = brackets expr  
-
-rhsNewPair :: Parser AssignRHS
-rhsNewPair = do
-  _  <- keyword "newpair"
-  _  <- token TokLParen
-  e1 <- expr
-  _  <- comma
-  e2 <- expr
-  _  <- token TokRParen
-  return (RHSNewPair e1 e2)
 
 rhsCall :: Parser AssignRHS
 rhsCall = do
@@ -188,7 +190,7 @@ whileStmt = do
   e <- expr
   _ <- keyword "do"
   b <- block
-  _ <- keyword "end"
+  _ <- keyword "done"
   return (StmtWhile e b)
 
 ifStmt :: Parser Stmt
@@ -286,6 +288,9 @@ function = do
   b <- block
   _ <- keyword "end"
   return (FuncDef t i x b)
+
+param :: Parser (Type, String)
+param = (,) <$> parseType <*> identifier
 
 waccParser :: String -> [(Pos, Token)] -> WACCResult Program
 waccParser fname tokens
