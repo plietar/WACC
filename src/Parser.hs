@@ -107,11 +107,61 @@ parseType = baseType {-<|> arrayType -} <|> pairType <?> "type"
     pairElemType = baseType <|> arrayType <|>
                    (TyPair TyAny TyAny <$ keyword "pair")
 
+arrayLit :: Parser AssignRHS
+arrayLit = do
+  _  <- token TokLBracket
+  es <- sepBy expr comma
+  _  <- token TokRBracket
+  return (RHSArrayLit es) 
+
 assignRHS :: Parser AssignRHS
-assignRHS = RHSExpr <$> expr
+assignRHS = RHSExpr <$> expr <|>
+            arrayLit <|>
+            RHSPair <$> pairElem   
+
+pairElem :: Parser PairElem
+pairElem = do
+  side <- (PairFst <$ keyword "fst") <|>
+          (PairSnd <$ keyword "snd")
+  e <- expr
+  return (PairElem side e) 
+
+arrayElem :: Parser ArrayElem
+arrayElem = do
+  i <- identifier
+  a <- many1 arrayIndex
+  return (ArrayElem i a)
+  where 
+    arrayIndex = between (token TokLBracket) (token TokRBracket) expr  
+
+rhsNewPair :: Parser AssignRHS
+rhsNewPair = do
+  _  <- keyword "newpair"
+  _  <- token TokLParen
+  e1 <- expr
+  _  <- comma
+  e2 <- expr
+  _  <- token TokRParen
+  return (RHSNewPair e1 e2)
+
+rhsCall :: Parser AssignRHS
+rhsCall = do
+  _  <- keyword "call"  
+  i  <- identifier
+  _  <- token TokLParen
+  es <- sepBy expr comma
+  _  <- token TokRParen
+  return (RHSCall i es)
+
+
+
+assignLHS :: Parser AssignLHS
+assignLHS = LHSVar <$> identifier <|> 
+            LHSPair <$> pairElem <|> 
+            LHSArray <$> arrayElem 
 
 varStmt :: Parser Stmt
-varStmt = do
+varStmt = do 
   t <- parseType
   i <- identifier
   _ <- token TokEqual
@@ -145,11 +195,52 @@ scopeStmt = do
   _ <- keyword "end"
   return (StmtScope b)
 
+printStmt :: Parser Stmt
+printStmt = do
+  _ <- keyword "print"
+  e <- expr
+  return (StmtPrint False e)
+
+printlnStmt :: Parser Stmt
+printlnStmt = do
+  _ <- keyword "println"
+  e <- expr
+  return (StmtPrint True e)
+
+assignStmt :: Parser Stmt
+assignStmt = do
+  l <- assignLHS
+  _ <- token TokEqual
+  r <- assignRHS
+  return (StmtAssign l r)
+
+readStmt :: Parser Stmt
+readStmt = do
+  l <- assignLHS
+  return (StmtRead l)
+
+freeStmt :: Parser Stmt
+freeStmt = do
+  e <- expr
+  return (StmtFree e)
+
+exitStmt :: Parser Stmt
+exitStmt = do
+  e <- expr
+  return (StmtExit e)
+
+
 stmt :: Parser Stmt
 stmt = skipStmt  <|>
        whileStmt <|>
        ifStmt    <|>
        scopeStmt <|>
+       printStmt <|>
+       printlnStmt <|>
+       assignStmt  <|>
+       readStmt  <|>
+       freeStmt  <|>
+       exitStmt  <|>
        varStmt   <?> "statement"
 
 block :: Parser [Stmt]
