@@ -83,7 +83,12 @@ brackets = between (token TokLBracket) (token TokRBracket)
 expr :: Parser Expr
 expr = buildExpressionParser exprTable term <?> "expression"
   where
-    term = parens expr <|> literal <|> parseNull <|> (ExprVar <$> identifier) <?> "term"
+    term = parens expr
+           <|> literal
+           <|> parseNull
+           <|> (ExprArrayElem <$> arrayElem)
+           <|> (ExprVar <$> identifier)
+           <?> "term"
 
     binary   p typ assoc = Infix (p $> ExprBinOp typ) assoc
     prefix   p typ       = Prefix (p $> ExprUnOp typ)
@@ -154,7 +159,7 @@ pairElem = do
 
 arrayElem :: Parser ArrayElem
 arrayElem = do
-  i <- identifier
+  i <- P.try (identifier <* P.lookAhead (token TokLBracket))
   a <- many1 arrayIndex
   return (ArrayElem i a)
   where 
@@ -169,12 +174,10 @@ rhsCall = do
   _  <- token TokRParen
   return (RHSCall i es)
 
-
-
 assignLHS :: Parser AssignLHS
-assignLHS = LHSVar <$> identifier <|> 
-            LHSPair <$> pairElem <|> 
-            LHSArray <$> arrayElem 
+assignLHS = LHSArray <$> arrayElem <|>
+            LHSPair <$> pairElem <|>
+            LHSVar <$> identifier
 
 varStmt :: Parser Stmt
 varStmt = do 
