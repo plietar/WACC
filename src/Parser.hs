@@ -2,6 +2,7 @@ module Parser where
 
 import qualified Text.Parsec.Prim as P
 import Text.Parsec.Prim ((<?>))
+import Text.Parsec.String ()
 import Control.Applicative
 import Text.Parsec.Combinator
 import Text.Parsec.Pos
