@@ -19,7 +19,7 @@ showTok (_, TokRParen) = ")"
 showTok (_, tok) = show tok
 
 posTok :: (Pos, Token) -> SourcePos
-posTok ((line, column), _) = newPos "<input>" line column
+posTok ((line, column,fname), _) = newPos fname line column
 
 identifier :: Parser String
 identifier = P.token showTok posTok matchTok <?> "identifier"
@@ -275,9 +275,9 @@ function = do
   _ <- keyword "end"
   return (FuncDef t i x b)
 
-waccParser :: [(Pos, Token)] -> WACCResult Program
-waccParser tokens
-  = case P.runParser program () "<input>" tokens of 
+waccParser :: String -> [(Pos, Token)] -> WACCResult Program
+waccParser fname tokens
+  = case P.runParser program () fname tokens of 
       Left e -> Error SyntaxError (show e)
       Right p -> OK p
 

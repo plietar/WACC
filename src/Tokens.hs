@@ -17,4 +17,4 @@ data Token =
     TokIntLit Integer 
     deriving (Eq,Show)
 
-type Pos = (Int, Int)
+type Pos = (Int, Int, String)
