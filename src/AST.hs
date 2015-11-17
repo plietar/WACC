@@ -14,7 +14,7 @@ data Type = TyInt
           | TyNull
           | TyAny
           | TyVoid
-    deriving (Eq,Show)
+    deriving (Eq)
 
 data ArrayElem = ArrayElem String [Expr]
     deriving (Show)
@@ -61,7 +61,6 @@ data UnOp = UnOpNot
           | UnOpLen
           | UnOpOrd
           | UnOpChr
-    deriving (Show)
 
 data BinOp = BinOpAdd
            | BinOpSub
@@ -76,7 +75,6 @@ data BinOp = BinOpAdd
            | BinOpNE
            | BinOpAnd
            | BinOpOr
-    deriving (Show)
 
 data Expr = ExprLit Literal
           | ExprNull
@@ -85,3 +83,35 @@ data Expr = ExprLit Literal
           | ExprUnOp UnOp Expr
           | ExprBinOp BinOp Expr Expr
     deriving (Show)
+
+instance Show Type where
+  show TyInt        = "int"
+  show TyBool       = "bool"
+  show TyChar       = "char"
+  show (TyPair f s) = "pair(" ++ show f ++ "," ++ show s ++ ")"
+  show (TyArray t)  = show t ++ "[]"
+  show TyNull       = "null"
+  show TyAny        = "any"
+  show TyVoid       = "void"
+
+instance Show BinOp where
+  show BinOpAdd = "+"
+  show BinOpSub = "-"
+  show BinOpMul = "*"
+  show BinOpDiv = "/"
+  show BinOpRem = "%"
+  show BinOpGT  = ">"
+  show BinOpGE  = ">="
+  show BinOpLT  = "<"
+  show BinOpLE  = "<="
+  show BinOpEQ  = "=="
+  show BinOpNE  = "!="
+  show BinOpAnd = "&&"
+  show BinOpOr  = "||"
+
+instance Show UnOp where
+  show UnOpNot = "!"
+  show UnOpNeg = "neg"
+  show UnOpLen = "len"
+  show UnOpOrd = "ord"
+  show UnOpChr = "chr"
