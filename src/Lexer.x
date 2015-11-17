@@ -75,9 +75,9 @@ waccLexer fname str = fmap (addfname fname) $ go (alexStartPos,'\n',[],str)
           case alexScan inp 0 of
                 AlexEOF -> OK []
                 AlexError ((AlexPn _ line column),chr,_,str)
-                  -> Error LexicalError $ (show fname) ++ " (line " ++ (show line) ++  ", column "  ++ (show column)
-                                                ++ "):\n" ++ "Token recognition error at: " 
-                                                ++ (chr : firstWord str)
+                  -> lexicalError $ show fname ++ " (line " ++ show line ++  ", column "  ++ show column
+                                               ++ "):\n" ++ "Token recognition error at: " 
+                                               ++ (chr : firstWord str)
                 AlexSkip  inp' len     -> go inp'
                 AlexToken inp' len act -> fmap (\tokens -> act pos (take len str) : tokens) (go inp')
 

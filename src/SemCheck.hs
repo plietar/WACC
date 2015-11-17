@@ -1,5 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
-
 module SemCheck where
 import qualified Data.Map as Map
 import Control.Monad.State
@@ -22,28 +20,26 @@ addVariable name value = do
   context <- get
   case ScopedMap.insertIfNotExists name value (variables context) of
     Just table -> put context { variables = table }
-    Nothing -> lift $ Error SemanticError ("Variable \"" ++ name 
-                                                         ++ "\" already exists")
+    Nothing -> lift $ semanticError ("Variable " ++ show name ++ " already exists")
 
 getVariable :: String -> Context -> WACCResult Type
 getVariable name context
   = case ScopedMap.lookup name (variables context) of
       Just value -> OK value
-      Nothing    -> Error SemanticError ("Unknown variable \"" ++ name ++ "\"")
+      Nothing    -> semanticError ("Unknown variable " ++ show name)
 
 addFunction :: String -> ([Type], Type) -> ContextState ()
 addFunction name typ = do
   context <- get
   case Map.lookup name (functions context) of
-    Just _  -> lift $ Error SemanticError ("Function \"" ++ name 
-                                                         ++ "\" already exists")
+    Just _  -> lift $ semanticError ("Function " ++ show name ++ " already exists")
     Nothing -> put context { functions = Map.insert name typ (functions context) }
 
 getFunction :: String -> Context -> WACCResult ([Type], Type)
 getFunction name context
   = case Map.lookup name (functions context) of
       Just value -> OK value
-      Nothing    -> Error SemanticError ("Unknown function \"" ++ name ++ "\"")
+      Nothing    -> semanticError ("Unknown function " ++ show name)
 
 emptyContext :: Context
 emptyContext = Context ScopedMap.empty Map.empty False
@@ -82,8 +78,8 @@ checkUnOp op typ
   = let (predicate, result) = unOpType op
     in if predicate typ
        then OK result
-       else Error SemanticError ("Cannot apply unary operator " 
-                                          ++ show op ++ " to type " ++ show typ)
+       else semanticError ("Cannot apply unary operator " ++ show op
+                           ++ " to type " ++ show typ)
 
 binOpType :: BinOp -> (Type -> Type -> Bool, Type)
 binOpType op = case op of
@@ -114,7 +110,7 @@ checkBinOp op t1 t2
   = let (predicate, result) = binOpType op
     in if predicate t1 t2
        then OK result
-       else Error SemanticError ("Cannot apply binary operator " ++ show op 
+       else semanticError ("Cannot apply binary operator " ++ show op 
                                                    ++ " to types " ++ show t1 
                                                           ++ " and " ++ show t2)
 
@@ -128,10 +124,10 @@ checkArrayIndexing (TyArray innerType) (e : es) context = do
   indexType <- typeCheckExpr e context
   if compatibleType TyInt indexType
   then checkArrayIndexing innerType es context
-  else Error SemanticError ("Cannot index array with type " ++ show indexType)
+  else semanticError ("Cannot index array with type " ++ show indexType)
 checkArrayIndexing TyAny _ _ = OK TyAny
 checkArrayIndexing t [] _    = OK t
-checkArrayIndexing t _ _     = Error SemanticError 
+checkArrayIndexing t _ _     = semanticError 
                                     ("Cannot index variable of type " ++ show t)
 
 compatibleType :: Type -> Type -> Bool
@@ -149,7 +145,7 @@ mergeTypes (TyPair f1 s1) (TyPair f2 s2)
   = TyPair <$> mergeTypes f1 f2 <*> mergeTypes s1 s2
 mergeTypes t1 t2
   | t1 == t2  = OK t1
-  | otherwise = Error SemanticError ("Types " ++ show t1 ++ " and " ++ 
+  | otherwise = semanticError ("Types " ++ show t1 ++ " and " ++ 
                                       show t2 ++ " are not compatible")
 
 isArrayType :: Type -> Bool
@@ -186,7 +182,7 @@ typeCheckPairElem (PairElem side e) context = do
     (PairFst, TyPair f _) -> OK f
     (PairSnd, TyPair _ s) -> OK s
     (_, TyAny           ) -> OK TyAny
-    (_, _               ) -> Error SemanticError ("Type " ++ show t 
+    (_, _               ) -> semanticError ("Type " ++ show t 
                                                           ++ " is not pair")
 
 typeCheckAssignLHS :: AssignLHS -> Context -> WACCResult Type
@@ -216,12 +212,12 @@ typeCheckAssignRHS (RHSCall fname args) context = do
       checkArgs n (a1:as1) (a2:as2)
         = if compatibleType a1 a2
           then checkArgs (n+1) as1 as2
-          else Error SemanticError ("Expected type " ++ show a2 
-                                      ++ " but got type " ++ show a1 
-                                      ++ " for argument " ++ show (n + 1)
-                                      ++ " of call to function \"" 
-                                      ++ fname ++ "\"")
-      checkArgs n _ _ = Error SemanticError ("Wrong number of arguments in call"
+          else semanticError ("Expected type " ++ show a2 
+                           ++ " but got type " ++ show a1 
+                           ++ " for argument " ++ show (n + 1)
+                           ++ " of call to function "
+                           ++ show fname)
+      checkArgs n _ _ = semanticError ("Wrong number of arguments in call"
                                 ++ "to function \"" ++ fname ++ "\". Expected " 
                                 ++ show (length expectedArgsType) ++ " but got "
                                                                   ++ show n)
@@ -232,8 +228,13 @@ typeCheckAssignRHS (RHSCall fname args) context = do
 typeCheckBlock :: Block -> Context -> WACCResult Type
 typeCheckBlock block parent
   = let context = newContext parent
-    in fmap last (evalStateT (forM (map snd block) typeCheckStmt) context)
+    in fmap last (evalStateT (forM block typeCheckPosStmt) context)
 
+typeCheckPosStmt :: (Pos, Stmt) -> ContextState Type
+typeCheckPosStmt ((line,column,fname), stmt)
+  = withErrorContext
+      ("at " ++ show fname ++ " (line " ++ show line ++  ", column "  ++ show column ++ ")")
+      (typeCheckStmt stmt)
 
 typeCheckStmt :: Stmt -> ContextState Type
 typeCheckStmt StmtSkip = return TyVoid
@@ -242,7 +243,7 @@ typeCheckStmt (StmtVar varType varname rhs) = do
   context <- get
   rhsType <- lift $ typeCheckAssignRHS rhs context
   when (not (compatibleType varType rhsType))
-       (lift (Error SemanticError ("Cannot assign RHS of type " 
+       (lift (semanticError ("Cannot assign RHS of type " 
                                          ++ show rhsType ++ " to LHS of type " 
                                                          ++ show varType)))
   addVariable varname varType
@@ -253,7 +254,7 @@ typeCheckStmt (StmtAssign lhs rhs) = do
   lhsType <- lift $ typeCheckAssignLHS lhs context
   rhsType <- lift $ typeCheckAssignRHS rhs context
   when (not (compatibleType lhsType rhsType))
-       (lift (Error SemanticError ("Cannot assign RHS of type " 
+       (lift (semanticError ("Cannot assign RHS of type " 
                         ++ show rhsType ++ " to LHS of type " ++ show lhsType)))
   return TyVoid
 
@@ -261,7 +262,7 @@ typeCheckStmt (StmtRead lhs) = do
   context <- get
   lhsType <- lift $ typeCheckAssignLHS lhs context
   when (not (isReadableType lhsType))
-       (lift (Error SemanticError ("Cannot read variable of type " 
+       (lift (semanticError ("Cannot read variable of type " 
                                                              ++ show lhsType)))
   return TyVoid
 
@@ -269,20 +270,20 @@ typeCheckStmt (StmtFree e) = do
   context <- get
   t <- lift $ typeCheckExpr e context
   when (not (isHeapType t))
-       (lift (Error SemanticError ("Cannot free variable of type " ++ show t)))
+       (lift (semanticError ("Cannot free variable of type " ++ show t)))
   return TyVoid
 
 typeCheckStmt (StmtReturn e) = do
   context <- get
   when (not (returnAllowed context))
-       (lift (Error SemanticError ("Cannot return from global context")))
+       (lift (semanticError ("Cannot return from global context")))
   lift $ typeCheckExpr e context
 
 typeCheckStmt (StmtExit e) = do
   context <- get
   t <- lift $ typeCheckExpr e context
   when (not (compatibleType TyInt t))
-       (lift (Error SemanticError ("Expected Int in exit statement, got " ++ show t)))
+       (lift (semanticError ("Expected int in exit statement, got " ++ show t)))
   return TyAny
 
 typeCheckStmt (StmtPrint _ e) = do
@@ -294,7 +295,7 @@ typeCheckStmt (StmtIf predicate b1 b2) = do
   context <- get
   predicateType <- lift $ typeCheckExpr predicate context
   when (not (compatibleType TyBool predicateType))
-       (lift (Error SemanticError ("Condition cannot be of type " ++ show predicateType)))
+       (lift (semanticError ("Condition cannot be of type " ++ show predicateType)))
   t1 <- lift $ typeCheckBlock b1 context
   t2 <- lift $ typeCheckBlock b2 context
   if isVoidType t1 || isVoidType t2
@@ -305,7 +306,7 @@ typeCheckStmt (StmtWhile predicate block) = do
   context <- get
   predicateType <- lift $ typeCheckExpr predicate context
   when (not (compatibleType TyBool predicateType))
-       (lift (Error SemanticError ("Condition cannot be of type " ++ show predicateType)))
+       (lift (semanticError ("Condition cannot be of type " ++ show predicateType)))
   lift $ typeCheckBlock block context
 
 typeCheckStmt (StmtScope block) = do
@@ -313,15 +314,17 @@ typeCheckStmt (StmtScope block) = do
   lift $ typeCheckBlock block context
 
 typeCheckFunction :: FuncDef -> Context -> WACCResult ()
-typeCheckFunction (FuncDef expectedReturnType name args block) globalContext = do
-  let allowReturn = modify (\c -> c { returnAllowed = True })
-  let addArguments = forM_ args (\(argType, argName) -> addVariable argName argType)
-  context <- execStateT (allowReturn >> addArguments) globalContext 
-  actualReturnType <- typeCheckBlock block context
-  when (isVoidType actualReturnType)
-       (Error SyntaxError ("Function \"" ++ name ++ "\" does not return anything"))
-  when (not (compatibleType expectedReturnType actualReturnType))
-       (Error SemanticError ("Function \"" ++ name ++ "\" should return type " ++ show expectedReturnType ++ " but returns " ++ show actualReturnType ++ " instead"))
+typeCheckFunction (FuncDef expectedReturnType name args block) globalContext
+  = withErrorContext ("In function " ++ show name) (do
+      let allowReturn = modify (\c -> c { returnAllowed = True })
+      let addArguments = forM_ args (\(argType, argName) -> addVariable argName argType)
+      context <- execStateT (allowReturn >> addArguments) globalContext 
+      actualReturnType <- typeCheckBlock block context
+      when (isVoidType actualReturnType)
+           (syntaxError ("Function " ++ show name ++ " does not return anything"))
+      when (not (compatibleType expectedReturnType actualReturnType))
+           (semanticError ("Function " ++ show name ++ " should return type " ++ show expectedReturnType ++ " but returns " ++ show actualReturnType ++ " instead"))
+    )
 
 typeCheckProgram :: Program -> WACCResult ()
 typeCheckProgram (Program funcs block) = do

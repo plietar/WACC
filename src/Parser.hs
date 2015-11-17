@@ -287,6 +287,6 @@ program = do
 waccParser :: String -> [(Pos, Token)] -> WACCResult Program
 waccParser fname tokens
   = case P.runParser (program <* eof) () fname tokens of 
-      Left e -> Error SyntaxError (show e)
+      Left e -> syntaxError (show e)
       Right p -> OK p
 
