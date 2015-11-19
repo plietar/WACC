@@ -1,5 +1,4 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Common where
 
@@ -36,14 +35,14 @@ instance Monad WACCResult where
 
 type Pos = (Int, Int, String)
 
-class ErrorContext (m :: * -> *) where
-  withErrorContext :: String -> m a -> m a
+class ErrorContext m where
+  withErrorContext :: String -> m -> m
 
-instance ErrorContext WACCResult where
+instance ErrorContext (WACCResult a) where
   withErrorContext msg (OK value)        = (OK value)
   withErrorContext msg (Error kind msgs) = (Error kind (msg : msgs))
 
-instance ErrorContext m => ErrorContext (StateT s m) where
+instance ErrorContext (StateT s WACCResult a) where
   withErrorContext msg = mapStateT (withErrorContext msg)
 
 
