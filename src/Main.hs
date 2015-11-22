@@ -31,8 +31,9 @@ main = do
 
   let result = frontend contents filename
   case result of
-    OK _           -> putStrLn "Success !"
+    OK prog        -> putStrLn ("Success !" ++ "\n" ++ show prog)
     Error kind msg -> do
       putStrLn ("Error " ++ show kind)
       putStr (unlines (reverse msg))
   exitWith (exitCodeForResult result)
+  show
