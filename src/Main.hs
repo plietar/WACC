@@ -11,6 +11,10 @@ import AST
 import Data.Map as Map
 import Control.Monad.State
 
+import BlockGen
+import ARMTypes
+
+
 exitCodeForResult :: WACCResult a -> ExitCode
 exitCodeForResult (OK _)                  = ExitSuccess
 exitCodeForResult (Error LexicalError  _) = ExitFailure 100
@@ -21,8 +25,15 @@ frontend :: String -> String -> WACCResult Program
 frontend source filename = do
   tokens <- waccLexer filename source
   ast <- waccParser filename tokens
-  typeCheckProgram ast
-  return ast
+  modifiedAst <- typeCheckProgram ast
+  return modifiedAst
+
+backend :: Program -> WACCResult [Instruction]
+backend (Program funcs block) = do 
+  result <- genBlock block
+  --let vars = blockGeneration block 
+  --return [SUB "jaime", ADD "John Ripper", PUSH (show vars)]
+  return result
 
 main :: IO ()
 main = do
@@ -36,4 +47,3 @@ main = do
       putStrLn ("Error " ++ show kind)
       putStr (unlines (reverse msg))
   exitWith (exitCodeForResult result)
-  show
