@@ -21,8 +21,8 @@ frontend :: String -> String -> WACCResult Program
 frontend source filename = do
   tokens <- waccLexer filename source
   ast <- waccParser filename tokens
-  typeCheckProgram ast
-  return ast
+  modifiedAst <- typeCheckProgram ast
+  return modifiedAst
 
 main :: IO ()
 main = do
@@ -36,4 +36,3 @@ main = do
       putStrLn ("Error " ++ show kind)
       putStr (unlines (reverse msg))
   exitWith (exitCodeForResult result)
-  show
