@@ -3,6 +3,7 @@ import Parser
 import Lexer
 import Common
 import ScopedMap
+import BlockGen
 
 import System.Environment
 import System.Exit
@@ -31,7 +32,8 @@ main = do
 
   let result = frontend contents filename
   case result of
-    OK prog        -> putStrLn ("Success !" ++ "\n" ++ show prog)
+    --OK prog        -> putStrLn ("Success !" ++ "\n" ++ show prog)
+    OK (Program fs block) -> putStrLn (show (blockGeneration block))
     Error kind msg -> do
       putStrLn ("Error " ++ show kind)
       putStr (unlines (reverse msg))
