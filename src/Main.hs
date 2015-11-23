@@ -25,6 +25,11 @@ frontend source filename = do
   modifiedAst <- typeCheckProgram ast
   return modifiedAst
 
+backend :: Program -> WACCResult [Instruction]
+backend (Program funcs block) = do 
+  let vars = blockGeneration block 
+  return [SUB "jaime", ADD "John Ripper", PUSH (show vars)]
+
 main :: IO ()
 main = do
   filename <- fmap head getArgs
@@ -32,9 +37,18 @@ main = do
 
   let result = frontend contents filename
   case result of
-    --OK prog        -> putStrLn ("Success !" ++ "\n" ++ show prog)
-    OK (Program fs block) -> putStrLn (show (blockGeneration block))
+   -- OK prog        -> putStrLn ("Success AST generation!")
+    OK prog -> do 
+      putStrLn ("Success AST generation!")
+      let assembly = backend prog 
+      case assembly of
+        --OK instrs -> putStrLn (show instrs)
+        OK instrs -> mapM_ (putStrLn . show) instrs 
+
     Error kind msg -> do
       putStrLn ("Error " ++ show kind)
       putStr (unlines (reverse msg))
-  exitWith (exitCodeForResult result)
+
+  exitWith (exitCodeForResult result) 
+
+

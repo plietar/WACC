@@ -10,15 +10,15 @@ import AST
 --  }
 --
 --type RuntimeEnvironment a = StateT Environment 
---data Instructions =
---  | SUB String
---  | PUSH String
---  | LDR String
---  | STR String
---  | BL String
---  | ADD String
---  | MOV String
---  deriving (Show)
+data Instruction =
+   SUB String
+  | PUSH String
+  | LDR String
+  | STR String
+  | BL String
+  | ADD String
+  | MOV String
+  deriving (Show)
   
 blockGeneration :: Block -> Map String Int
 blockGeneration block
@@ -32,5 +32,9 @@ genTable (_ : rest) index table
   = genTable rest index table
 genTable [] _ t
   = t
+
+
+
+
 
 
