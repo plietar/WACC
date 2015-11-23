@@ -3,6 +3,7 @@ import Parser
 import Lexer
 import Common
 import ScopedMap
+import BlockGen
 
 import System.Environment
 import System.Exit
@@ -21,8 +22,8 @@ frontend :: String -> String -> WACCResult Program
 frontend source filename = do
   tokens <- waccLexer filename source
   ast <- waccParser filename tokens
-  typeCheckProgram ast
-  return ast
+  modifiedAst <- typeCheckProgram ast
+  return modifiedAst
 
 main :: IO ()
 main = do
@@ -31,7 +32,8 @@ main = do
 
   let result = frontend contents filename
   case result of
-    OK _           -> putStrLn "Success !"
+    --OK prog        -> putStrLn ("Success !" ++ "\n" ++ show prog)
+    OK (Program fs block) -> putStrLn (show (blockGeneration block))
     Error kind msg -> do
       putStrLn ("Error " ++ show kind)
       putStr (unlines (reverse msg))

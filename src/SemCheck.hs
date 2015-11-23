@@ -326,7 +326,7 @@ typeCheckFunction (FuncDef expectedReturnType name args block) globalContext
            (semanticError ("Function " ++ show name ++ " should return type " ++ show expectedReturnType ++ " but returns " ++ show actualReturnType ++ " instead"))
     )
 
-typeCheckProgram :: Program -> WACCResult ()
+typeCheckProgram :: Program -> WACCResult Program
 typeCheckProgram (Program funcs block) = do
   let defineFunc (FuncDef returnType name args _)
         = addFunction name (map fst args, returnType)
@@ -335,5 +335,5 @@ typeCheckProgram (Program funcs block) = do
 
   forM_ funcs (\f -> typeCheckFunction f context)
   _ <- typeCheckBlock block context
-  return ()
+  return (Program funcs block)
 
