@@ -1,60 +1,80 @@
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE FlexibleContexts #-}
+
 module AST where
 
 import Common
 
-data Program = Program [FuncDef] Block
-    deriving (Show)
-data FuncDef = FuncDef Type String [(Type, String)] Block
-    deriving (Show)
-data Type = TyInt
-          | TyBool
-          | TyChar
-          | TyPair Type Type
-          | TyArray Type
-          | TyNull
-          | TyAny
-          | TyVoid
-    deriving (Eq)
+class ( Show (Ann a Program)
+      , Show (Ann a FuncDef)
+      , Show (Ann a Block)
+      , Show (Ann a Stmt)
+      , Show (Ann a Expr)
+      , Show (Ann a AssignLHS)
+      , Show (Ann a AssignRHS)
+      , Show (Ann a ArrayElem)
+      , Show (Ann a PairElem)
+      , Show (Ann a Literal)
+      ) => Annotation a where
+  type Ann a (t :: * -> *)
 
-data ArrayElem = ArrayElem String [Expr]
-    deriving (Show)
-data PairSide  = PairFst | PairSnd
-    deriving (Show)
-data PairElem  = PairElem PairSide Expr
-    deriving (Show)
+type Annotated (t :: * -> *) (a :: *)
+  = (Ann a t, t a)
 
-data AssignLHS = LHSVar String
-               | LHSPair PairElem
-               | LHSArray ArrayElem
-    deriving (Show)
+data Program a = Program [Annotated FuncDef a] (Annotated Block a)
+data FuncDef a = FuncDef Type Identifier [(Type, Identifier)] (Annotated Block a)
+data Block a = Block [Annotated Stmt a]
 
-data AssignRHS = RHSExpr Expr
-               | RHSArrayLit [Expr]
-               | RHSNewPair Expr Expr
-               | RHSPair PairElem
-               | RHSCall String [Expr]
-    deriving (Show)
+data Stmt a
+  = StmtSkip
+  | StmtVar    Type Identifier (Annotated AssignRHS a)
+  | StmtAssign (Annotated AssignLHS a) (Annotated AssignRHS a)
+  | StmtRead   (Annotated AssignLHS a)
+  | StmtFree   (Annotated Expr a)
+  | StmtReturn (Annotated Expr a)
+  | StmtExit   (Annotated Expr a)
+  | StmtPrint  (Annotated Expr a) Bool 
+  | StmtIf     (Annotated Expr a) (Annotated Block a) (Annotated Block a)
+  | StmtWhile  (Annotated Expr a) (Annotated Block a)
+  | StmtScope  (Annotated Block a)
 
-data Stmt = StmtSkip
-          | StmtVar Type String AssignRHS
-          | StmtAssign AssignLHS AssignRHS
-          | StmtRead AssignLHS 
-          | StmtFree Expr
-          | StmtReturn Expr
-          | StmtExit Expr
-          | StmtPrint Bool Expr
-          | StmtIf Expr Block Block
-          | StmtWhile Expr Block
-          | StmtScope Block
-    deriving (Show)
+data AssignLHS a
+  = LHSVar       Identifier
+  | LHSPairElem  (Annotated PairElem a)
+  | LHSArrayElem (Annotated ArrayElem a)
 
-type Block = [(Pos, Stmt)]
+data AssignRHS a
+  = RHSExpr     (Annotated Expr a)
+  | RHSArrayLit [Annotated Expr a]
+  | RHSNewPair  (Annotated Expr a) (Annotated Expr a)
+  | RHSPairElem (Annotated PairElem a)
+  | RHSCall     Identifier [Annotated Expr a]
 
-data Literal = LitInt Integer
-             | LitBool Bool
-             | LitChar Char
-             | LitString String
-    deriving (Show)
+data Expr a
+  = ExprLit       (Annotated Literal a)
+  | ExprVar       Identifier
+  | ExprArrayElem (Annotated ArrayElem a)
+  | ExprUnOp      UnOp  (Annotated Expr a)
+  | ExprBinOp     BinOp (Annotated Expr a) (Annotated Expr a)
+
+type Identifier = String
+
+data ArrayElem a
+  = ArrayElem Identifier [(Annotated Expr a)]
+
+data PairElem a
+  = PairElem PairSide (Annotated Expr a)
+
+data PairSide = PairFst | PairSnd
+
+data Literal a = LitInt Integer
+               | LitBool Bool
+               | LitChar Char
+               | LitString String
+               | LitNull
 
 data UnOp = UnOpNot
           | UnOpNeg
@@ -76,23 +96,25 @@ data BinOp = BinOpAdd
            | BinOpAnd
            | BinOpOr
 
-data Expr = ExprLit Literal
-          | ExprNull
-          | ExprVar String
-          | ExprArrayElem ArrayElem
-          | ExprUnOp UnOp Expr
-          | ExprBinOp BinOp Expr Expr
-    deriving (Show)
+data Type = TyInt
+          | TyBool
+          | TyChar
+          | TyPair Type Type
+          | TyArray Type
+          | TyAny
+          | TyVoid
+    deriving (Eq)
 
-instance Show Type where
-  show TyInt        = "int"
-  show TyBool       = "bool"
-  show TyChar       = "char"
-  show (TyPair f s) = "pair(" ++ show f ++ "," ++ show s ++ ")"
-  show (TyArray t)  = show t ++ "[]"
-  show TyNull       = "null"
-  show TyAny        = "any"
-  show TyVoid       = "void"
+deriving instance Annotation a => Show (Program a)
+deriving instance Annotation a => Show (FuncDef a)
+deriving instance Annotation a => Show (Block a)
+deriving instance Annotation a => Show (Stmt a)
+deriving instance Annotation a => Show (Expr a)
+deriving instance Annotation a => Show (AssignLHS a)
+deriving instance Annotation a => Show (AssignRHS a)
+deriving instance Annotation a => Show (ArrayElem a)
+deriving instance Annotation a => Show (PairElem a)
+deriving instance Annotation a => Show (Literal a)
 
 instance Show BinOp where
   show BinOpAdd = "+"
@@ -115,3 +137,33 @@ instance Show UnOp where
   show UnOpLen = "len"
   show UnOpOrd = "ord"
   show UnOpChr = "chr"
+
+instance Show Type where
+  show TyInt        = "int"
+  show TyBool       = "bool"
+  show TyChar       = "char"
+  show (TyPair f s) = "pair(" ++ show f ++ "," ++ show s ++ ")"
+  show (TyArray t)  = show t ++ "[]"
+  show TyAny        = "any"
+  show TyVoid       = "void"
+
+instance Show PairSide where
+  show PairFst = "fst"
+  show PairSnd = "snd"
+
+data SpanA
+instance Annotation SpanA where
+  type Ann SpanA t = Span
+
+data TypeA
+instance Annotation TypeA where
+  type Ann TypeA Program = ()
+  type Ann TypeA FuncDef = ()
+  type Ann TypeA Block = (Bool, Type)
+  type Ann TypeA Stmt = (Bool, Type)
+  type Ann TypeA Expr = Type
+  type Ann TypeA AssignLHS = Type
+  type Ann TypeA AssignRHS = Type
+  type Ann TypeA ArrayElem = Type
+  type Ann TypeA PairElem = Type
+  type Ann TypeA Literal = Type
