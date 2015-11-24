@@ -14,20 +14,6 @@ import AST
 --  }
 --
 --type RuntimeEnvironment a = StateT Environment 
- blockGeneration :: Block -> Map String Int
-blockGeneration block
-  = genTable block 0 Map.empty
-
-
-data Instruction =
-   SUB String
-  | PUSH String
-  | LDR String
-  | STR String
-  | BL String
-  | ADD String
-  | MOV String
-  deriving (Show)
 
 blockGeneration :: (Annotated Block TypeA) -> Map String Int
 blockGeneration (_, Block stmts)
@@ -44,17 +30,17 @@ genTable [] _ t
   = t
 
 
-genBlock :: Block -> WACCResult [Instruction]
-genBlock block = do
-  blockCode <- fmap concat (mapM (genStatement variables allRegs) block)
+genBlock :: (Annotated Block TypeA) -> WACCResult [Instruction]
+genBlock (_, Block stmts) = do
+  blockCode <- fmap concat (mapM (genStatement variables allRegs) stmts)
   return (initFrame ++ blockCode ++ endFrame)
   where
-    variables = genTable block 0 Map.empty
+    variables = genTable stmts 0 Map.empty
     initFrame = [PUSH "{LR}", SUB (Ref SP) (Ref SP) (ImmNum (4 * Map.size variables))]
     endFrame = [ADD (Ref SP) (Ref SP) (ImmNum (4 * Map.size variables)), POP "{PC}"]
 
-genStatement :: Map String Int -> [Register] -> (Pos, Stmt) -> WACCResult [Instruction]
-
+genStatement :: Map String Int -> [Register] 
+    -> Annotated Stmt TypeA -> WACCResult [Instruction]
 genStatement offsetTable regs (_, StmtVar t s rhs)
   = case Map.lookup s offsetTable of
       Nothing -> Error RuntimeError [""]
