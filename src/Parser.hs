@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeFamilies #-}
+
 module Parser where
 
 import qualified Text.Parsec.Prim as P
@@ -24,8 +26,20 @@ showTok (_, tok) = show tok
 posTok :: (Pos, Token) -> SourcePos
 posTok ((line, column,fname), _) = newPos fname line column
 
-identifier :: Parser String
-identifier = P.token showTok posTok matchTok <?> "identifier"
+position :: Parser Pos
+position = do
+  p <- P.getPosition
+  return (sourceLine p, sourceColumn p, sourceName p)
+
+spanned :: Parser a -> Parser (Span, a)
+spanned p = do
+  initialPos <- position
+  node <- p
+  finalPos <- position
+  return ((initialPos, finalPos), node)
+
+identifier :: Parser (Annotated Identifier SpanA)
+identifier = (spanned $ Identifier <$> P.token showTok posTok matchTok) <?> "identifier"
   where
     matchTok (_, TokIdent ident) = Just ident
     matchTok _                   = Nothing
@@ -44,24 +58,22 @@ keyword expected = token (TokKeyword expected)
 op :: String -> Parser Token
 op expected = token (TokOp expected)
 
-literal :: Parser Expr
-literal = ExprLit <$> (lit >>= check) <?> "literal"
+literal :: Parser (Annotated Literal SpanA)
+literal = (lit >>= check) <?> "literal"
   where
-    lit = P.token showTok posTok matchTok
-    matchTok (_, TokIntLit l)  = Just (LitInt l)
-    matchTok (_, TokBoolLit l) = Just (LitBool l)
-    matchTok (_, TokCharLit l) = Just (LitChar l)
-    matchTok (_, TokStrLit l)  = Just (LitString l)
-    matchTok _                 = Nothing
+    lit = spanned $ P.token showTok posTok matchTok
+    matchTok (_, TokIntLit l)       = Just (LitInt l)
+    matchTok (_, TokBoolLit l)      = Just (LitBool l)
+    matchTok (_, TokCharLit l)      = Just (LitChar l)
+    matchTok (_, TokStrLit l)       = Just (LitString l)
+    matchTok (_, TokKeyword "null") = Just LitNull
+    matchTok _                      = Nothing
 
-    check :: Literal -> Parser Literal
-    check x@(LitInt l) = if l > toInteger (maxBound :: Int32)
-                         then (fail "Integer litteral too large")
-                         else return x
+    check :: Annotated Literal SpanA -> Parser (Annotated Literal SpanA)
+    check x@(_, LitInt l) = if l > toInteger (maxBound :: Int32)
+                            then (fail "Integer litteral too large")
+                            else return x
     check x = return x
-
-parseNull :: Parser Expr
-parseNull = keyword "null" $> ExprNull
 
 semi :: Parser Token
 semi = token TokSemiColon
@@ -76,18 +88,25 @@ parens = between (token TokLParen) (token TokRParen)
 brackets :: Parser p -> Parser p
 brackets = between (token TokLBracket) (token TokRBracket)
 
-expr :: Parser Expr
+expr :: Parser (Annotated Expr SpanA)
 expr = buildExpressionParser exprTable term <?> "expression"
   where
     term = parens expr
-           <|> literal
-           <|> parseNull
-           <|> (ExprArrayElem <$> arrayElem)
-           <|> (ExprVar <$> identifier)
+           <|> spanned (ExprLit <$> literal)
+           <|> spanned (ExprArrayElem <$> arrayElem)
+           <|> spanned (ExprVar <$> identifier)
            <?> "term"
 
-    binary   p typ assoc = Infix (p $> ExprBinOp typ) assoc
-    prefix   p typ       = Prefix (p $> ExprUnOp typ)
+    parsePrefix p typ = do
+      (span, _) <- spanned p
+      return (\x -> (span, ExprUnOp (span,typ) x))
+
+    parseBinary p typ = do
+      (span, _) <- spanned p
+      return (\x y -> (span, ExprBinOp (span,typ) x y))
+
+    prefix   p typ       = Prefix (parsePrefix p typ)
+    binary   p typ assoc = Infix (parseBinary p typ) assoc
 
     left     p typ       = binary p typ AssocLeft
     nonassoc p typ       = binary p typ AssocNone
@@ -106,9 +125,6 @@ expr = buildExpressionParser exprTable term <?> "expression"
                 , [ left (op "||") BinOpOr ]
                 ]
 
-skipStmt :: Parser Stmt
-skipStmt = keyword "skip" $> StmtSkip
-
 parseType :: Parser Type
 parseType = (do
   t <- notArrayType
@@ -126,54 +142,62 @@ parseType = (do
       parens (TyPair <$> pairElemType <* comma <*> pairElemType)
     pairElemType = parseType <|> (keyword "pair" $> TyPair TyAny TyAny)
 
-pairElem :: Parser PairElem
-pairElem = do
-  side <- (keyword "fst" $> PairFst) <|>
-          (keyword "snd" $> PairSnd)
+pairElem :: Parser (Annotated PairElem SpanA)
+pairElem = spanned $ do
+  side <- pairSide
   e <- expr
-  return (PairElem side e) 
+  return (PairElem side e)
+  where
+    pairSide = spanned $ (keyword "fst" $> PairFst) <|>
+                         (keyword "snd" $> PairSnd)
 
-arrayElem :: Parser ArrayElem
-arrayElem = do
+arrayElem :: Parser (Annotated ArrayElem SpanA)
+arrayElem = spanned $ do
   i <- P.try (identifier <* P.lookAhead (token TokLBracket))
   a <- many1 arrayIndex
   return (ArrayElem i a)
-  where 
-    arrayIndex = brackets expr  
+  where
+    arrayIndex = brackets expr
 
-assignLHS :: Parser AssignLHS
-assignLHS = LHSArray <$> arrayElem <|>
-            LHSPair <$> pairElem <|>
-            LHSVar <$> identifier
+assignLHS :: Parser (Annotated AssignLHS SpanA)
+assignLHS
+  = spanned $ LHSArrayElem <$> arrayElem <|>
+              LHSPairElem <$> pairElem <|>
+              LHSVar <$> identifier
 
-assignRHS :: Parser AssignRHS
+assignRHS :: Parser (Annotated AssignRHS SpanA)
 assignRHS
-  = rhsExpr <|>
-    rhsArrayLit <|>
-    rhsPairElem <|>
-    rhsCall <|>
-    rhsNewPair
+  = spanned $ rhsExpr <|>
+              rhsArrayLit <|>
+              rhsPairElem <|>
+              rhsCall <|>
+              rhsNewPair
     where
-      rhsExpr = RHSExpr <$> expr
+      rhsExpr     = RHSExpr <$> expr
       rhsArrayLit = RHSArrayLit <$> brackets (sepBy expr comma) <?> "array literal"
-      rhsPairElem = RHSPair <$> pairElem
+      rhsPairElem = RHSPairElem <$> pairElem
       rhsNewPair = keyword "newpair" *> parens (RHSNewPair <$> expr <* comma <*> expr)
       rhsCall = do
-        _  <- keyword "call"  
+        _  <- keyword "call"
         i  <- identifier
         es <- parens (sepBy expr comma)
         return (RHSCall i es)
 
-varStmt :: Parser Stmt
-varStmt = do 
+skipStmt :: Parser (Annotated Stmt SpanA)
+skipStmt = spanned $ do
+  keyword "skip"
+  return StmtSkip
+
+varStmt :: Parser (Annotated Stmt SpanA)
+varStmt = spanned $ do
   t <- parseType
   i <- identifier
   _ <- token TokEqual
   r <- assignRHS
   return (StmtVar t i r)
 
-whileStmt :: Parser Stmt
-whileStmt = do
+whileStmt :: Parser (Annotated Stmt SpanA)
+whileStmt = spanned $ do
   _ <- keyword "while"
   e <- expr
   _ <- keyword "do"
@@ -181,8 +205,8 @@ whileStmt = do
   _ <- keyword "done"
   return (StmtWhile e b)
 
-ifStmt :: Parser Stmt
-ifStmt = do
+ifStmt :: Parser (Annotated Stmt SpanA)
+ifStmt = spanned $ do
   _ <- keyword "if"
   i <- expr
   _ <- keyword "then"
@@ -192,57 +216,57 @@ ifStmt = do
   _ <- keyword "fi"
   return (StmtIf i t e)
 
-scopeStmt :: Parser Stmt
-scopeStmt = do
+scopeStmt :: Parser (Annotated Stmt SpanA)
+scopeStmt = spanned $ do
   _ <- keyword "begin"
   b <- block
   _ <- keyword "end"
   return (StmtScope b)
 
-printStmt :: Parser Stmt
-printStmt = do
+printStmt :: Parser (Annotated Stmt SpanA)
+printStmt = spanned $ do
   _ <- keyword "print"
   e <- expr
-  return (StmtPrint False e)
+  return (StmtPrint e False)
 
-printlnStmt :: Parser Stmt
-printlnStmt = do
+printlnStmt :: Parser (Annotated Stmt SpanA)
+printlnStmt = spanned $ do
   _ <- keyword "println"
   e <- expr
-  return (StmtPrint True e)
+  return (StmtPrint e True)
 
-assignStmt :: Parser Stmt
-assignStmt = do
+assignStmt :: Parser (Annotated Stmt SpanA)
+assignStmt = spanned $ do
   l <- assignLHS
   _ <- token TokEqual
   r <- assignRHS
   return (StmtAssign l r)
 
-readStmt :: Parser Stmt
-readStmt = do
+readStmt :: Parser (Annotated Stmt SpanA)
+readStmt = spanned $ do
   _ <- keyword "read"
   l <- assignLHS
   return (StmtRead l)
 
-freeStmt :: Parser Stmt
-freeStmt = do
+freeStmt :: Parser (Annotated Stmt SpanA)
+freeStmt = spanned $ do
   _ <- keyword "free"
   e <- expr
   return (StmtFree e)
 
-exitStmt :: Parser Stmt
-exitStmt = do
+exitStmt :: Parser (Annotated Stmt SpanA)
+exitStmt = spanned $ do
   _ <- keyword "exit"
   e <- expr
   return (StmtExit e)
 
-returnStmt :: Parser Stmt
-returnStmt = do
+returnStmt :: Parser (Annotated Stmt SpanA)
+returnStmt = spanned $ do
   _ <- keyword "return"
   e <- expr
   return (StmtReturn e)
 
-stmt :: Parser Stmt
+stmt :: Parser (Annotated Stmt SpanA)
 stmt = skipStmt    <|>
        whileStmt   <|>
        ifStmt      <|>
@@ -256,19 +280,14 @@ stmt = skipStmt    <|>
        returnStmt  <|>
        varStmt     <?> "statement"
 
-block :: Parser Block
-block = sepBy1 posStmt semi
-  where
-    posStmt = do
-      p <- P.getPosition
-      s <- stmt
-      return ((sourceLine p, sourceColumn p, sourceName p), s)
+block :: Parser (Annotated Block SpanA)
+block = spanned $ Block <$> sepBy1 stmt semi
 
-param :: Parser (Type, String)
-param = (,) <$> parseType <*> identifier
+param :: Parser (Annotated Parameter SpanA)
+param = spanned $ Parameter <$> parseType <*> identifier
 
-function :: Parser FuncDef
-function = do
+function :: Parser (Annotated FuncDef SpanA)
+function = spanned $ do
   (t,i) <- P.try ((,) <$> parseType <*> identifier <* lookAhead (token TokLParen))
   x <- parens (sepBy param comma)
   _ <- keyword "is"
@@ -276,17 +295,17 @@ function = do
   _ <- keyword "end"
   return (FuncDef t i x b)
 
-program :: Parser Program
-program = do
+program :: Parser (Annotated Program SpanA)
+program = spanned $ do
   _ <- keyword "begin"
   f <- many function
   b <- block
   _ <- keyword "end"
   return (Program f b)
 
-waccParser :: String -> [(Pos, Token)] -> WACCResult Program
+waccParser :: String -> [(Pos, Token)] -> WACCResult (Annotated Program SpanA)
 waccParser fname tokens
-  = case P.runParser (program <* eof) () fname tokens of 
+  = case P.runParser (program <* eof) () fname tokens of
       Left e -> syntaxError (show e)
       Right p -> OK p
 
