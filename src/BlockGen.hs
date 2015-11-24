@@ -1,6 +1,6 @@
 module BlockGen where
 import Data.Map as Map
-import AST 
+import AST
 
 
 --data Environment = Environment
@@ -9,7 +9,7 @@ import AST
 --  , outputProgram :: [Instructions]
 --  }
 --
---type RuntimeEnvironment a = StateT Environment 
+--type RuntimeEnvironment a = StateT Environment
 data Instruction =
    SUB String
   | PUSH String
@@ -19,13 +19,13 @@ data Instruction =
   | ADD String
   | MOV String
   deriving (Show)
-  
-blockGeneration :: Block -> Map String Int
-blockGeneration block
-  = genTable block 0 Map.empty
+
+blockGeneration :: (Annotated Block TypeA) -> Map String Int
+blockGeneration (_, Block stmts)
+  = genTable stmts 0 Map.empty
 
 
-genTable :: Block -> Int -> Map String Int -> Map String Int
+genTable :: [(Annotated Stmt TypeA)] -> Int -> Map String Int -> Map String Int
 genTable ((_, StmtVar _ s _) : rest) index table
   = genTable rest (index + 1) (Map.insert s index table)
 genTable (_ : rest) index table

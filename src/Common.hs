@@ -34,6 +34,7 @@ instance Monad WACCResult where
   (Error kind msg) >>= _ = Error kind msg
 
 type Pos = (Int, Int, String)
+type Span = (Pos, Pos)
 
 class ErrorContext m where
   withErrorContext :: String -> m -> m
