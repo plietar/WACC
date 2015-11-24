@@ -38,8 +38,8 @@ spanned p = do
   finalPos <- position
   return ((initialPos, finalPos), node)
 
-identifier :: Parser (Annotated Identifier SpanA)
-identifier = (spanned $ Identifier <$> P.token showTok posTok matchTok) <?> "identifier"
+identifier :: Parser Identifier
+identifier = P.token showTok posTok matchTok <?> "identifier"
   where
     matchTok (_, TokIdent ident) = Just ident
     matchTok _                   = Nothing
@@ -99,11 +99,11 @@ expr = buildExpressionParser exprTable term <?> "expression"
 
     parsePrefix p typ = do
       (span, _) <- spanned p
-      return (\x -> (span, ExprUnOp (span,typ) x))
+      return (\x -> (span, ExprUnOp typ x))
 
     parseBinary p typ = do
       (span, _) <- spanned p
-      return (\x y -> (span, ExprBinOp (span,typ) x y))
+      return (\x y -> (span, ExprBinOp typ x y))
 
     prefix   p typ       = Prefix (parsePrefix p typ)
     binary   p typ assoc = Infix (parseBinary p typ) assoc
@@ -148,8 +148,8 @@ pairElem = spanned $ do
   e <- expr
   return (PairElem side e)
   where
-    pairSide = spanned $ (keyword "fst" $> PairFst) <|>
-                         (keyword "snd" $> PairSnd)
+    pairSide = (keyword "fst" $> PairFst) <|>
+               (keyword "snd" $> PairSnd)
 
 arrayElem :: Parser (Annotated ArrayElem SpanA)
 arrayElem = spanned $ do
@@ -283,8 +283,8 @@ stmt = skipStmt    <|>
 block :: Parser (Annotated Block SpanA)
 block = spanned $ Block <$> sepBy1 stmt semi
 
-param :: Parser (Annotated Parameter SpanA)
-param = spanned $ Parameter <$> parseType <*> identifier
+param :: Parser (Type, Identifier)
+param = (,) <$> parseType <*> identifier
 
 function :: Parser (Annotated FuncDef SpanA)
 function = spanned $ do

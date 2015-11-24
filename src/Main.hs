@@ -6,7 +6,7 @@ import ScopedMap
 
 import System.Environment
 import System.Exit
---import SemCheck
+import SemCheck
 import AST
 import Data.Map as Map
 import Control.Monad.State
@@ -17,12 +17,12 @@ exitCodeForResult (Error LexicalError  _) = ExitFailure 100
 exitCodeForResult (Error SyntaxError   _) = ExitFailure 100
 exitCodeForResult (Error SemanticError _) = ExitFailure 200
 
-frontend :: String -> String -> WACCResult (Annotated Program SpanA)
+frontend :: String -> String -> WACCResult (Annotated Program TypeA)
 frontend source filename = do
   tokens <- waccLexer filename source
   ast <- waccParser filename tokens
-  --typeCheckProgram ast
-  return ast
+  ast' <- waccSemCheck ast
+  return ast'
 
 main :: IO ()
 main = do
