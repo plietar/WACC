@@ -19,19 +19,19 @@ data IR
   | ICall { iLabel :: Label, iArgs :: [Var] }
   | ILabel { iLabel :: Label }
 
-  | INewFrame { iSize :: Int }
-  | IFreeFrame { iSize :: Int }
-  | IReadFrame { iOffset :: Int, iDest :: Var }
-  | IWriteFrame { iOffset :: Int, iValue :: Var }
+  | IFrameAllocate { iSize :: Int }
+  | IFrameFree { iSize :: Int }
+  | IFrameRead { iOffset :: Int, iDest :: Var }
+  | IFrameWrite { iOffset :: Int, iValue :: Var }
 
-  | INewArray { iDest :: Var, iSize :: Int }
-  | IReadArray { iArray :: Var, iIndex :: Var, iDest :: Var }
-  | IWriteArray { iArray :: Var, iIndex :: Var, iValue :: Var }
+  | IArrayAllocate { iDest :: Var, iSize :: Int }
+  | IArrayRead { iArray :: Var, iIndex :: Var, iDest :: Var }
+  | IArrayWrite { iArray :: Var, iIndex :: Var, iValue :: Var }
   | IArrayLength { iArray :: Var, iDest :: Var }
 
-  | INewPair { iDest :: Var }
-  | IReadPair { iPair :: Var, iDest :: Var, iSide :: PairSide }
-  | IWritePair { iPair :: Var, iValue :: Var, iSide :: PairSide }
+  | IPairAllocate { iDest :: Var }
+  | IPairRead { iPair :: Var, iDest :: Var, iSide :: PairSide }
+  | IPairWrite { iPair :: Var, iValue :: Var, iSide :: PairSide }
 
   | INullCheck { iValue :: Var }
   | IBoundsCheck { iArray :: Var, iIndex :: Var }
