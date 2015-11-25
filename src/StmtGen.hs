@@ -6,22 +6,11 @@ import AST
 import CodeGen
 import Control.Monad.Writer
 
--- Integer
+-- Literals
 genExpr :: Annotated Expr TypeA -> CodeGen Var
-genExpr (_ , ExprLit (LitInt n)) = do 
-  intVar <- allocateVar
-  tell [ ILiteral { iDest = intVar, iLiteral = LitInt n} ]
-
--- Boolean
-genExpr (_, ExprLit (LitBool bool) = do
-  boolVar <- allocateVar
-  tell [ ILiteral { iDest = boolVar, iLiteral = LitBool bool} ]
-
---Characters
-genExpr (_, ExprLit (LitChar chr)) = do
-  chrVar <- allocateVar
-  tell [ ILiteral { iDest = chrVar, iLiteral = LitInt n} ]
-
+genExpr (_ , ExprLit literal) = do 
+  litVar <- allocateVar
+  tell [ ILiteral { iDest = litVar, iLiteral = literal} ]
 
 
 
