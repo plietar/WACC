@@ -10,10 +10,9 @@ import AST
 --data Environment = Environment
 --  {
 --    variableOffset :: Map String Int
---  , outputProgram :: [Instructions]
 --  }
 --
---type RuntimeEnvironment a = StateT Environment 
+--type CodeGenEnvironment a = StateT Environment WACCResult a
 
 blockGeneration :: (Annotated Block TypeA) -> Map String Int
 blockGeneration (_, Block stmts)
@@ -41,14 +40,32 @@ genBlock (_, Block stmts) = do
 
 genStatement :: Map String Int -> [Register] 
     -> Annotated Stmt TypeA -> WACCResult [Instruction]
-genStatement offsetTable regs (_, StmtVar t s rhs)
-  = case Map.lookup s offsetTable of
-      Nothing -> Error RuntimeError [""]
-      Just offset -> OK result
+genStatement offsetTable regs (_, StmtVar t s rhs) = do
+  rhsCode  <- genAssignRHS offsetTable regs rhs
+  case Map.lookup s offsetTable of
+    Nothing -> Error CodeGenError ["Code gen error"]
+    Just offset -> OK (rhsCode ++ storeInReg)
     where
-      -- Need to call generateAssignRHS instead of the -1
-      result = [LDR (Ref (head regs)) (ImmNum (-1)), STR (Ref (head regs)) (Ind SP varPos)]
       -- I assume the lookup will succeed since the variable was just added to the table
       varPos = 4 * (Map.size offsetTable - fromJust (Map.lookup s offsetTable) - 1)
+      storeInReg = [STR (Ref (head regs)) (Ind SP varPos)]
+      -- result = [LDR (Ref (head regs)) (ImmNum (-1)), STR (Ref (head regs)) (Ind SP varPos)]
 genStatement _ _ (_, stmt) = OK [BL "ignore line"]
+
+
+genAssignRHS :: Map String Int -> [Register] -> Annotated AssignRHS TypeA -> WACCResult [Instruction]
+genAssignRHS offsetTable regs (_, RHSExpr e) =
+  case e of
+    (_, ExprLit literal) -> genExprLit offsetTable regs literal
+
+genAssignRHS offsetTable regs (_, RHSArrayLit exps)     = OK []
+genAssignRHS offsetTable regs (_, RHSNewPair e1 e2)     = OK []
+genAssignRHS offsetTable regs (_, RHSPairElem pairElem) = OK []
+genAssignRHS offsetTable regs (_, RHSCall ident exps)   = OK []
+
+genExprLit :: Map String Int -> [Register] -> Annotated Literal TypeA -> WACCResult [Instruction]
+genExprLit offsetTable regs (_, LitInt x)
+  = OK [LDR (Ref (head regs)) (ImmNum (fromInteger x))]
+genExprLit _ _ _
+  = OK []
 

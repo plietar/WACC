@@ -26,7 +26,7 @@ data Operand = Ref Register
 
 instance Show Operand where
   show (Ref r) = show r
-  show (ImmNum i) = "#" ++ show i
+  show (ImmNum i) = "=" ++ show i
   show (ImmName s) = "#" ++ s
   show (Ind r offset) = "[" ++ show r ++", #" ++ show offset ++ "]"
 

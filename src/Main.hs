@@ -33,7 +33,7 @@ backend :: (Annotated Program TypeA) -> WACCResult [Instruction]
 backend (_, Program funcs block) = do 
   result <- genBlock block
   --let vars = blockGeneration block 
-  --return [SUB "jaime", ADD "John Ripper", PUSH (show vars)]
+  --return [PUSH "jaime", PUSH "John Ripper", PUSH (show vars)]
   return result
 
 main :: IO ()
@@ -43,8 +43,8 @@ main = do
 
   let result = frontend contents filename
   case result of
-   -- OK prog        -> putStrLn ("Success AST generation!")
     OK prog -> do
+      putStrLn (show result)
       putStrLn ("Success AST generation!")
       let assembly = backend prog
       case assembly of

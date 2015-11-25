@@ -10,7 +10,7 @@ import Control.Monad.Trans
 data ErrorKind = LexicalError
                | SyntaxError
                | SemanticError
-               | RuntimeError
+               | CodeGenError
                deriving (Show)
 
 data WACCResult a = OK a
