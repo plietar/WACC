@@ -1,41 +1,28 @@
-transFunction :: FuncDef -> [Instruction]
-transFunction returnType fname [] body 
-  = transExp body [registerNotInUse]
+module FunctionCodeGen where
 
-transFunction returnType fname [(paramType, paramName)] body
-  = saveFun fname ++ [PUSH {lr}] ++ caller [(paramType, paramName)] ++ [POP {pc}] ++ [POP {pc}]
+import AST
+--import BlockGen
+import ARMTypes
+import CodeGen 
+import Control.Monad.Reader
+import Data.Map as Map
+import Control.Frame
 
-saveFun fname 
-  = 
+genFunction :: Annotated FuncDef TypeA -> [IR]
+genFunction (_, FuncDef returnType fname params body) 
+  = runReaderT topFrame $ do
+	tell [ ILabel {iLabel = NamedLabel ("f_" ++ fname)}
+		, IFunctionBegin ]
+	genBlock body
+	tell [IFunctionEnd]
+	where 
+	  topFrame = Frame { offsets = p, parent = Nothing, allocated = False, size = length params + 1 }
+	  p = saveParam params 1 Map.empty
 
-caller :: [(Type, String)] -> [Instruction]
-caller params 
-  = [SUB sp, sp, bytes] ++ [BL fname] ++ [PUSH returnValue]
-  where 
-  	bytes = ??
 
-caller fname 
-  = [BL fname] ++ [POP {pc}]
+saveParam :: [(Type, String)] -> Int -> Map String Int -> Map String Int
+saveParam [] _ t = t
+saveParam [(_, s) : rest] index table 
+  = saveParam rest (index + 1) (Map.insert s index table)
 
-callee :: 
-  = [PUSH fp] ++ [MOV sp ] ++
-
-lr = r14
-pc = r15 
-
--- Caller
--- pop param into register for param pass
--- call function
--- push return value onto stack
-
--- Callee
--- push old FP
--- make space for frame -- push
--- copy sp to fp
--- populate frame 
--- execute body
--- may push return value
--- clear frame space
--- pop fp
--- return
 

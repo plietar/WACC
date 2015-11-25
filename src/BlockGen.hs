@@ -35,8 +35,8 @@ genBlock (_, Block stmts) = do
   return (initFrame ++ blockCode ++ endFrame)
   where
     variables = genTable stmts 0 Map.empty
-    initFrame = [PUSH "{LR}", SUB (Ref sp) (Ref sp) (ImmNum (4 * Map.size variables))]
-    endFrame = [ADD (Ref sp) (Ref sp) (ImmNum (4 * Map.size variables)), POP "{PC}"]
+    initFrame = [PUSH lr, SUB (Ref sp) (Ref sp) (ImmNum (4 * Map.size variables))]
+    endFrame = [ADD (Ref sp) (Ref sp) (ImmNum (4 * Map.size variables)), POP pc]
 
 genStatement :: Map String Int -> [Register] 
     -> Annotated Stmt TypeA -> WACCResult [Instruction]

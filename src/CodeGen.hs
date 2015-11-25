@@ -41,6 +41,9 @@ data IR
   | IFree { iValue :: Var, iType :: Type }
   | IExit { iValue :: Var }
 
+  | IFunctionBegin { }
+  | IFunctionEnd { }
+
 data CodeGenState = CodeGenState {
   variables :: [Var],
   labels :: [Label]
