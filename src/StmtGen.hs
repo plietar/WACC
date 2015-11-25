@@ -13,11 +13,15 @@ genExpr (_ , ExprLit (LitInt n)) = do
   tell [ ILiteral { iDest = intVar, iLiteral = LitInt n} ]
 
 -- Boolean
-genExpr (_, ExprLit (LitBool True)) = undefined
-genExpr (_, ExprLit (LitBool False)) = undefined 
+genExpr (_, ExprLit (LitBool bool) = do
+  boolVar <- allocateVar
+  tell [ ILiteral { iDest = boolVar, iLiteral = LitBool bool} ]
 
 --Characters
-genExpr (_, ExprLit (LitChar a)) = undefined
+genExpr (_, ExprLit (LitChar chr)) = do
+  chrVar <- allocateVar
+  tell [ ILiteral { iDest = chrVar, iLiteral = LitInt n} ]
+
 
 
 
