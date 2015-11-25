@@ -59,3 +59,29 @@ allocateLabel = do
   modify (\s -> s { labels = ls })
   return l
 
+genFrameRead :: String -> CodeGen Var
+genFrameRead ident = do
+  outVar <- allocateVar
+  offset <- variableOffset ident
+  tell [ IFrameRead { iOffset = offset
+                    , iDest = outVar } ]
+  return outVar
+
+genArrayRead :: Var -> Annotated Expr TypeA -> CodeGen Var
+genArrayRead arrayVar indexExpr =do
+  outVar <- allocateVar
+  indexVar <- genExpr indexExpr
+  tell [ IArrayRead { iArray = arrayVar
+                    , iIndex = indexVar
+                    , iDest = outVar } ]
+  return outVar
+
+genExpr :: Annotated Expr TypeA -> CodeGen Var
+genExpr = undefined
+
+genBlock :: Annotated Block TypeA -> CodeGen ()
+genBlock = undefined
+
+variableOffset :: String -> CodeGen Int
+variableOffset = undefined
+

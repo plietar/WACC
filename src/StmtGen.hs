@@ -6,26 +6,31 @@ import AST
 import CodeGen
 import Control.Monad.Writer
 
-genExpr :: Annotated Expr TypeA -> CodeGen Var
-genExpr = undefined
-
-genBlock :: Annotated Block TypeA -> CodeGen ()
-genBlock = undefined
-
-
 genAssign :: Annotated AssignLHS TypeA -> Var -> CodeGen ()
-genAssign (_, LHSVar ident) valueVar = undefined
+genAssign (_, LHSVar ident) valueVar = do
+  offset <- variableOffset ident
+  tell [ IFrameWrite { iOffset = offset, iValue = valueVar } ]
+
 genAssign (_, LHSPairElem (_, PairElem side pairExpr)) valueVar = do
   pairVar <- genExpr pairExpr
   tell [ IPairWrite { iPair = pairVar, iSide = side, iValue = valueVar } ]
 
-genAssign (_, LHSArrayElem (_, ArrayElem ident exprs)) valueVar = undefined
+genAssign (_, LHSArrayElem (_, ArrayElem ident exprs)) valueVar = do
+  let readIndexExprs  = init exprs
+      writeIndexExpr  = last exprs
 
+  arrayVar <- genFrameRead ident
+  subArrayVar <- foldM genArrayRead arrayVar readIndexExprs
+
+  writeIndexVar <- genExpr writeIndexExpr
+  tell [ IArrayWrite { iArray = subArrayVar
+                     , iIndex = writeIndexVar
+                     , iValue = valueVar } ]
 
 genRHS :: Annotated AssignRHS TypeA -> CodeGen Var
 genRHS (_, RHSExpr expr) = genExpr expr
 genRHS (_, RHSArrayLit exprs) = do
-  arrayVar <- allocateVar 
+  arrayVar <- allocateVar
   tell [ IArrayAllocate { iDest = arrayVar, iSize = length exprs }]
   forM (zip exprs [0..]) $ \(expr, index) -> do
     indexVar <- allocateVar
@@ -49,9 +54,9 @@ genRHS (_, RHSPairElem (_, PairElem side pairExpr)) = do
   tell [ IPairRead { iPair = pairVar, iSide = side, iDest = outVar } ]
   return outVar
 
-genRHS (_, RHSCall name exprs) = undefined
-
-
+genRHS (_, RHSCall name exprs) = do
+  argVars <- forM exprs genExpr
+  tell [ ICall { iLabel = name, iArgs = argVars } ]
 
 genStmt :: Annotated Stmt TypeA -> CodeGen ()
 genStmt (_, StmtSkip) = return ()
@@ -63,7 +68,7 @@ genStmt (_, StmtAssign lhs@(ty,_) rhs) = do
   genAssign lhs v
 
 genStmt (_, StmtRead lhs@(ty, _)) = do
-  v <- allocateVar 
+  v <- allocateVar
   tell [IRead { iDest = v, iType = ty }]
   genAssign lhs v
 
@@ -90,7 +95,7 @@ genStmt (_, StmtIf condition thenBlock elseBlock) = do
   genBlock elseBlock
   tell [ IJump { iLabel = endLabel }
        , ILabel { iLabel = thenLabel }]
-  genBlock thenBlock 
+  genBlock thenBlock
   tell [ILabel { iLabel = endLabel }]
 
 genStmt (_, StmtWhile condition block ) = do
