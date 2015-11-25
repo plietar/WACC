@@ -12,6 +12,20 @@ genExpr (_ , ExprLit literal) = do
   litVar <- allocateVar
   tell [ ILiteral { iDest = litVar, iLiteral = literal} ]
 
+-- UnOp
+genExpr (_ , ExprUnOp operator expr) = do 
+  unOpVar <- allocateVar
+  valueVar <- genExpr expr
+  tell [ IUnOp { iUnOp = operator, iDest = unOpVar, iValue = valueVar} ]
+
+-- BinOp
+genExpr (_ , ExprBinOp operator expr1 expr2) = do 
+  binOpVar <- allocateVar
+  value1Var <- genExpr expr1
+  value2Var <- genExpr expr2
+  tell [ IBinOp { iBinOp = operator, iDest = unOpVar, iLeft = value1Var, iRight = value2Var } ]
+
+
 
 
 
