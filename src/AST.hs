@@ -158,7 +158,7 @@ data TypeA
 instance Annotation TypeA where
   type Ann TypeA Program = ()
   type Ann TypeA FuncDef = ()
-  type Ann TypeA Block = (Bool, Type)
+  type Ann TypeA Block = ((Bool, Type), [String])
   type Ann TypeA Stmt = (Bool, Type)
   type Ann TypeA Expr = Type
   type Ann TypeA AssignLHS = Type

@@ -14,6 +14,7 @@ import Control.Monad.State
 
 import BlockGen
 import ARMTypes
+import FunctionCodeGen
 
 
 exitCodeForResult :: WACCResult a -> ExitCode
@@ -30,11 +31,7 @@ frontend source filename = do
   return typedAst
 
 backend :: (Annotated Program TypeA) -> WACCResult [Instruction]
-backend (_, Program funcs block) = do 
-  result <- genBlock block
-  --let vars = blockGeneration block 
-  --return [PUSH "jaime", PUSH "John Ripper", PUSH (show vars)]
-  return result
+backend (_, Program funcs block) = undefined
 
 main :: IO ()
 main = do
