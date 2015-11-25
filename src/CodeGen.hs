@@ -10,9 +10,9 @@ import Data.Maybe
 
 
 data Var = Var Int
-  deriving Show
+  deriving (Show, Ord, Eq)
 data Label = NamedLabel String | UnnamedLabel Int
-  deriving Show
+  deriving (Show, Ord, Eq)
 
 data IR
   = ILiteral { iDest :: Var, iLiteral :: Literal }
@@ -22,7 +22,7 @@ data IR
 
   | ICondJump { iLabel :: Label, iValue :: Var }
   | IJump { iLabel :: Label }
-  | ICall { iLabel :: Label, iArgs :: [Var] }
+  | ICall { iLabel :: Label, iArgs :: [Var], iDest :: Var }
   | ILabel { iLabel :: Label }
 
   | IFrameAllocate { iSize :: Int }
