@@ -35,8 +35,8 @@ genBlock (_, Block stmts) = do
   return (initFrame ++ blockCode ++ endFrame)
   where
     variables = genTable stmts 0 Map.empty
-    initFrame = [PUSH "{LR}", SUB (Ref SP) (Ref SP) (ImmNum (4 * Map.size variables))]
-    endFrame = [ADD (Ref SP) (Ref SP) (ImmNum (4 * Map.size variables)), POP "{PC}"]
+    initFrame = [PUSH "{LR}", SUB (Ref sp) (Ref sp) (ImmNum (4 * Map.size variables))]
+    endFrame = [ADD (Ref sp) (Ref sp) (ImmNum (4 * Map.size variables)), POP "{PC}"]
 
 genStatement :: Map String Int -> [Register] 
     -> Annotated Stmt TypeA -> WACCResult [Instruction]
@@ -48,7 +48,7 @@ genStatement offsetTable regs (_, StmtVar t s rhs) = do
     where
       -- I assume the lookup will succeed since the variable was just added to the table
       varPos = 4 * (Map.size offsetTable - fromJust (Map.lookup s offsetTable) - 1)
-      storeInReg = [STR (Ref (head regs)) (Ind SP varPos)]
+      storeInReg = [STR (Ref (head regs)) (Ind sp varPos)]
       -- result = [LDR (Ref (head regs)) (ImmNum (-1)), STR (Ref (head regs)) (Ind SP varPos)]
 genStatement _ _ (_, stmt) = OK [BL "ignore line"]
 
