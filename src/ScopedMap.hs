@@ -5,35 +5,37 @@ module ScopedMap
   , ScopedMap.lookup
   , ScopedMap.empty
   , newScope
+  , localTable
   ) where
 import Data.Maybe
 import Data.Map as Map
 import Control.Applicative
 
-data ScopedMap k v = Leaf (Map k v) (ScopedMap k v) | Root (Map k v)
+data ScopedMap k v = ScopedMap {
+  table :: Map k v,
+  parent :: Maybe (ScopedMap k v)
+}
+
 insertIfNotExists :: Ord k => k -> v -> ScopedMap k v -> Maybe (ScopedMap k v)
-insertIfNotExists key value (Leaf table parent)
-  = if Map.notMember key table
-    then Just (Leaf (Map.insert key value table) parent)
-    else Nothing
-insertIfNotExists key value (Root table)
-  = if Map.notMember key table
-    then Just (Root (Map.insert key value table))
+insertIfNotExists key value scopedMap
+  = if Map.notMember key (table scopedMap)
+    then Just (scopedMap { table = Map.insert key value (table scopedMap) })
     else Nothing
 
 insert :: Ord k => k -> v -> ScopedMap k v -> ScopedMap k v
-insert key value table
-  = fromMaybe table (insertIfNotExists key value table)
+insert key value scopedMap
+  = fromMaybe scopedMap (insertIfNotExists key value scopedMap)
 
 lookup :: Ord k => k -> ScopedMap k v -> Maybe v
-lookup key (Leaf table parent)
-  = Map.lookup key table <|> ScopedMap.lookup key parent
-lookup key (Root table)
-  = Map.lookup key table
+lookup key scopedMap
+  = Map.lookup key (table scopedMap) <|> ((ScopedMap.lookup key) =<< (parent scopedMap))
 
 empty :: ScopedMap k v
-empty = Root Map.empty
+empty = ScopedMap { table = Map.empty, parent = Nothing }
 
 newScope :: ScopedMap k v -> ScopedMap k v
-newScope parent = Leaf Map.empty parent
+newScope parent = ScopedMap { table = Map.empty, parent = Just parent }
+
+localTable :: ScopedMap k v -> Map k v
+localTable = table
 
