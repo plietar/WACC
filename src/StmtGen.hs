@@ -6,8 +6,21 @@ import AST
 import CodeGen
 import Control.Monad.Writer
 
+-- Integer
 genExpr :: Annotated Expr TypeA -> CodeGen Var
-genExpr = undefined
+genExpr (_ , ExprLit (LitInt n)) = do 
+  intVar <- allocateVar
+  tell [ ILiteral { iDest = intVar, iLiteral = LitInt n} ]
+
+-- Boolean
+genExpr (_, ExprLit (LitBool True)) = undefined
+genExpr (_, ExprLit (LitBool False)) = undefined 
+
+--Characters
+genExpr (_, ExprLit (LitChar a)) = undefined
+
+
+
 
 genBlock :: Annotated Block TypeA -> CodeGen ()
 genBlock = undefined
