@@ -97,18 +97,16 @@ isVoidType TyVoid = True
 isVoidType _      = False
 
 
-checkLiteral :: Annotated Literal SpanA -> WACCResult (Annotated Literal TypeA)
-checkLiteral (_, LitInt l)    = OK (TyInt,          LitInt l)
-checkLiteral (_, LitBool l)   = OK (TyBool,         LitBool l)
-checkLiteral (_, LitChar l)   = OK (TyChar,         LitChar l)
-checkLiteral (_, LitString l) = OK (TyArray TyChar, LitString l)
-checkLiteral (_, LitNull)     = OK (TyAny,          LitNull)
+checkLiteral :: Literal -> Type
+checkLiteral (LitInt _)    = TyInt
+checkLiteral (LitBool _)   = TyBool
+checkLiteral (LitChar _)   = TyChar
+checkLiteral (LitString _) = TyArray TyChar
+checkLiteral  LitNull      = TyAny
 
 
 checkExpr :: Annotated Expr SpanA -> Context -> WACCResult (Annotated Expr TypeA)
-checkExpr (_, ExprLit lit) _ = do
-  lit'@(ty, _) <- checkLiteral lit
-  return (ty, ExprLit lit')
+checkExpr (_, ExprLit lit) _ = return (checkLiteral lit, ExprLit lit)
 
 checkExpr (_, ExprVar varname) context = do
   ty <- getVariable varname context

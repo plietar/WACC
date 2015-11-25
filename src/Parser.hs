@@ -58,10 +58,10 @@ keyword expected = token (TokKeyword expected)
 op :: String -> Parser Token
 op expected = token (TokOp expected)
 
-literal :: Parser (Annotated Literal SpanA)
+literal :: Parser Literal
 literal = (lit >>= check) <?> "literal"
   where
-    lit = spanned $ P.token showTok posTok matchTok
+    lit = P.token showTok posTok matchTok
     matchTok (_, TokIntLit l)       = Just (LitInt l)
     matchTok (_, TokBoolLit l)      = Just (LitBool l)
     matchTok (_, TokCharLit l)      = Just (LitChar l)
@@ -69,10 +69,10 @@ literal = (lit >>= check) <?> "literal"
     matchTok (_, TokKeyword "null") = Just LitNull
     matchTok _                      = Nothing
 
-    check :: Annotated Literal SpanA -> Parser (Annotated Literal SpanA)
-    check x@(_, LitInt l) = if l > toInteger (maxBound :: Int32)
-                            then (fail "Integer litteral too large")
-                            else return x
+    check :: Literal -> Parser Literal
+    check x@(LitInt l) = if l > toInteger (maxBound :: Int32)
+                         then (fail "Integer litteral too large")
+                         else return x
     check x = return x
 
 semi :: Parser Token
