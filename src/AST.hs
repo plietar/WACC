@@ -17,7 +17,6 @@ class ( Show (Ann a Program)
       , Show (Ann a AssignRHS)
       , Show (Ann a ArrayElem)
       , Show (Ann a PairElem)
-      , Show (Ann a Literal)
       ) => Annotation a where
   type Ann a (t :: * -> *)
 
@@ -36,7 +35,7 @@ data Stmt a
   | StmtFree   (Annotated Expr a)
   | StmtReturn (Annotated Expr a)
   | StmtExit   (Annotated Expr a)
-  | StmtPrint  (Annotated Expr a) Bool 
+  | StmtPrint  (Annotated Expr a) Bool
   | StmtIf     (Annotated Expr a) (Annotated Block a) (Annotated Block a)
   | StmtWhile  (Annotated Expr a) (Annotated Block a)
   | StmtScope  (Annotated Block a)
@@ -54,7 +53,7 @@ data AssignRHS a
   | RHSCall     Identifier [Annotated Expr a]
 
 data Expr a
-  = ExprLit       (Annotated Literal a)
+  = ExprLit       Literal
   | ExprVar       Identifier
   | ExprArrayElem (Annotated ArrayElem a)
   | ExprUnOp      UnOp  (Annotated Expr a)
@@ -70,11 +69,12 @@ data PairElem a
 
 data PairSide = PairFst | PairSnd
 
-data Literal a = LitInt Integer
-               | LitBool Bool
-               | LitChar Char
-               | LitString String
-               | LitNull
+data Literal = LitInt Integer
+             | LitBool Bool
+             | LitChar Char
+             | LitString String
+             | LitNull
+  deriving Show
 
 data UnOp = UnOpNot
           | UnOpNeg
@@ -114,7 +114,6 @@ deriving instance Annotation a => Show (AssignLHS a)
 deriving instance Annotation a => Show (AssignRHS a)
 deriving instance Annotation a => Show (ArrayElem a)
 deriving instance Annotation a => Show (PairElem a)
-deriving instance Annotation a => Show (Literal a)
 
 instance Show BinOp where
   show BinOpAdd = "+"
@@ -166,4 +165,3 @@ instance Annotation TypeA where
   type Ann TypeA AssignRHS = Type
   type Ann TypeA ArrayElem = Type
   type Ann TypeA PairElem = Type
-  type Ann TypeA Literal = Type
