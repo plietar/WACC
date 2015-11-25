@@ -3,7 +3,6 @@ import Parser
 import Lexer
 import Common
 import ScopedMap
-import BlockGen
 
 import System.Environment
 import System.Exit
@@ -12,9 +11,9 @@ import AST
 import Data.Map as Map
 import Control.Monad.State
 
-import BlockGen
 import ARMTypes
 import FunctionCodeGen
+import CodeGen
 
 
 exitCodeForResult :: WACCResult a -> ExitCode
@@ -30,8 +29,8 @@ frontend source filename = do
   typedAst <- waccSemCheck ast
   return typedAst
 
-backend :: (Annotated Program TypeA) -> WACCResult [Instruction]
-backend (_, Program funcs block) = undefined
+backend :: (Annotated Program TypeA) -> [IR]
+backend (_, Program funcs block) = genFunction ((), FuncDef TyVoid "main" [] block)
 
 main :: IO ()
 main = do
@@ -43,10 +42,7 @@ main = do
     OK prog -> do
       putStrLn (show result)
       putStrLn ("Success AST generation!")
-      let assembly = backend prog
-      case assembly of
-        --OK instrs -> putStrLn (show instrs)
-        OK instrs -> mapM_ (putStrLn . show) instrs
+      print (backend prog)
     Error kind msg -> do
       putStrLn ("Error " ++ show kind)
       putStr (unlines (reverse msg))

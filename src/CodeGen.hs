@@ -8,8 +8,11 @@ import Control.Monad.Reader
 import Data.Map as Map
 import Data.Maybe
 
+
 data Var = Var Int
+  deriving Show
 data Label = NamedLabel String | UnnamedLabel Int
+  deriving Show
 
 data IR
   = ILiteral { iDest :: Var, iLiteral :: Literal }
@@ -46,6 +49,7 @@ data IR
 
   | IFunctionBegin { }
   | IFunctionEnd { }
+  deriving Show
 
 data CodeGenState = CodeGenState {
   variables :: [Var],
@@ -84,22 +88,4 @@ getOffset var frame =
   case Map.lookup var (offsets frame) of
     Nothing -> (CodeGen.size frame) + getOffset var (fromJust (parent frame))
     Just offset -> offset
-
-
-genFrameRead :: String -> CodeGen Var
-genFrameRead ident = do
-  outVar <- allocateVar
-  offset <- variableOffset ident
-  tell [ IFrameRead { iOffset = offset
-                    , iDest = outVar } ]
-  return outVar
-
-genArrayRead :: Var -> Annotated Expr TypeA -> CodeGen Var
-genArrayRead arrayVar indexExpr =do
-  outVar <- allocateVar
-  indexVar <- genExpr indexExpr
-  tell [ IArrayRead { iArray = arrayVar
-                    , iIndex = indexVar
-                    , iDest = outVar } ]
-  return outVar
 

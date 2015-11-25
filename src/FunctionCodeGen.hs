@@ -1,9 +1,9 @@
 module FunctionCodeGen where
 
 import AST
-import BlockGen
 import ARMTypes
 import CodeGen 
+import StmtGen
 import Control.Monad.Reader
 import Control.Monad.Writer
 import Data.Map as Map

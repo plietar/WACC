@@ -5,6 +5,8 @@ module StmtGen where
 import AST
 import CodeGen
 import Control.Monad.Writer
+import Control.Monad.Reader
+import qualified Data.Map as Map
 
 -- Literals
 genExpr :: Annotated Expr TypeA -> CodeGen Var
@@ -25,7 +27,7 @@ genExpr (_ , ExprBinOp operator expr1 expr2) = do
   binOpVar <- allocateVar
   value1Var <- genExpr expr1
   value2Var <- genExpr expr2
-  tell [ IBinOp { iBinOp = operator, iDest = unOpVar, iLeft = value1Var, iRight = value2Var } ]
+  tell [ IBinOp { iBinOp = operator, iDest = binOpVar, iLeft = value1Var, iRight = value2Var } ]
   return binOpVar
 
 -- Variable
@@ -38,8 +40,22 @@ genExpr (_, ExprVar ident) = do
 -- ArrayElem
 --genExpr (_, ExprArrayElem (ArrayElem ident xs)) = do
   
+genFrameRead :: String -> CodeGen Var
+genFrameRead ident = do
+  outVar <- allocateVar
+  offset <- variableOffset ident
+  tell [ IFrameRead { iOffset = offset
+                    , iDest = outVar } ]
+  return outVar
 
-
+genArrayRead :: Var -> Annotated Expr TypeA -> CodeGen Var
+genArrayRead arrayVar indexExpr =do
+  outVar <- allocateVar
+  indexVar <- genExpr indexExpr
+  tell [ IArrayRead { iArray = arrayVar
+                    , iIndex = indexVar
+                    , iDest = outVar } ]
+  return outVar
 
 genAssign :: Annotated AssignLHS TypeA -> Var -> CodeGen ()
 genAssign (_, LHSVar ident) valueVar = do
@@ -89,9 +105,9 @@ genRHS (_, RHSPairElem (_, PairElem side pairExpr)) = do
   tell [ IPairRead { iPair = pairVar, iSide = side, iDest = outVar } ]
   return outVar
 
-genRHS (_, RHSCall name exprs) = do
-  argVars <- forM exprs genExpr
-  tell [ ICall { iLabel = name, iArgs = argVars } ]
+genRHS (_, RHSCall name exprs) = undefined
+--  argVars <- forM exprs genExpr
+--  tell [ ICall { iLabel = name, iArgs = argVars } ]
 
 genStmt :: Annotated Stmt TypeA -> CodeGen ()
 genStmt (_, StmtSkip) = return ()
@@ -148,4 +164,23 @@ genStmt (_, StmtWhile condition block ) = do
 
 genStmt (_, StmtScope block) = genBlock block
 
+
+
+-- Block code generation
+
+genBlock :: Annotated Block TypeA -> CodeGen ()
+genBlock ((_, varNames), Block stmts) = do
+  local createFrame generation 
+  where
+      offsetsMap = Map.fromList (zip varNames [0..])
+      sizeFrame = length varNames
+      createFrame = (\frame -> Frame { offsets = offsetsMap
+                                     , parent = Just frame
+                                     , allocated = True
+                                     , CodeGen.size = sizeFrame})
+      generation = do 
+        frameSize <- asks CodeGen.size
+        tell [ IFrameAllocate { iSize = frameSize } ]
+        forM_ stmts genStmt
+        tell [ IFrameFree { iSize = frameSize } ]
 
