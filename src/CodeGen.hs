@@ -4,6 +4,9 @@ import AST
 import Common
 import Control.Monad.Writer
 import Control.Monad.State
+import Control.Monad.Reader
+import Data.Map as Map
+import Data.Maybe
 
 data Var = Var Int
 data Label = NamedLabel String | UnnamedLabel Int
@@ -46,7 +49,7 @@ data CodeGenState = CodeGenState {
   labels :: [Label]
 }
 
-type CodeGen a = StateT CodeGenState (Writer [IR]) a
+type CodeGen a = StateT CodeGenState (ReaderT Frame (Writer [IR])) a
 allocateVar :: CodeGen Var
 allocateVar = do
   (v:vs) <- gets variables
@@ -58,4 +61,24 @@ allocateLabel = do
   (l:ls) <- gets labels
   modify (\s -> s { labels = ls })
   return l
+
+
+data Frame = Frame
+  { offsets   :: Map String Int
+  , parent    :: Maybe Frame
+  , allocated :: Bool
+  , size      :: Int
+  }
+
+emptyFrame :: Frame
+emptyFrame = Frame Map.empty Nothing False 0
+
+variableOffset :: String -> CodeGen Int
+variableOffset s = asks (getOffset s)
+
+getOffset :: String -> Frame -> Int
+getOffset var frame =
+  case Map.lookup var (offsets frame) of
+    Nothing -> (CodeGen.size frame) + getOffset var (fromJust (parent frame))
+    Just offset -> offset
 
