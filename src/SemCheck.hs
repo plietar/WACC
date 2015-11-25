@@ -266,11 +266,14 @@ checkAssignRHS (_, RHSCall fname args) context = do
 checkBlock :: Annotated Block SpanA -> Context -> WACCResult (Annotated Block TypeA)
 checkBlock (_, Block stmts) parent = do
   let context = newContext parent
-  stmts' <- evalStateT (mapM checkPosStmt stmts) context
-  let tys = [(always, ty) | ((always, ty), _) <- stmts', ty /= TyVoid]
-  ty <- foldM (\(al1, ty1) (al2, ty2) -> (al1 || al2,) <$> mergeTypes ty1 ty2) (False, TyAny) tys
+  (stmts', finalContext) <- runStateT (mapM checkPosStmt stmts) context
 
-  return (ty, Block stmts')
+  let tys = [(always, ty) | ((always, ty), _) <- stmts', ty /= TyVoid]
+  (al,ty) <- foldM (\(al1, ty1) (al2, ty2) -> (al1 || al2,) <$> mergeTypes ty1 ty2) (False, TyAny) tys
+
+  let locals = Map.keys (ScopedMap.localTable (variables finalContext))
+
+  return (((al,ty), locals), Block stmts')
 
 
 checkPosStmt :: Annotated Stmt SpanA -> ContextState (Annotated Stmt TypeA)
@@ -341,8 +344,8 @@ checkStmt (_, StmtIf predicate b1 b2) = do
   predicate'@(predicateType, _) <- lift $ checkExpr predicate context
   when (not (compatibleType TyBool predicateType))
        (lift (semanticError ("Condition cannot be of type " ++ show predicateType)))
-  b1'@((al1, t1),_) <- lift $ checkBlock b1 context
-  b2'@((al2, t2),_) <- lift $ checkBlock b2 context
+  b1'@(((al1, t1),_),_) <- lift $ checkBlock b1 context
+  b2'@(((al2, t2),_),_) <- lift $ checkBlock b2 context
 
   ty <- if isVoidType t1 || isVoidType t2
         then return TyVoid
@@ -356,12 +359,12 @@ checkStmt (_, StmtWhile predicate block) = do
   when (not (compatibleType TyBool predicateType))
        (lift (semanticError ("Condition cannot be of type " ++ show predicateType)))
 
-  block'@((_, ty),_) <- lift $ checkBlock block context
+  block'@(((_, ty),_),_) <- lift $ checkBlock block context
   return ((False, ty), StmtWhile predicate' block')
 
 checkStmt (_, StmtScope block) = do
   context <- get
-  block'@((al, ty),_) <- lift $ checkBlock block context
+  block'@(((al, ty),_),_) <- lift $ checkBlock block context
   return ((al, ty), StmtScope block')
 
 
@@ -372,7 +375,7 @@ checkFunction (_, FuncDef expectedReturnType name args block) globalContext
       let addArguments = forM_ args (\(argType, argName) -> addVariable argName argType)
 
       context <- execStateT (allowReturn >> addArguments) globalContext 
-      block'@((alwaysReturns, actualReturnType), _) <- checkBlock block context
+      block'@(((alwaysReturns, actualReturnType), _), _) <- checkBlock block context
 
       when (isVoidType actualReturnType)
            (syntaxError ("Function " ++ show name ++ " does not return anything"))
