@@ -6,6 +6,41 @@ import AST
 import CodeGen
 import Control.Monad.Writer
 
+-- Literals
+genExpr :: Annotated Expr TypeA -> CodeGen Var
+genExpr (_ , ExprLit literal) = do 
+  litVar <- allocateVar
+  tell [ ILiteral { iDest = litVar, iLiteral = literal} ]
+  return litVar
+
+-- UnOp
+genExpr (_ , ExprUnOp operator expr) = do 
+  unOpVar <- allocateVar
+  valueVar <- genExpr expr
+  tell [ IUnOp { iUnOp = operator, iDest = unOpVar, iValue = valueVar} ]
+  return valueVar
+
+-- BinOp
+genExpr (_ , ExprBinOp operator expr1 expr2) = do 
+  binOpVar <- allocateVar
+  value1Var <- genExpr expr1
+  value2Var <- genExpr expr2
+  tell [ IBinOp { iBinOp = operator, iDest = unOpVar, iLeft = value1Var, iRight = value2Var } ]
+  return binOpVar
+
+-- Variable
+genExpr (_, ExprVar ident) = do
+  outVar <- allocateVar
+  offset <- variableOffset ident
+  tell [ IFrameRead { iOffset = offset, iDest = outVar} ]
+  return outVar
+
+-- ArrayElem
+--genExpr (_, ExprArrayElem (ArrayElem ident xs)) = do
+  
+
+
+
 genAssign :: Annotated AssignLHS TypeA -> Var -> CodeGen ()
 genAssign (_, LHSVar ident) valueVar = do
   offset <- variableOffset ident
