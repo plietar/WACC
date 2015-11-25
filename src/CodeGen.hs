@@ -85,3 +85,21 @@ getOffset var frame =
     Nothing -> (CodeGen.size frame) + getOffset var (fromJust (parent frame))
     Just offset -> offset
 
+
+genFrameRead :: String -> CodeGen Var
+genFrameRead ident = do
+  outVar <- allocateVar
+  offset <- variableOffset ident
+  tell [ IFrameRead { iOffset = offset
+                    , iDest = outVar } ]
+  return outVar
+
+genArrayRead :: Var -> Annotated Expr TypeA -> CodeGen Var
+genArrayRead arrayVar indexExpr =do
+  outVar <- allocateVar
+  indexVar <- genExpr indexExpr
+  tell [ IArrayRead { iArray = arrayVar
+                    , iIndex = indexVar
+                    , iDest = outVar } ]
+  return outVar
+
