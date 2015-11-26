@@ -72,9 +72,11 @@ backend (_, Program funcs block) = do
   forM_ (Graph.nodes rig) $ \idx -> do
     let ctx = Graph.context rig idx
     putStrLn (show (Graph.lab' ctx) ++ " - " ++ show (map (fromJust . Graph.lab rig) (Graph.suc' ctx)))
+  putStrLn ""
 
   let colouring = colourGraph rig [0..15]
-  putStrLn ("Colouring: " ++ show colouring)
+  putStrLn ("Colouring")
+  mapM (\(v,col) -> putStrLn $ "Node: " ++ show v ++ " -> " ++ "Colour: " ++ show col) (Map.toList $ fromJust colouring)
   putStrLn ""
 
 main :: IO ()
