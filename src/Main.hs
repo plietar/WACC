@@ -26,6 +26,7 @@ import RegisterAllocation.ControlFlow
 import RegisterAllocation.DataFlow
 import RegisterAllocation.GraphColouring
 
+import Data.Graph.Inductive.PatriciaTree (Gr)
 
 exitCodeForResult :: WACCResult a -> ExitCode
 exitCodeForResult (OK _)                  = ExitSuccess
@@ -45,8 +46,9 @@ frontend source filename = do
 backend :: (Annotated Program TypeA) -> IO ()
 backend (_, Program funcs block) = do
   let ir = genFunction ((), FuncDef TyVoid "main" [] block)
-  let (bb, cfg, revCfg) = basicBlocks ir
+  let cfg = basicBlocks ir :: Gr [IR] ()
 
+  {-
   forM_ (Map.assocs bb) $ \(idx, irs) -> do
     print idx
     forM_ irs (putStrLn . ("  " ++) . show)
@@ -65,6 +67,7 @@ backend (_, Program funcs block) = do
   let rig = interferenceGraph live
   forM_ (Map.assocs rig) $ \(v, conflicts) -> do
     putStrLn (show v ++ " - " ++ showSet conflicts)
+    -}
 
   putStrLn ""
 
