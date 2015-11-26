@@ -6,11 +6,16 @@ import RegisterAllocation.ControlFlow
 
 import CodeGen
 import Data.Maybe
+import Data.Tuple (swap)
 
 import Data.Map (Map, (!))
 import qualified Data.Map as Map
+
 import Data.Set (Set)
 import qualified Data.Set as Set
+
+import Data.Graph.Inductive.Graph (Graph)
+import qualified Data.Graph.Inductive.Graph as Graph
 
 data FlowInfo = FlowInfo
                 { vUsed :: Set Var
@@ -19,56 +24,66 @@ data FlowInfo = FlowInfo
                 , vOut  :: Set Var }
   deriving Show
 
-type RIG = Map Var (Set Var)
-
---dataFlow :: BasicBlocks -> ControlFlow -> ControlFlow -> [(Int, Set Var, Set Var)]
-interferenceGraph :: [Set Var] -> RIG
-interferenceGraph liveVariables = Map.unionsWith Set.union (map liveSets liveVariables)
+interferenceGraph :: Graph gr => [Set Var] -> gr Var ()
+interferenceGraph liveVariables = Graph.mkGraph nodes (map (\e -> Graph.toLEdge e ()) edges)
   where
-    liveSets :: Set Var -> RIG
-    liveSets live = Map.fromList (liveSets' [] (Set.elems live))
-      where
-        liveSets' :: [Var] -> [Var] -> [(Var, Set Var)]
-        liveSets' _ [] = []
-        liveSets' xs (y:ys) = (y, Set.fromList (xs ++ ys)) : (liveSets' (y:xs) ys)
+    nodes :: [Graph.LNode Var]
+    nodes = zip [0..] (Set.elems (Set.unions liveVariables))
 
-liveVariables :: BasicBlocks -> Map Int FlowInfo -> [Set Var]
-liveVariables blocks flowInfo = concatMap snd (Map.toList (Map.mapWithKey (\idx irs -> irFlow irs (flowInfo ! idx)) blocks))
+    varMap :: Map Var Int
+    varMap = Map.fromList (map swap nodes)
+
+    edges :: [Graph.Edge]
+    edges = map (\(v1,v2) -> (varMap ! v1, varMap ! v2)) (concatMap livePairs liveVariables)
+
+    livePairs :: Set Var -> [(Var, Var)]
+    livePairs live = [(v1,v2) | v1 <- vs, v2 <- vs, v1 /= v2]
+      where vs = Set.elems live
+
+liveVariables :: Graph gr => gr [IR] () -> Map Int FlowInfo -> [Set Var]
+liveVariables cfg flowInfo = concatMap bbFlow (Graph.nodes cfg)
   where
-    irFlow :: [IR] -> FlowInfo -> [Set Var]
-    irFlow irs blockInfo = scanr irFlow' (vOut blockInfo) irs
+    nodes :: [Int]
+    nodes = Graph.nodes cfg
 
-    irFlow' :: IR -> Set Var -> Set Var
-    irFlow' ir out = Set.union (Set.difference out (irDef ir)) (irUse ir)
+    bbFlow :: Int -> [Set Var]
+    bbFlow idx
+      = let irs = fromJust (Graph.lab cfg idx)
+            blockInfo = flowInfo ! idx
+        in  scanr irFlow (vOut blockInfo) irs
 
-blockDataFlow :: BasicBlocks -> ControlFlow -> ControlFlow -> Map Int FlowInfo
-blockDataFlow blocks cfg revCfg = blockDataFlow' initial (Map.keys blocks)
+    irFlow :: IR -> Set Var -> Set Var
+    irFlow ir out = Set.union (Set.difference out (irDef ir)) (irUse ir)
+
+blockDataFlow :: Graph gr => gr [IR] () -> Map Int FlowInfo
+blockDataFlow cfg = blockDataFlow' initial (Graph.nodes cfg)
   where
+    blocks :: Map Int [IR]
+    blocks = Map.fromList $ Graph.labNodes cfg
+
+    initial :: Map Int FlowInfo
     initial = Map.map (\bb -> FlowInfo { vUsed = bbUse bb
                                        , vDef = bbDef bb
                                        , vIn = Set.empty
                                        , vOut = Set.empty}) blocks
 
+    blockDataFlow' :: Map Int FlowInfo -> [Int] -> Map Int FlowInfo
     blockDataFlow' blockInfoMap []       = blockInfoMap
     blockDataFlow' blockInfoMap (idx:ws)
-      = let (blockInfo', toUpdate) = step idx (blockInfoMap ! idx) blockInfoMap
-        in blockDataFlow' (Map.insert idx blockInfo' blockInfoMap) (ws ++ Set.elems toUpdate)
+      = let (blockInfo', toUpdate) = step (Graph.context cfg idx) (blockInfoMap ! idx) blockInfoMap
+        in blockDataFlow' (Map.insert idx blockInfo' blockInfoMap) (ws ++ toUpdate)
 
-    step :: Int -> FlowInfo -> Map Int FlowInfo -> (FlowInfo, Set Int)
-    step idx blockInfo blockInfoMap = (blockInfo', toUpdate)
+    step :: Graph.Context [IR] () -> FlowInfo -> Map Int FlowInfo -> (FlowInfo, [Int])
+    step ctx blockInfo blockInfoMap = (blockInfo', toUpdate)
       where
-        vOut' = Set.unions (map (\cIdx -> vIn (blockInfoMap ! cIdx)) (Set.elems (children idx)))
+        vOut' = Set.unions (map (\cIdx -> vIn (blockInfoMap ! cIdx)) (Graph.suc' ctx))
         vIn'  = Set.union (Set.difference vOut' (vDef blockInfo)) (vUsed blockInfo)
         blockInfo' = blockInfo { vIn = vIn', vOut = vOut' }
 
+        toUpdate :: [Int]
         toUpdate = if vIn blockInfo /= vIn'
-                   then parent idx
-                   else Set.empty
-
-    children :: Int -> Set Int
-    children idx = fromMaybe Set.empty (Map.lookup idx cfg)
-    parent :: Int -> Set Int
-    parent idx = fromMaybe Set.empty (Map.lookup idx revCfg)
+                   then Graph.pre' ctx
+                   else []
 
 bbDef :: [IR] -> Set Var
 bbDef bb = Set.unions (map irDef bb)

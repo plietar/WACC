@@ -15,10 +15,6 @@ import qualified Data.Set as Set
 import Data.Graph.Inductive.Graph (Graph)
 import qualified Data.Graph.Inductive.Graph as Graph
 
-type BasicBlocks = Map Int [IR]
-type ControlFlow = Map Int (Set Int)
-type LabeledBlocks = Map Label Int
-
 basicBlocks :: Graph gr => [IR] -> gr [IR] ()
 basicBlocks ir = Graph.mkGraph cfgNodes (map (\e -> Graph.toLEdge e ()) cfgEdges)
   where
