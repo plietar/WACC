@@ -38,8 +38,11 @@ genExpr (_, ExprVar ident) = do
   return outVar
 
 -- ArrayElem
---genExpr (_, ExprArrayElem (ArrayElem ident xs)) = do
-  
+genExpr (_, ExprArrayElem (_, ArrayElem ident xs)) = do
+  frameVar <- genFrameRead ident
+  outVar <- foldM genArrayRead frameVar xs
+  return outVar
+
 genFrameRead :: String -> CodeGen Var
 genFrameRead ident = do
   outVar <- allocateVar
