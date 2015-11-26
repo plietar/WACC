@@ -11,44 +11,23 @@ import GHC.Exts
 type RIG = Map Var (Set Var)
 type Stack = [Var]
 type Colour = Int
+type Colours = [Colour]
 
-maxRegisters :: Int
-maxRegisters = 32
-
-colours :: [Int]
-colours = [1..32]
-
-sampleRig :: RIG
-sampleRig = Map.fromList $ zip (map Var [1..6]) $ map Set.fromList $ map (map Var) lists
-  where
-    lists = [[3,6],[3,5,6],[1,2,4,5,6],[3,5,6],[2,3,4,6],[1,2,3,4,5]] 
-
-push :: a -> [a] -> Maybe ((), [a])
-push e stack = Just ((), e : stack)
-
-
-pop :: [a] -> Maybe (a, [a])
-pop (x : xs) = Just (x, xs)
-pop [] = Nothing
-
-colourGraph :: RIG -> Maybe (Map Var Colour)
-colourGraph rig
+colourGraph :: RIG -> Colours -> Maybe (Map Var Colour)
+colourGraph rig colours
   = case stack of
     Just s -> findColouring s rig colours 
     Nothing -> Nothing
   where
-    stack = extractWhileNonempty sortedGraph []
+    stack = extractWhileNonempty sortedGraph [] (length colours)
     sortedGraph = sortWith (\(_, set) -> Set.size set) (Map.toList rig)
-    --vars = sortWith (\(Var x) -> x) (map fst (Map.toList rig))
     
 
-extractWhileNonempty :: [(Var, Set Var)] -> Stack -> Maybe Stack
-extractWhileNonempty ((var, edges) : xs) stack
-  | Set.size edges < maxRegisters = extractWhileNonempty (remove var xs) pushedStack  
-  | otherwise                     = Nothing
-  where
-    Just (_, pushedStack) = push var stack
-extractWhileNonempty [] stack = Just stack 
+extractWhileNonempty :: [(Var, Set Var)] -> Stack -> Int -> Maybe Stack
+extractWhileNonempty ((var, edges) : xs) stack maxColours
+  | Set.size edges <= maxColours = extractWhileNonempty (remove var xs) (var : stack) maxColours
+  | otherwise                    = Nothing
+extractWhileNonempty [] stack _  = Just stack
 
 remove :: Var -> [(Var, Set Var)] -> [(Var, Set Var)]
 remove x ((y, ys) : rest) 
@@ -78,7 +57,7 @@ differentColour v rig coloured allCol
   where
     allNeighbors = Map.lookup v rig
     -- getnewcolour given the list of neighbors
-    getNewColour :: [Var] ->  [Colour] -> Maybe Colour
+    getNewColour :: [Var] -> [Colour] -> Maybe Colour
     getNewColour (n : rest) cols 
       = case Map.lookup n coloured of
           Nothing -> getNewColour rest cols
@@ -86,9 +65,3 @@ differentColour v rig coloured allCol
     getNewColour (_:_) [] = Nothing
     getNewColour [] cols = Just (head cols)
 
-sampleMapColour :: Map Var Colour
-sampleMapColour = Map.fromList [(Var 1, 2), (Var 2, 3),(Var 3, 4),(Var 4, 3),(Var 6, 1)]
---(Var 5, 2),
-
-testDifferentColour :: Maybe Colour
-testDifferentColour = differentColour (Var 5) sampleRig sampleMapColour colours 

@@ -62,7 +62,10 @@ backend (_, Program funcs block) = do
   let rig = dataFlow bb cfg revCfg
   forM_ (Map.assocs rig) $ \(v, conflicts) -> do
     putStrLn (show v ++ " - " ++ showSet conflicts)
+  putStrLn ""
 
+  let colouring = colourGraph rig [0..15]
+  putStrLn ("Colouring: " ++ show colouring)
   putStrLn ""
 
 main :: IO ()
