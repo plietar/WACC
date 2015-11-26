@@ -3,7 +3,6 @@
 module RegisterAllocation.ControlFlow where
 
 import CodeGen
-import Data.Graph
 import Data.Maybe
 
 import Data.Map (Map)
@@ -13,7 +12,6 @@ import qualified Data.Set as Set
 
 type BasicBlocks = Map Int [IR]
 type ControlFlow = Map Int (Set Int)
-
 type LabeledBlocks = Map Label Int
 
 basicBlocks :: [IR] -> (BasicBlocks, ControlFlow, ControlFlow)

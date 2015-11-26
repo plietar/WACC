@@ -50,12 +50,20 @@ backend (_, Program funcs block) = do
     print idx
     forM_ irs (putStrLn . ("  " ++) . show)
   putStrLn ""
+
   forM_ (Map.assocs cfg) $ \(source, targets) -> do
     putStrLn (show source ++ " -> " ++ showSet targets)
   putStrLn ""
+
   forM_ (Map.assocs revCfg) $ \(target, sources) -> do
     putStrLn (show target ++ " <- " ++ showSet sources)
-    
+  putStrLn ""
+
+  let rig = dataFlow bb cfg revCfg
+  forM_ (Map.assocs rig) $ \(v, conflicts) -> do
+    putStrLn (show v ++ " - " ++ showSet conflicts)
+
+  putStrLn ""
 
 main :: IO ()
 main = do
