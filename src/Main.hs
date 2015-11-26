@@ -10,10 +10,16 @@ import SemCheck
 import AST
 
 import Data.List
+import Data.Maybe
+
 import Data.Map (Map)
 import qualified Data.Map as Map
+
 import Data.Set (Set)
 import qualified Data.Set as Set
+
+import Data.Graph.Inductive.Graph (Graph)
+import qualified Data.Graph.Inductive.Graph as Graph
 
 import Control.Monad.State
 
@@ -25,6 +31,7 @@ import RegisterAllocation.ControlFlow
 import RegisterAllocation.DataFlow
 import RegisterAllocation.GraphColouring
 
+import Data.Graph.Inductive.PatriciaTree (Gr)
 
 exitCodeForResult :: WACCResult a -> ExitCode
 exitCodeForResult (OK _)                  = ExitSuccess
@@ -44,25 +51,27 @@ frontend source filename = do
 backend :: (Annotated Program TypeA) -> IO ()
 backend (_, Program funcs block) = do
   let ir = genFunction ((), FuncDef TyVoid "main" [] block)
-  let (bb, cfg, revCfg) = basicBlocks ir
+  let cfg = basicBlocks ir :: Gr [IR] ()
 
-  forM_ (Map.assocs bb) $ \(idx, irs) -> do
+  forM_ (Graph.labNodes cfg) $ \(idx, irs) -> do
     print idx
     forM_ irs (putStrLn . ("  " ++) . show)
   putStrLn ""
 
-  forM_ (Map.assocs cfg) $ \(source, targets) -> do
-    putStrLn (show source ++ " -> " ++ showSet targets)
+  forM_ (Graph.nodes cfg) $ \idx -> do
+    let ctx = Graph.context cfg idx
+    putStrLn (show (Graph.pre' ctx) ++ " -> " ++
+              show (Graph.node' ctx) ++ " -> " ++
+              show (Graph.suc' ctx))
   putStrLn ""
 
-  forM_ (Map.assocs revCfg) $ \(target, sources) -> do
-    putStrLn (show target ++ " <- " ++ showSet sources)
-  putStrLn ""
+  let flow = blockDataFlow cfg
+  let live = liveVariables cfg flow
+  let rig = interferenceGraph live :: Gr Var ()
 
-  let rig = dataFlow bb cfg revCfg
-  forM_ (Map.assocs rig) $ \(v, conflicts) -> do
-    putStrLn (show v ++ " - " ++ showSet conflicts)
-  putStrLn ""
+  forM_ (Graph.nodes rig) $ \idx -> do
+    let ctx = Graph.context rig idx
+    putStrLn (show (Graph.lab' ctx) ++ " - " ++ show (map (fromJust . Graph.lab rig) (Graph.suc' ctx)))
 
   let colouring = colourGraph rig [0..15]
   putStrLn ("Colouring: " ++ show colouring)
