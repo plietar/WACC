@@ -59,7 +59,9 @@ backend (_, Program funcs block) = do
     putStrLn (show target ++ " <- " ++ showSet sources)
   putStrLn ""
 
-  let rig = dataFlow bb cfg revCfg
+  let flow = blockDataFlow bb cfg revCfg
+  let live = liveVariables bb flow
+  let rig = interferenceGraph live
   forM_ (Map.assocs rig) $ \(v, conflicts) -> do
     putStrLn (show v ++ " - " ++ showSet conflicts)
 

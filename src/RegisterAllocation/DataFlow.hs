@@ -22,39 +22,37 @@ data FlowInfo = FlowInfo
 type RIG = Map Var (Set Var)
 
 --dataFlow :: BasicBlocks -> ControlFlow -> ControlFlow -> [(Int, Set Var, Set Var)]
-dataFlow blocks cfg revCfg = interferenceGraph
+interferenceGraph :: [Set Var] -> RIG
+interferenceGraph liveVariables = Map.unionsWith Set.union (map liveSets liveVariables)
   where
-    interferenceGraph :: RIG
-    interferenceGraph = Map.unionsWith Set.union (map liveSets liveVariables)
+    liveSets :: Set Var -> RIG
+    liveSets live = Map.fromList (liveSets' [] (Set.elems live))
       where
-        liveSets :: Set Var -> RIG
-        liveSets live = Map.fromList (liveSets' [] (Set.elems live))
-          where
-            liveSets' :: [Var] -> [Var] -> [(Var, Set Var)]
-            liveSets' _ [] = []
-            liveSets' xs (y:ys) = (y, Set.fromList (xs ++ ys)) : (liveSets' (y:xs) ys)
+        liveSets' :: [Var] -> [Var] -> [(Var, Set Var)]
+        liveSets' _ [] = []
+        liveSets' xs (y:ys) = (y, Set.fromList (xs ++ ys)) : (liveSets' (y:xs) ys)
 
-    liveVariables :: [Set Var]
-    liveVariables = concatMap snd (Map.toList (Map.mapWithKey (\idx irs -> irFlow irs (blockFlow ! idx)) blocks))
-
+liveVariables :: BasicBlocks -> Map Int FlowInfo -> [Set Var]
+liveVariables blocks flowInfo = concatMap snd (Map.toList (Map.mapWithKey (\idx irs -> irFlow irs (flowInfo ! idx)) blocks))
+  where
     irFlow :: [IR] -> FlowInfo -> [Set Var]
     irFlow irs blockInfo = scanr irFlow' (vOut blockInfo) irs
-      where
-        irFlow' :: IR -> Set Var -> Set Var
-        irFlow' ir out = Set.union (Set.difference out (irDef ir)) (irUse ir)
 
-    blockFlow :: Map Int FlowInfo
-    blockFlow = blockFlow' initial (Map.keys blocks)
-      where
-        initial = Map.map (\bb -> FlowInfo { vUsed = bbUse bb
-                                           , vDef = bbDef bb
-                                           , vIn = Set.empty
-                                           , vOut = Set.empty}) blocks
+    irFlow' :: IR -> Set Var -> Set Var
+    irFlow' ir out = Set.union (Set.difference out (irDef ir)) (irUse ir)
 
-        blockFlow' blockInfoMap []       = blockInfoMap
-        blockFlow' blockInfoMap (idx:ws)
-          = let (blockInfo', toUpdate) = step idx (blockInfoMap ! idx) blockInfoMap
-            in blockFlow' (Map.insert idx blockInfo' blockInfoMap) (ws ++ Set.elems toUpdate)
+blockDataFlow :: BasicBlocks -> ControlFlow -> ControlFlow -> Map Int FlowInfo
+blockDataFlow blocks cfg revCfg = blockDataFlow' initial (Map.keys blocks)
+  where
+    initial = Map.map (\bb -> FlowInfo { vUsed = bbUse bb
+                                       , vDef = bbDef bb
+                                       , vIn = Set.empty
+                                       , vOut = Set.empty}) blocks
+
+    blockDataFlow' blockInfoMap []       = blockInfoMap
+    blockDataFlow' blockInfoMap (idx:ws)
+      = let (blockInfo', toUpdate) = step idx (blockInfoMap ! idx) blockInfoMap
+        in blockDataFlow' (Map.insert idx blockInfo' blockInfoMap) (ws ++ Set.elems toUpdate)
 
     step :: Int -> FlowInfo -> Map Int FlowInfo -> (FlowInfo, Set Int)
     step idx blockInfo blockInfoMap = (blockInfo', toUpdate)
@@ -72,44 +70,44 @@ dataFlow blocks cfg revCfg = interferenceGraph
     parent :: Int -> Set Int
     parent idx = fromMaybe Set.empty (Map.lookup idx revCfg)
 
-    bbDef :: [IR] -> Set Var
-    bbDef bb = Set.unions (map irDef bb)
+bbDef :: [IR] -> Set Var
+bbDef bb = Set.unions (map irDef bb)
 
-    bbUse :: [IR] -> Set Var
-    bbUse bb = bbUse' (reverse bb) Set.empty 
-      where
-        bbUse' :: [IR] -> Set Var -> Set Var
-        bbUse' []       use = use
-        bbUse' (ir:irs) use = bbUse' irs (Set.union (Set.difference use (irDef ir)) (irUse ir))
+bbUse :: [IR] -> Set Var
+bbUse bb = bbUse' (reverse bb) Set.empty 
+  where
+    bbUse' :: [IR] -> Set Var -> Set Var
+    bbUse' []       use = use
+    bbUse' (ir:irs) use = bbUse' irs (Set.union (Set.difference use (irDef ir)) (irUse ir))
 
-    irDef :: IR -> Set Var
-    irDef (ILiteral{..})       = Set.singleton iDest
-    irDef (IBinOp{..})         = Set.singleton iDest
-    irDef (IUnOp{..})          = Set.singleton iDest
-    irDef (ICall{..})          = Set.singleton iDest
-    irDef (IFrameRead{..})     = Set.singleton iDest
-    irDef (IArrayAllocate{..}) = Set.singleton iDest
-    irDef (IArrayRead{..})     = Set.singleton iDest
-    irDef (IArrayLength{..})   = Set.singleton iDest
-    irDef (IPairAllocate{..})  = Set.singleton iDest
-    irDef (IPairRead{..})      = Set.singleton iDest
-    irDef (IRead{..})          = Set.singleton iDest
-    irDef _                    = Set.empty
+irDef :: IR -> Set Var
+irDef (ILiteral{..})       = Set.singleton iDest
+irDef (IBinOp{..})         = Set.singleton iDest
+irDef (IUnOp{..})          = Set.singleton iDest
+irDef (ICall{..})          = Set.singleton iDest
+irDef (IFrameRead{..})     = Set.singleton iDest
+irDef (IArrayAllocate{..}) = Set.singleton iDest
+irDef (IArrayRead{..})     = Set.singleton iDest
+irDef (IArrayLength{..})   = Set.singleton iDest
+irDef (IPairAllocate{..})  = Set.singleton iDest
+irDef (IPairRead{..})      = Set.singleton iDest
+irDef (IRead{..})          = Set.singleton iDest
+irDef _                    = Set.empty
 
-    irUse :: IR -> Set Var
-    irUse (IBinOp{..})         = Set.fromList [ iRight, iLeft ]
-    irUse (IUnOp{..})          = Set.singleton iValue
-    irUse (ICall{..})          = Set.fromList  iArgs
-    irUse (IFrameWrite{..})    = Set.singleton iValue
-    irUse (IArrayRead{..})     = Set.fromList [ iArray, iIndex ]
-    irUse (IArrayWrite{..})    = Set.fromList [ iArray, iIndex, iValue ]
-    irUse (IArrayLength{..})   = Set.singleton iArray
-    irUse (IPairRead{..})      = Set.singleton iPair
-    irUse (IPairWrite{..})     = Set.fromList [ iPair, iValue ]
-    irUse (INullCheck{..})     = Set.singleton iValue
-    irUse (IBoundsCheck{..})   = Set.fromList [ iArray, iIndex ]
-    irUse (IPrint{..})         = Set.singleton iValue
-    irUse (IFree{..})          = Set.singleton iValue
-    irUse (IExit{..})          = Set.singleton iValue
-    irUse _                    = Set.empty
+irUse :: IR -> Set Var
+irUse (IBinOp{..})         = Set.fromList [ iRight, iLeft ]
+irUse (IUnOp{..})          = Set.singleton iValue
+irUse (ICall{..})          = Set.fromList  iArgs
+irUse (IFrameWrite{..})    = Set.singleton iValue
+irUse (IArrayRead{..})     = Set.fromList [ iArray, iIndex ]
+irUse (IArrayWrite{..})    = Set.fromList [ iArray, iIndex, iValue ]
+irUse (IArrayLength{..})   = Set.singleton iArray
+irUse (IPairRead{..})      = Set.singleton iPair
+irUse (IPairWrite{..})     = Set.fromList [ iPair, iValue ]
+irUse (INullCheck{..})     = Set.singleton iValue
+irUse (IBoundsCheck{..})   = Set.fromList [ iArray, iIndex ]
+irUse (IPrint{..})         = Set.singleton iValue
+irUse (IFree{..})          = Set.singleton iValue
+irUse (IExit{..})          = Set.singleton iValue
+irUse _                    = Set.empty
 
