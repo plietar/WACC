@@ -16,7 +16,7 @@ maxRegisters :: Int
 maxRegisters = 32
 
 colours :: [Int]
-colours = [0..31]
+colours = [1..32]
 
 sampleRig :: RIG
 sampleRig = Map.fromList $ zip (map Var [1..6]) $ map Set.fromList $ map (map Var) lists
@@ -24,7 +24,7 @@ sampleRig = Map.fromList $ zip (map Var [1..6]) $ map Set.fromList $ map (map Va
     lists = [[3,6],[3,5,6],[1,2,4,5,6],[3,5,6],[2,3,4,6],[1,2,3,4,5]] 
 
 push :: a -> [a] -> Maybe ((), [a])
-push elem stack = Just ((), elem : stack)
+push e stack = Just ((), e : stack)
 
 
 pop :: [a] -> Maybe (a, [a])
@@ -39,17 +39,16 @@ colourGraph rig
   where
     stack = extractWhileNonempty sortedGraph []
     sortedGraph = sortWith (\(_, set) -> Set.size set) (Map.toList rig)
-    vars = sortWith (\(Var x) -> x) (map fst (Map.toList rig))
+    --vars = sortWith (\(Var x) -> x) (map fst (Map.toList rig))
     
 
 extractWhileNonempty :: [(Var, Set Var)] -> Stack -> Maybe Stack
-extractWhileNonempty [(var, edges)] stack = Just stack
 extractWhileNonempty ((var, edges) : xs) stack
   | Set.size edges < maxRegisters = extractWhileNonempty (remove var xs) pushedStack  
   | otherwise                     = Nothing
   where
     Just (_, pushedStack) = push var stack
-extractWhileNonempty _ _ = Nothing
+extractWhileNonempty [] stack = Just stack 
 
 remove :: Var -> [(Var, Set Var)] -> [(Var, Set Var)]
 remove x ((y, ys) : rest) 
@@ -84,6 +83,12 @@ differentColour v rig coloured allCol
       = case Map.lookup n coloured of
           Nothing -> getNewColour rest cols
           Just c -> getNewColour rest (cols \\ [c])
-    getNewColour vars [] = Nothing
-    getNewColours [] cols = Just (head cols)
+    getNewColour (_:_) [] = Nothing
+    getNewColour [] cols = Just (head cols)
 
+sampleMapColour :: Map Var Colour
+sampleMapColour = Map.fromList [(Var 1, 2), (Var 2, 3),(Var 3, 4),(Var 4, 3),(Var 6, 1)]
+--(Var 5, 2),
+
+testDifferentColour :: Maybe Colour
+testDifferentColour = differentColour (Var 5) sampleRig sampleMapColour colours 
