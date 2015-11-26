@@ -11,6 +11,7 @@ import SemCheck
 import AST
 import Data.Map as Map
 import Control.Monad.State
+import Data.Graph.Inductive.Graph
 
 exitCodeForResult :: WACCResult a -> ExitCode
 exitCodeForResult (OK _)                  = ExitSuccess
