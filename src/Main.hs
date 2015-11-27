@@ -1,4 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE CPP #-}
+
 module Main where
 import Parser
 import Lexer
@@ -15,7 +17,7 @@ import Data.List
 import Data.Maybe
 import Control.Applicative
 
-import Data.Map (Map)
+import Data.Map (Map,(!))
 import qualified Data.Map as Map
 
 import Data.Set (Set)
@@ -39,17 +41,19 @@ import Data.Graph.Inductive.PatriciaTree (Gr)
 
 import Arguments
 
+#if WITH_GRAPHVIZ
+import qualified Data.GraphViz as GraphViz
+import qualified Data.GraphViz.Attributes as GraphViz
+import qualified Data.GraphViz.Attributes.Complete as GraphViz
+import Data.Text.Lazy (unpack)
+#endif
+
 exitCodeForResult :: WACCResult a -> ExitCode
 exitCodeForResult (OK _)                  = ExitSuccess
 exitCodeForResult (Error LexicalError  _) = ExitFailure 100
 exitCodeForResult (Error SyntaxError   _) = ExitFailure 100
 exitCodeForResult (Error SemanticError _) = ExitFailure 200
 exitCodeForResult (Error CodeGenError  _) = ExitFailure 1
-
-{-
-  putStrLn ("Colouring")
-  putStrLn ""
-  -}
 
 showTokens :: [(Pos, Token)] -> [String]
 showTokens = (:[]) . show . map snd
@@ -82,6 +86,60 @@ showColouring colouring = execWriter $ do
   forM_ (Map.toList colouring) $ \(v,col) -> do
     tell ["Node: " ++ show v ++ " -> " ++ "Colour: " ++ show col]
 
+#if WITH_GRAPHVIZ
+showDotCFG :: Graph gr => gr [IR] () -> [String]
+showDotCFG = (:[]) . unpack . GraphViz.printDotGraph . GraphViz.setDirectedness GraphViz.graphToDot dotCFGParams
+
+dotCFGParams :: GraphViz.GraphvizParams n [IR] () () [IR]
+dotCFGParams = GraphViz.nonClusteredParams
+              { GraphViz.globalAttributes = ga
+              , GraphViz.fmtNode = fn
+              , GraphViz.fmtEdge = fe }
+  where
+    ga = [ GraphViz.NodeAttrs [ GraphViz.shape GraphViz.BoxShape ]]
+
+    fn (n, l)    = [(GraphViz.toLabel . unlines . map show) l ]
+    fe (f, t, l) = []
+
+showDotRIG :: Graph gr => gr Var () -> [String]
+showDotRIG = (:[]) . unpack . GraphViz.printDotGraph . GraphViz.setDirectedness GraphViz.graphToDot dotRIGParams
+
+dotRIGParams :: GraphViz.GraphvizParams n Var () () Var
+dotRIGParams = GraphViz.nonClusteredParams
+              { GraphViz.globalAttributes = ga
+              , GraphViz.fmtNode = fn
+              , GraphViz.fmtEdge = fe }
+  where
+    ga = [ GraphViz.GraphAttrs [ GraphViz.RankDir GraphViz.FromLeft
+                               , GraphViz.bgColor GraphViz.White
+                               , GraphViz.Layout GraphViz.Fdp ]
+
+         , GraphViz.NodeAttrs [ GraphViz.shape GraphViz.Ellipse
+                              , GraphViz.fillColor GraphViz.White
+                              , GraphViz.style GraphViz.filled ] ]
+
+    fn (n, l)    = [(GraphViz.toLabel . show) l]
+    fe (f, t, l) = []
+
+showDotColouring :: Graph gr => gr Var () -> Map Int Colour -> [String]
+showDotColouring cfg colouring
+  = (:[]) . unpack . GraphViz.printDotGraph . GraphViz.setDirectedness GraphViz.graphToDot (dotColouringParams colouring) $ cfg
+
+dotColouringParams :: Map Int Colour -> GraphViz.GraphvizParams Int Var () () Var
+dotColouringParams colouring = dotRIGParams { GraphViz.fmtNode = fn }
+  where
+    fn (n, l) = [(GraphViz.toLabel . show) l
+                , GraphViz.FillColor (GraphViz.toColorList [colour (colouring ! n)])]
+
+    colourCount = length (nub (Map.elems colouring))
+    colourStep = 1.0 / (fromIntegral (colourCount + 1))
+
+    colour    i = GraphViz.HSV (colourHue i) (colourSat i) (colourVal i)
+    colourHue i = colourStep * fromIntegral i
+    colourSat _ = 1
+    colourVal _ = 1
+
+#endif
 
 compile :: String -> String -> OutputType -> WACCResult [String]
 compile filename contents output
@@ -93,6 +151,11 @@ compile filename contents output
     OutputCFG          -> showCFG <$> cfg
     OutputRIG          -> showRIG <$> rig
     OutputColouring    -> showColouring <$> colouring
+#if WITH_GRAPHVIZ
+    OutputDotCFG       -> showDotCFG <$> cfg
+    OutputDotRIG       -> showDotRIG <$> rig
+    OutputDotColouring -> showDotColouring <$> rig <*> colouring
+#endif
 
   where
     tokens    = waccLexer  filename contents

@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 module Arguments where
 
 import Options.Applicative
@@ -9,6 +11,11 @@ data OutputType = OutputTokens
                 | OutputCFG
                 | OutputRIG
                 | OutputColouring
+#if WITH_GRAPHVIZ
+                | OutputDotColouring
+                | OutputDotCFG
+                | OutputDotRIG
+#endif
                 deriving Show
 
 data Arguments = Arguments
@@ -25,6 +32,11 @@ argumentList = Arguments
                     <|> flag' OutputCFG (long "cfg") 
                     <|> flag' OutputRIG (long "rig") 
                     <|> flag' OutputColouring (long "colouring")
+#if WITH_GRAPHVIZ
+                    <|> flag' OutputDotCFG (long "dot-cfg") 
+                    <|> flag' OutputDotRIG (long "dot-rig") 
+                    <|> flag' OutputDotColouring (long "dot-colouring")
+#endif
                     <|> pure OutputIR)
 
 argumentInfo = info (helper <*> argumentList) fullDesc

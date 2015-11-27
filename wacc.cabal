@@ -13,12 +13,20 @@ build-type:          Simple
 extra-source-files:  README
 cabal-version:       >=1.10
 
+Flag graphviz
+  description: Generate dot files for graphviz
+
 executable wacc
-  main-is:             Main.hs
-  -- other-modules:
-  -- other-extensions:
-  build-depends:       base >=4.6 && <4.9, array, containers, mtl, parsec, fgl, optparse-applicative
   hs-source-dirs:      src
-  default-language:    Haskell2010
-  Build-tools:         alex
+  main-is:             Main.hs
   other-modules:       Lexer
+  default-language:    Haskell2010
+
+  build-depends:       base >=4.6 && <4.9, array, containers, mtl, parsec, fgl, optparse-applicative
+  build-tools:         alex
+
+  If flag(graphviz)
+    build-depends:     graphviz, text
+    CPP-Options:       -DWITH_GRAPHVIZ
+    CC-Options:        -DWITH_GRAPHVIZ
+
