@@ -8,14 +8,15 @@ genARMInstruction :: IR -> [String]
 genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitInt n } ) 
   = ["LDR r" ++ (show dest) ++ ", =" ++ (show n)]
 genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitBool True } ) 
-  = ["MOV r" ++ (show dest) ++ ", #" ++ (show 1)]
+  = ["MOV r" ++ (show dest) ++ ", #1"]
 genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitBool False } ) 
-  = ["MOV r" ++ (show dest) ++ ", #" ++ (show 0)]
+  = ["MOV r" ++ (show dest) ++ ", #0"]
 genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitChar chr } ) 
   = ["MOV r" ++ (show dest) ++ ", #" ++ (show chr)]
--- Need a reference of the number of strings in the scope.
+-- Not right, need a reference of the number of strings in the scope.
+-- For the moment I'll just put msg_0.
 genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitString str  } ) 
-  = ["LDR r" ++ (show dest) ++ ", =msg_" ++ (show 0)]
+  = ["LDR r" ++ (show dest) ++ ", =msg_0"]
 
 --BinOp
 --Missing divide and mod binops, ARM calls a label "__aeabi_idiv" 
@@ -29,23 +30,23 @@ genARMInstruction (IBinOp { iBinOp = op, iDest = Var dest,
       BinOpDiv -> [""]
       BinOpRem -> [""]
       BinOpGT  -> ["CMP r" ++ (show left) ++ ", r" ++ (show right),
-                 "MOVGT r" ++ (show dest) ++ ", #" ++ (show 1),
-                 "MOVLE r" ++ (show dest) ++ ", #" ++ (show 0)]
+                 "MOVGT r" ++ (show dest) ++ ", #1",
+                 "MOVLE r" ++ (show dest) ++ ", #0"]
       BinOpGE  ->  ["CMP r" ++ (show left) ++ ", r" ++ (show right),
-                 "MOVGE r" ++ (show dest) ++ ", #" ++ (show 1),
-                 "MOVLT r" ++ (show dest) ++ ", #" ++ (show 0)]
+                 "MOVGE r" ++ (show dest) ++ ", #1",
+                 "MOVLT r" ++ (show dest) ++ ", #0"]
       BinOpLT  ->  ["CMP r" ++ (show left) ++ ", r" ++ (show right),
-                 "MOVLT r" ++ (show dest) ++ ", #" ++ (show 1),
-                 "MOVGE r" ++ (show dest) ++ ", #" ++ (show 0)]
+                 "MOVLT r" ++ (show dest) ++ ", #1",
+                 "MOVGE r" ++ (show dest) ++ ", #0"]
       BinOpLE  ->  ["CMP r" ++ (show left) ++ ", r" ++ (show right),
-                 "MOVLE r" ++ (show dest) ++ ", #" ++ (show 1),
-                 "MOVGT r" ++ (show dest) ++ ", #" ++ (show 0)]
+                 "MOVLE r" ++ (show dest) ++ ", #1",
+                 "MOVGT r" ++ (show dest) ++ ", #0"]
       BinOpEQ  ->  ["CMP r" ++ (show left) ++ ", r" ++ (show right),
-                 "MOVEQ r" ++ (show dest) ++ ", #" ++ (show 1),
-                 "MOVNE r" ++ (show dest) ++ ", #" ++ (show 0)]
+                 "MOVEQ r" ++ (show dest) ++ ", #1",
+                 "MOVNE r" ++ (show dest) ++ ", #0"]
       BinOpNE  ->  ["CMP r" ++ (show left) ++ ", r" ++ (show right),
-                 "MOVNE r" ++ (show dest) ++ ", #" ++ (show 1),
-                 "MOVEQ r" ++ (show dest) ++ ", #" ++ (show 0)]
+                 "MOVNE r" ++ (show dest) ++ ", #1",
+                 "MOVEQ r" ++ (show dest) ++ ", #0"]
       BinOpAnd ->  ["AND r" ++ (show dest) ++ ", r" ++ (show left) ++ ", r" ++ (show right) ]
       BinOpOr  ->  ["OR r" ++ (show dest) ++ ", r" ++ (show left) ++ ", r" ++ (show right) ] 
 
@@ -53,8 +54,8 @@ genARMInstruction (IUnOp { iUnOp = op, iDest = Var dest,
         iValue = Var value } )
   = case op of
       UnOpNot -> ["EOR r" ++ (show dest) ++ ", r" ++ (show value) ++ ", #1"]
-      UnOpNeg -> [""]
-      UnOpLen -> [""]
+      UnOpNeg -> ["RSBS r" ++ (show dest) ++ ", r" ++ (show value) ++ ", #0"]
+      UnOpLen -> ["LDR r" ++ (show dest) ++ ", =msg_0"]
       UnOpOrd -> [""]
       UnOpChr -> [""]    
 
