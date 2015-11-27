@@ -19,8 +19,6 @@ genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitString str  } )
   = ["LDR r" ++ (show dest) ++ ", =msg_0"]
 
 --BinOp
---Missing divide and mod binops, ARM calls a label "__aeabi_idiv" 
---but doesn't show the label.
 genARMInstruction (IBinOp { iBinOp = op, iDest = Var dest, 
         iLeft  = Var left, iRight = Var right } )
   = case op of  
@@ -56,6 +54,7 @@ genARMInstruction (IBinOp { iBinOp = op, iDest = Var dest,
       BinOpAnd ->  ["AND r" ++ (show dest) ++ ", r" ++ (show left) ++ ", r" ++ (show right) ]
       BinOpOr  ->  ["OR r" ++ (show dest) ++ ", r" ++ (show left) ++ ", r" ++ (show right) ] 
 
+--UnOp
 genARMInstruction (IUnOp { iUnOp = op, iDest = Var dest, 
         iValue = Var value } )
   = case op of
@@ -66,13 +65,36 @@ genARMInstruction (IUnOp { iUnOp = op, iDest = Var dest,
       UnOpOrd -> [""]
       UnOpChr -> [""]
 
+--Jumps
 genARMInstruction (ICondJump { iLabel = label, iValue = value}) 
   = ["CMP r" ++ (show value) ++ ", #0",
      "BNE" ++ (show label)]
-
 genARMInstruction (IJump {iLabel = label} ) 
   = ["B " ++ (show label)]
 
+--Call
 genARMInstruction (ICall { iLabel = label, iArgs = vars, iDest = dest })
   = undefined
+
+--Labels
+genARMInstruction (ILabel { iLabel = NamedLabel label} )
+  = [label ++ ":"] 
+genARMInstruction (ILabel { iLabel = UnnamedLabel n }) 
+  = ["L" ++ (show n) ++ ":"]
+
+--Frame
+genARMInstruction (IFrameAllocate { iSize = size })
+  = ["SUB sp, sp, #" ++ (show size)]
+genARMInstruction (IFrameFree { iSize = size } )
+  = ["ADD sp, sp, #" ++ (show size)]
+genARMInstruction (IFrameRead {iOffset = offset, iDest = Var dest} ) 
+  = ["LDR r" ++ (show dest) ++ ", [sp, #" ++ (show offset) ++ "]"]
+genARMInstruction (IFrameWrite {iOffset = offset, iValue = Var value} )
+  = ["STR r" ++ (show value) ++ ", [sp, #" ++ (show offset) ++ "]"]
+
+ 
+
+
+
+
 
