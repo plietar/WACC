@@ -1,6 +1,6 @@
 {-# LANGUAGE TypeFamilies #-}
 
-module Parser where
+module Parser (waccParser) where
 
 import qualified Text.Parsec.Prim as P
 import Text.Parsec.Prim ((<?>))

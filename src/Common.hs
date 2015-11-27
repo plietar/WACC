@@ -54,5 +54,7 @@ syntaxError :: String -> WACCResult a
 syntaxError e = Error SyntaxError [e]
 semanticError :: String -> WACCResult a
 semanticError e = Error SemanticError [e]
+codegenError :: String -> WACCResult a
+codegenError e = Error CodeGenError [e]
 
 
