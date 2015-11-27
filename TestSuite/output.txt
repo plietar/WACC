@@ -1,0 +1,1 @@
+["{\"../../wacc_examples/valid/IO/print/printBool.wacc\": [\"0\", \"True is true\", \"False is false\"]}", "{\"../../wacc_examples/valid/IO/print/printInt.wacc\": [\"0\", \"An example integer is 189\"]}"]
