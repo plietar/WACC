@@ -27,8 +27,14 @@ genARMInstruction (IBinOp { iBinOp = op, iDest = Var dest,
       BinOpAdd -> ["ADD r" ++ (show dest) ++ ", r" ++ (show left) ++ ", r" ++ (show right) ] 
       BinOpSub -> ["SUB r" ++ (show dest) ++ ", r" ++ (show left) ++ ", r" ++ (show right) ]
       BinOpMul -> ["MUL r" ++ (show dest) ++ ", r" ++ (show left) ++ ", r" ++ (show right) ]
-      BinOpDiv -> [""]
-      BinOpRem -> [""]
+      BinOpDiv -> ["MOV r0, r" ++ (show left),
+                   "MOV r1, r" ++ (show right),
+                   "BL p_check_divide_by_zero",
+                   "BL __aeabi_idiv"]
+      BinOpRem -> ["MOV r0, r" ++ (show left),
+                   "MOV r1, r" ++ (show right),
+                   "BL p_check_divide_by_zero",
+                   "BL __aeabi_idivmod"]
       BinOpGT  -> ["CMP r" ++ (show left) ++ ", r" ++ (show right),
                  "MOVGT r" ++ (show dest) ++ ", #1",
                  "MOVLE r" ++ (show dest) ++ ", #0"]
@@ -55,17 +61,15 @@ genARMInstruction (IUnOp { iUnOp = op, iDest = Var dest,
   = case op of
       UnOpNot -> ["EOR r" ++ (show dest) ++ ", r" ++ (show value) ++ ", #1"]
       UnOpNeg -> ["RSBS r" ++ (show dest) ++ ", r" ++ (show value) ++ ", #0"]
-      UnOpLen -> ["LDR r" ++ (show dest) ++ ", =msg_0"]
+      UnOpLen -> ["LDR r" ++ (show dest) ++ ", =msg_0",
+                  "LDR r" ++ (show value) ++ ", =msg_0"]
       UnOpOrd -> [""]
-      UnOpChr -> [""]    
+      UnOpChr -> [""]
 
+genARMInstruction (ICondJump { iLabel = label, iValue = value}) 
+  = ["CMP r" ++ (show value) ++ ", #0",
+     "BNE" ++ (show label)]
 
-
-
-
-
-
-
-
-
+genARMInstruction (IJump {iLabel = label} ) 
+  = ["B " ++ (show label)]
 
