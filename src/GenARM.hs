@@ -23,32 +23,40 @@ genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitString str  } )
 genARMInstruction (IBinOp { iBinOp = op, iDest = Var dest, 
         iLeft  = Var left, iRight = Var right } )
   = case op of  
-    BinOpAdd -> ["ADD r" ++ (show dest) ++ ", r" ++ (show left) ++ ", r" ++ (show right) ] 
-    BinOpSub -> ["SUB r" ++ (show dest) ++ ", r" ++ (show left) ++ ", r" ++ (show right) ]
-    BinOpMul -> ["MUL r" ++ (show dest) ++ ", r" ++ (show left) ++ ", r" ++ (show right) ]
-    BinOpDiv -> [""]
-    BinOpRem -> [""]
-    BinOpGT  -> ["CMP r" ++ (show left) ++ ", r" ++ (show right),
+      BinOpAdd -> ["ADD r" ++ (show dest) ++ ", r" ++ (show left) ++ ", r" ++ (show right) ] 
+      BinOpSub -> ["SUB r" ++ (show dest) ++ ", r" ++ (show left) ++ ", r" ++ (show right) ]
+      BinOpMul -> ["MUL r" ++ (show dest) ++ ", r" ++ (show left) ++ ", r" ++ (show right) ]
+      BinOpDiv -> [""]
+      BinOpRem -> [""]
+      BinOpGT  -> ["CMP r" ++ (show left) ++ ", r" ++ (show right),
                  "MOVGT r" ++ (show dest) ++ ", #" ++ (show 1),
                  "MOVLE r" ++ (show dest) ++ ", #" ++ (show 0)]
-    BinOpGE  ->  ["CMP r" ++ (show left) ++ ", r" ++ (show right),
+      BinOpGE  ->  ["CMP r" ++ (show left) ++ ", r" ++ (show right),
                  "MOVGE r" ++ (show dest) ++ ", #" ++ (show 1),
                  "MOVLT r" ++ (show dest) ++ ", #" ++ (show 0)]
-    BinOpLT  ->  ["CMP r" ++ (show left) ++ ", r" ++ (show right),
+      BinOpLT  ->  ["CMP r" ++ (show left) ++ ", r" ++ (show right),
                  "MOVLT r" ++ (show dest) ++ ", #" ++ (show 1),
                  "MOVGE r" ++ (show dest) ++ ", #" ++ (show 0)]
-    BinOpLE  ->  ["CMP r" ++ (show left) ++ ", r" ++ (show right),
+      BinOpLE  ->  ["CMP r" ++ (show left) ++ ", r" ++ (show right),
                  "MOVLE r" ++ (show dest) ++ ", #" ++ (show 1),
                  "MOVGT r" ++ (show dest) ++ ", #" ++ (show 0)]
-    BinOpEQ  ->  ["CMP r" ++ (show left) ++ ", r" ++ (show right),
+      BinOpEQ  ->  ["CMP r" ++ (show left) ++ ", r" ++ (show right),
                  "MOVEQ r" ++ (show dest) ++ ", #" ++ (show 1),
                  "MOVNE r" ++ (show dest) ++ ", #" ++ (show 0)]
-    BinOpNE  ->  ["CMP r" ++ (show left) ++ ", r" ++ (show right),
+      BinOpNE  ->  ["CMP r" ++ (show left) ++ ", r" ++ (show right),
                  "MOVNE r" ++ (show dest) ++ ", #" ++ (show 1),
                  "MOVEQ r" ++ (show dest) ++ ", #" ++ (show 0)]
-    BinOpAnd ->  ["AND r" ++ (show dest) ++ ", r" ++ (show left) ++ ", r" ++ (show right) ]
-    BinOpOr  ->  ["OR r" ++ (show dest) ++ ", r" ++ (show left) ++ ", r" ++ (show right) ] 
+      BinOpAnd ->  ["AND r" ++ (show dest) ++ ", r" ++ (show left) ++ ", r" ++ (show right) ]
+      BinOpOr  ->  ["OR r" ++ (show dest) ++ ", r" ++ (show left) ++ ", r" ++ (show right) ] 
 
+genARMInstruction (IUnOp { iUnOp = op, iDest = Var dest, 
+        iValue = Var value } )
+  = case op of
+      UnOpNot -> ["EOR r" ++ (show dest) ++ ", r" ++ (show value) ++ ", #1"]
+      UnOpNeg -> [""]
+      UnOpLen -> [""]
+      UnOpOrd -> [""]
+      UnOpChr -> [""]    
 
 
 
