@@ -31,6 +31,29 @@ genARMInstruction (IBinOp { iBinOp = op, iDest = Var dest,
     BinOpGT  -> ["CMP r" ++ (show left) ++ ", r" ++ (show right),
                  "MOVGT r" ++ (show left) ++ ", #" ++ (show 1),
                  "MOVLE r" ++ (show left) ++ ", #" ++ (show 0)]
+    BinOpGE  ->  ["CMP r" ++ (show left) ++ ", r" ++ (show right),
+                 "MOVGE r" ++ (show left) ++ ", #" ++ (show 1),
+                 "MOVLT r" ++ (show left) ++ ", #" ++ (show 0)]
+    BinOpLT  ->  ["CMP r" ++ (show left) ++ ", r" ++ (show right),
+                 "MOVLT r" ++ (show left) ++ ", #" ++ (show 1),
+                 "MOVGE r" ++ (show left) ++ ", #" ++ (show 0)]
+    BinOpLE  ->  ["CMP r" ++ (show left) ++ ", r" ++ (show right),
+                 "MOVLE r" ++ (show left) ++ ", #" ++ (show 1),
+                 "MOVGT r" ++ (show left) ++ ", #" ++ (show 0)]
+    BinOpEQ  ->  ["CMP r" ++ (show left) ++ ", r" ++ (show right),
+                 "MOVEQ r" ++ (show left) ++ ", #" ++ (show 1),
+                 "MOVNE r" ++ (show left) ++ ", #" ++ (show 0)]
+    BinOpNE  ->  ["CMP r" ++ (show left) ++ ", r" ++ (show right),
+                 "MOVNE r" ++ (show left) ++ ", #" ++ (show 1),
+                 "MOVEQ r" ++ (show left) ++ ", #" ++ (show 0)]
+
+
+
+
+
+
+
+
 
 
 
