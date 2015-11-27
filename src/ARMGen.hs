@@ -73,3 +73,6 @@ genARMInstruction (ICondJump { iLabel = label, iValue = value})
 genARMInstruction (IJump {iLabel = label} ) 
   = ["B " ++ (show label)]
 
+genARMInstruction (ICall { iLabel = label, iArgs = vars, iDest = dest })
+  = undefined
+
