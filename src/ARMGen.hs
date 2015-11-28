@@ -124,7 +124,17 @@ genARMInstruction (IFrameRead {iOffset = offset, iDest = Var dest} )
 genARMInstruction (IFrameWrite {iOffset = offset, iValue = Var value} )
   = emit ["STR r" ++ (show value) ++ ", [sp, #" ++ (show offset) ++ "]"]
 
- 
+-- Array
+genARMInstruction (IArrayAllocate { iDest = Var dest, iSize = size })
+  = emit ["LDR r" ++ (show dest) ++ ", =" ++ show (size)]
+genARMInstruction (IArrayRead { iArray = Var array, iIndex = Var index, iDest = Var dest })
+  = emit ["LDR r" ++ (show arr) ++ ", [" ++ (show index) ++ "]\n MOV r" ++ (show dest) ++ " r" ++ (show array)]
+genARMInstruction (IArrayWrite { iArray = Var array, iIndex = Var index, iValue = Var value })
+  = emit ["STR r" ++ (show value) ++ ", [r" ++ (show array) ++ ", #" == (show index) ++ "]"]
+genARMInstruction (IArrayLength { iArray = Var array, iDest = Var dest })
+  = emit [""]
+
+
 
 
 
