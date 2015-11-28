@@ -16,6 +16,10 @@ genExpr (_ , ExprLit literal) = do
   return litVar
 
 -- UnOp
+genExpr (_, ExprUnOp UnOpChr expr) =
+  genExpr expr
+genExpr (_, ExprUnOp UnOpOrd expr) = 
+  genExpr expr
 genExpr (_ , ExprUnOp operator expr) = do 
   unOpVar <- allocateVar
   valueVar <- genExpr expr
