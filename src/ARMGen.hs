@@ -116,7 +116,7 @@ genARMInstruction (ILabel { iLabel = UnnamedLabel n })
 
 --Frame
 genARMInstruction (IFrameAllocate { iSize = size })
-  = emit ["SUB sp, sp, #" ++ (show size)]
+  = emit ["SUB sp, sp, #" ++ (show size) ++ "\nBL malloc"]
 genARMInstruction (IFrameFree { iSize = size } )
   = emit ["ADD sp, sp, #" ++ (show size)]
 genARMInstruction (IFrameRead {iOffset = offset, iDest = Var dest} ) 
@@ -126,13 +126,25 @@ genARMInstruction (IFrameWrite {iOffset = offset, iValue = Var value} )
 
 -- Array
 genARMInstruction (IArrayAllocate { iDest = Var dest, iSize = size })
-  = emit ["LDR r" ++ (show dest) ++ ", =" ++ show (size)]
+  = emit ["LDR r" ++ (show dest) ++ ", =" ++ show (size) ++ "\nBL malloc"]
 genARMInstruction (IArrayRead { iArray = Var array, iIndex = Var index, iDest = Var dest })
-  = emit ["LDR r" ++ (show arr) ++ ", [" ++ (show index) ++ "]\n MOV r" ++ (show dest) ++ " r" ++ (show array)]
+  = emit ["LDR r" ++ (show arr) ++ ", [" ++ (show index) ++ "]\nMOV r" ++ (show dest) ++ " r" ++ (show array)]
 genARMInstruction (IArrayWrite { iArray = Var array, iIndex = Var index, iValue = Var value })
   = emit ["STR r" ++ (show value) ++ ", [r" ++ (show array) ++ ", #" == (show index) ++ "]"]
 genARMInstruction (IArrayLength { iArray = Var array, iDest = Var dest })
   = emit [""]
+
+--Pair
+genARMInstruction IPairAllocate { iDest = Var dest }
+  = emit ["LDR r" (show dest) ++ " =4 \nBL malloc"]
+genARMInstruction IPairRead { iPair = Var pair, iDest = Var dest, iSide = fst}
+  = emit ["LDR r" ++ (show pair) ++ "[r" ++ (show dest) ++ "]"
+genARMInstruction IPairRead { iPair = Var pair, iDest = Var dest, iSide = snd} 
+  = emit ["LDR r" ++ (show dest) ++ ", [r" (show pair) ++ ", #4]" ]
+genARMInstruction IPairWrite { iPair = Var pair, iValue = Var value, iSide = fst }
+  = emit ["STR r" (show value) ++ ", [r" ++ (show pair) ++ "]"]
+genARMInstruction IPairWrite { iPair = Var pair, iValue = Var value, iSide = snd }
+  = emit ["STR r" (show pair) ++ ", [r" ++ (show value) ++ ", #4]"]
 
 
 
