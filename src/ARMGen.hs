@@ -135,18 +135,77 @@ genARMInstruction (IArrayLength { iArray = Var array, iDest = Var dest })
   = emit [""]
 
 --Pair
-genARMInstruction IPairAllocate { iDest = Var dest }
+genARMInstruction (IPairAllocate { iDest = Var dest })
   = emit ["LDR r" (show dest) ++ " =4 \nBL malloc"]
-genARMInstruction IPairRead { iPair = Var pair, iDest = Var dest, iSide = fst}
+genARMInstruction (IPairRead { iPair = Var pair, iDest = Var dest, iSide = fst })
   = emit ["LDR r" ++ (show pair) ++ "[r" ++ (show dest) ++ "]"
-genARMInstruction IPairRead { iPair = Var pair, iDest = Var dest, iSide = snd} 
+genARMInstruction (IPairRead { iPair = Var pair, iDest = Var dest, iSide = snd })
   = emit ["LDR r" ++ (show dest) ++ ", [r" (show pair) ++ ", #4]" ]
-genARMInstruction IPairWrite { iPair = Var pair, iValue = Var value, iSide = fst }
+genARMInstruction (IPairWrite { iPair = Var pair, iValue = Var value, iSide = fst})
   = emit ["STR r" (show value) ++ ", [r" ++ (show pair) ++ "]"]
-genARMInstruction IPairWrite { iPair = Var pair, iValue = Var value, iSide = snd }
+genARMInstruction (IPairWrite { iPair = Var pair, iValue = Var value, iSide = snd })
   = emit ["STR r" (show pair) ++ ", [r" ++ (show value) ++ ", #4]"]
 
 
+-- cases where BL p_check_null_pointer is generated but no call to INullCheck eg. readPair.wacc
+genARMInstruction (INullCheck { iValue = Var value })
+  = emit ["BL p_check_null_pointer"]
+genARMInstruction (IBoundsCheck { iArray = Var array, iIndex = Var dest })
+  = emit ["BL p_check_array_bounds"]
+
+-- General - do I need to return after each case?
+-- recursion not quite right
+genARMInstruction (IPrint { iValue = Var value, iType = t, iNewline = True })
+  = case t of
+      TyInt -> emit ["BL p_print_int\nBL p_print_ln"]
+      TyBool -> emit ["BL p_print_bool\nBL p_print_ln"]
+      TyChar -> emit ["BL putchar\nBL p_print_ln"]
+      TyPair t1 t2 -> emit 
+      TyArray t1 -> case t1 of
+                      TyChar -> emit ["BL p_print_string\nBL p_print_ln"]
+                      default -> genARMInstruction (IPrint {iValue = value , iType = t1, iNewline = True}) 
+                              ++ genARMInstruction (IPrint {iValue = value , iType = t2, iNewline = True})
+      TyAny -> emit []
+      TyVoid -> emit []
+
+genARMInstruction (IPrint { iValue = Var value, iType = Type t, iNewline = False })
+  = case t of
+      TyInt -> emit ["BL p_print_int"]
+      TyBool -> emit ["BL p_print_bool"]
+      TyChar -> emit ["BL putchar"]
+      TyPair Type Type -> emit []
+      TyArray -. emit []
+      TyAny -> emit []
+      TyVoid -> emit []
+
+genARMInstruction (IRead { iDest = Var dest, iType = t})
+  = case t of
+      TyInt -> emit ["BL p_read_int"]
+      TyBool -> emit ["BL p_read_bool"]
+      TyChar -> emit ["BL p_read_char"]
+      TyPair Type Type -> emit []
+      TyArray Type -> emit []
+      TyAny -> emit []
+      TyVoid -> emit []
+
+genARMInstruction (IFree { iValue = Var value, iType = t})
+  = case t of
+      TyInt -> emit []
+      TyBool -> emit []
+      TyChar -> emit []
+      TyPair Type Type -> emit []
+      TyArray Type -> emit []
+      TyAny -> emit []
+      TyVoid -> emit []
+
+genARMInstruction (IExit { iValue = Var value })
+  = emit []
+
+genARMInstruction (IFunctionBegin { })
+  = emit ["PUSH {lr}"]
+
+genARMInstruction (IFunctionEnd { })
+  = emit ["POP {pc}"]
 
 
 
