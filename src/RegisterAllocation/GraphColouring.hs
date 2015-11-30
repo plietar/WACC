@@ -1,31 +1,13 @@
-module RegisterAllocation.GraphColouring where
-import qualified Data.Map as Map
-import qualified Data.Set as Set
-import Data.Graph.Inductive
-import Data.Map (Map)
-import Data.Set (Set)
-import Data.List
-import CodeGen
-import GHC.Exts
+module RegisterAllocation.GraphColouring (colourGraph, Colour) where
 
+import Data.Graph.Inductive
+import Data.List
+import qualified Data.Map as Map
+import Data.Map (Map)
 
 type Stack = [Int]
 type Colour = Int
 type Colours = [Colour]
-
---testing
-n = [1,2,3,4,5,6]
-es = [[3,6],[3,5,6],[1,2,4,5,6],[3,5,6],[2,3,4,6],[1,2,3,4,5]]
-
-ledges :: [LEdge ()]
-ledges = map (\(a,b) -> (a,b,())) $ concatMap (\(x,xs) -> zip (repeat x) xs) (zip n es)
-
-lnodes :: [LNode Int]
-lnodes = map (\a -> (a, 0)) n
-
-testg :: Gr Int ()
-testg = mkGraph lnodes ledges
---testing
 
 colourGraph :: Graph gr => gr a () -> Colours -> Maybe (Map Node Colour)
 colourGraph rig colours

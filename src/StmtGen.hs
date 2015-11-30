@@ -128,7 +128,7 @@ genStmt (_, StmtSkip) = return ()
 genStmt (st, StmtVar ty ident rhs)
   = genStmt (st, StmtAssign (ty, LHSVar ident) rhs)
 
-genStmt (_, StmtAssign lhs@(ty,_) rhs) = do
+genStmt (_, StmtAssign lhs rhs) = do
   v <- genRHS rhs
   genAssign lhs v
 
@@ -195,10 +195,10 @@ genBlock ((_, varNames), Block stmts) = do
       createFrame = (\frame -> Frame { offsets = offsetsMap
                                      , parent = Just frame
                                      , allocated = True
-                                     , CodeGen.size = sizeFrame})
+                                     , frameSize = sizeFrame})
       generation = do 
-        frameSize <- asks CodeGen.size
-        tell [ IFrameAllocate { iSize = frameSize } ]
+        s <- asks frameSize
+        tell [ IFrameAllocate { iSize = s } ]
         forM_ stmts genStmt
-        tell [ IFrameFree { iSize = frameSize } ]
+        tell [ IFrameFree { iSize = s } ]
 

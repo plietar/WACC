@@ -2,9 +2,8 @@
 
 module RegisterAllocation.DataFlow where
 
-import RegisterAllocation.ControlFlow
-
 import CodeGen
+
 import Data.Maybe
 import Data.Tuple (swap)
 import Data.List
@@ -26,23 +25,23 @@ data FlowInfo = FlowInfo
   deriving Show
 
 interferenceGraph :: Graph gr => [Set Var] -> gr Var ()
-interferenceGraph liveVariables = Graph.mkGraph nodes (map (\e -> Graph.toLEdge e ()) (nub edges))
+interferenceGraph liveSets = Graph.mkGraph nodes (map (\e -> Graph.toLEdge e ()) (nub edges))
   where
     nodes :: [Graph.LNode Var]
-    nodes = zip [0..] (Set.elems (Set.unions liveVariables))
+    nodes = zip [0..] (Set.elems (Set.unions liveSets))
 
     varMap :: Map Var Int
     varMap = Map.fromList (map swap nodes)
 
     edges :: [Graph.Edge]
-    edges = map (\(v1,v2) -> (varMap ! v1, varMap ! v2)) (concatMap livePairs liveVariables)
+    edges = map (\(v1,v2) -> (varMap ! v1, varMap ! v2)) (concatMap livePairs liveSets)
 
     livePairs :: Set Var -> [(Var, Var)]
     livePairs live = [(v1,v2) | v1 <- vs, v2 <- vs, v1 /= v2]
       where vs = Set.elems live
 
 liveVariables :: Graph gr => gr [IR] () -> Map Int FlowInfo -> [Set Var]
-liveVariables cfg flowInfo = concatMap bbFlow (Graph.nodes cfg)
+liveVariables cfg flowInfo = concatMap bbFlow nodes
   where
     nodes :: [Int]
     nodes = Graph.nodes cfg

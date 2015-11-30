@@ -4,12 +4,9 @@
 module RegisterAllocation.ControlFlow where
 
 import CodeGen
-import Data.Maybe
 
 import Data.Map (Map,(!))
 import qualified Data.Map as Map
-
-import Data.Set (Set)
 import qualified Data.Set as Set
 
 import Data.Graph.Inductive.Graph (Graph, DynGraph)
@@ -27,7 +24,7 @@ basicBlocks ir = Graph.mkGraph cfgNodes (map (\e -> Graph.toLEdge e ()) cfgEdges
     (cfgNodes, cfgEdges, labeledBlocks) = splitIR ir 0 []
 
     splitIR :: [IR] -> Int -> [IR] -> ([Graph.LNode [IR]], [Graph.Edge], Map Label Int)
-    splitIR [] idx [] = ([], [], Map.empty)
+    splitIR [] _ [] = ([], [], Map.empty)
     splitIR [] idx b
       = let nodes  = [(idx, reverse b)]
             edges  = []

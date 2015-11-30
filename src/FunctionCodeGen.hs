@@ -10,10 +10,13 @@ import Control.Monad.Writer
 import Data.Map as Map
 
 genFunction :: Annotated FuncDef TypeA -> [IR]
-genFunction (_, FuncDef returnType fname params body) 
+genFunction (_, FuncDef _ fname params body) 
   = execWriter (runReaderT (evalStateT generation initialState) topFrame) 
     where 
-      topFrame = Frame { offsets = p, parent = Nothing, allocated = False, CodeGen.size = length params + 1}
+      topFrame = Frame { offsets = p
+                       , parent = Nothing
+                       , allocated = False
+                       , frameSize = length params + 1}
       p = saveParam params 1 Map.empty
       initialState = CodeGenState {
         variables = Prelude.map Var [0..],

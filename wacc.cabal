@@ -25,6 +25,9 @@ executable wacc
   build-depends:       base >=4.6 && <4.9, array, containers, mtl, parsec, fgl, optparse-applicative
   build-tools:         alex
 
+  -- Code is quite ready for this
+  -- GHC-Options:         -Wall -fno-warn-unused-do-bind
+
   If flag(graphviz)
     build-depends:     graphviz, text
     CPP-Options:       -DWITH_GRAPHVIZ

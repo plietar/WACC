@@ -77,7 +77,7 @@ data Frame = Frame
   { offsets   :: Map String Int
   , parent    :: Maybe Frame
   , allocated :: Bool
-  , size      :: Int
+  , frameSize :: Int
   }
 
 emptyFrame :: Frame
@@ -89,10 +89,10 @@ variableOffset s = asks (getOffset s)
 getOffset :: String -> Frame -> Int
 getOffset var Frame{..} =
   case Map.lookup var offsets of
-    Nothing -> size + getOffset var (fromJust parent)
+    Nothing -> frameSize + getOffset var (fromJust parent)
     Just offset -> offset
 
 totalFrameSize :: Frame -> Int
 totalFrameSize Frame{..}
-  = size + fromMaybe 0 (totalFrameSize <$> parent)
+  = frameSize + fromMaybe 0 (totalFrameSize <$> parent)
 

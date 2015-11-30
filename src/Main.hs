@@ -17,7 +17,6 @@ import RegisterAllocation.ControlFlow
 import RegisterAllocation.DataFlow
 import RegisterAllocation.GraphColouring
 
-import System.Environment
 import System.Exit
 
 import Data.List
@@ -26,9 +25,6 @@ import Control.Applicative
 
 import Data.Map (Map,(!))
 import qualified Data.Map as Map
-
-import Data.Set (Set)
-import qualified Data.Set as Set
 
 import Data.Graph.Inductive.Graph (Graph)
 import Data.Graph.Inductive.PatriciaTree (Gr)
@@ -39,7 +35,6 @@ import Control.Monad.Writer
 
 #if WITH_GRAPHVIZ
 import qualified Data.GraphViz as GraphViz
-import qualified Data.GraphViz.Attributes as GraphViz
 import qualified Data.GraphViz.Attributes.Complete as GraphViz
 import Data.Text.Lazy (unpack)
 #endif
@@ -89,13 +84,11 @@ showDotCFG = (:[]) . unpack . GraphViz.printDotGraph . GraphViz.setDirectedness 
 dotCFGParams :: GraphViz.GraphvizParams n [IR] () () [IR]
 dotCFGParams = GraphViz.nonClusteredParams
               { GraphViz.globalAttributes = ga
-              , GraphViz.fmtNode = fn
-              , GraphViz.fmtEdge = fe }
+              , GraphViz.fmtNode = fn }
   where
     ga = [ GraphViz.NodeAttrs [ GraphViz.shape GraphViz.BoxShape ]]
 
-    fn (n, l)    = [(GraphViz.toLabel . unlines . map show) l ]
-    fe (f, t, l) = []
+    fn (_, l)    = [(GraphViz.toLabel . unlines . map show) l ]
 
 showDotRIG :: Graph gr => gr Var () -> [String]
 showDotRIG = (:[]) . unpack . GraphViz.printDotGraph . GraphViz.setDirectedness GraphViz.graphToDot dotRIGParams
@@ -103,8 +96,7 @@ showDotRIG = (:[]) . unpack . GraphViz.printDotGraph . GraphViz.setDirectedness 
 dotRIGParams :: GraphViz.GraphvizParams n Var () () Var
 dotRIGParams = GraphViz.nonClusteredParams
               { GraphViz.globalAttributes = ga
-              , GraphViz.fmtNode = fn
-              , GraphViz.fmtEdge = fe }
+              , GraphViz.fmtNode = fn }
   where
     ga = [ GraphViz.GraphAttrs [ GraphViz.RankDir GraphViz.FromLeft
                                , GraphViz.bgColor GraphViz.White
@@ -114,8 +106,7 @@ dotRIGParams = GraphViz.nonClusteredParams
                               , GraphViz.fillColor GraphViz.White
                               , GraphViz.style GraphViz.filled ] ]
 
-    fn (n, l)    = [(GraphViz.toLabel . show) l]
-    fe (f, t, l) = []
+    fn (_, l) = [(GraphViz.toLabel . show) l]
 
 showDotColouring :: Graph gr => gr Var () -> Map Int Colour -> [String]
 showDotColouring cfg colouring
