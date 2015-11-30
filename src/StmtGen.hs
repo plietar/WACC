@@ -190,9 +190,9 @@ genBlock :: Annotated Block TypeA -> CodeGen ()
 genBlock ((_, varNames), Block stmts) = do
   local createFrame generation 
   where
-      offsetsMap = Map.fromList (zip varNames [0..])
-      sizeFrame = length varNames
-      createFrame = (\frame -> Frame { offsets = offsetsMap
+      offs = off varNames 0
+      sizeFrame = snd $ offs !! (length offs - 1)
+      createFrame = (\frame -> Frame { offsets = Map.fromList (take (length offs - 1) offs)
                                      , parent = Just frame
                                      , allocated = True
                                      , frameSize = sizeFrame})
@@ -201,4 +201,16 @@ genBlock ((_, varNames), Block stmts) = do
         tell [ IFrameAllocate { iSize = s } ]
         forM_ stmts genStmt
         tell [ IFrameFree { iSize = s } ]
+
+-- Specify offsets from SP for variables depending on type
+-- Possible improve: Store in regs
+off :: [(String, Type)] -> Int -> [(String, Int)]
+off [] totalSize  = [("",totalSize)]
+off ((v, t) : vs) x = 
+  case t of
+    TyBool  -> f 1
+    TyChar  -> f 1
+    _       -> f 4
+  where
+    f n = (v,x) : off vs (x + n) 
 

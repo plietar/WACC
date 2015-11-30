@@ -15,13 +15,13 @@ colourGraph rig colours
     Just s -> findColouring s rig colours 
     Nothing -> Nothing
   where
-    stack = extractWhileNonempty rig [] (length colours)
+    stack = buildStack rig [] (length colours)
     
-extractWhileNonempty :: Graph gr => gr a () -> Stack -> Int -> Maybe Stack
-extractWhileNonempty rig stack maxR
+buildStack :: Graph gr => gr a () -> Stack -> Int -> Maybe Stack
+buildStack rig stack maxR
   | isEmpty rig = Just stack
   | otherwise = case findValidNode rig (nodes rig) maxR of 
-        Just n  -> extractWhileNonempty (delNode n rig) (n : stack) maxR
+        Just n  -> buildStack (delNode n rig) (n : stack) maxR
         Nothing -> Nothing
      
 findValidNode :: Graph gr => gr a () -> [Node] -> Int -> Maybe Node

@@ -272,7 +272,7 @@ checkBlock (_, Block stmts) parent = do
   (stmts', finalContext) <- runStateT (mapM checkPosStmt stmts) context
 
   let alwaysReturns = or (map fst stmts')
-  let locals = Map.keys (ScopedMap.localTable (variables finalContext))
+  let locals = Map.assocs (ScopedMap.localTable (variables finalContext))
 
   return ((alwaysReturns, locals), Block stmts')
 
