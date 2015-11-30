@@ -271,7 +271,7 @@ checkBlock (_, Block stmts) parent = do
   let tys = [(always, ty) | ((always, ty), _) <- stmts', ty /= TyVoid]
   (al,ty) <- foldM (\(al1, ty1) (al2, ty2) -> (al1 || al2,) <$> mergeTypes ty1 ty2) (False, TyAny) tys
 
-  let locals = Map.keys (ScopedMap.localTable (variables finalContext))
+  let locals = Map.assocs (ScopedMap.localTable (variables finalContext))
 
   return (((al,ty), locals), Block stmts')
 
