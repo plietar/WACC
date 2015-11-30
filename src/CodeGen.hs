@@ -1,3 +1,5 @@
+{-# LANGUAGE RecordWildCards #-}
+
 module CodeGen where
 
 import AST
@@ -5,6 +7,7 @@ import Common
 import Control.Monad.Writer
 import Control.Monad.State
 import Control.Monad.Reader
+import Control.Applicative
 import Data.Map as Map
 import Data.Maybe
 
@@ -84,8 +87,12 @@ variableOffset :: String -> CodeGen Int
 variableOffset s = asks (getOffset s)
 
 getOffset :: String -> Frame -> Int
-getOffset var frame =
-  case Map.lookup var (offsets frame) of
-    Nothing -> (CodeGen.size frame) + getOffset var (fromJust (parent frame))
+getOffset var Frame{..} =
+  case Map.lookup var offsets of
+    Nothing -> size + getOffset var (fromJust parent)
     Just offset -> offset
+
+totalFrameSize :: Frame -> Int
+totalFrameSize Frame{..}
+  = size + fromMaybe 0 (totalFrameSize <$> parent)
 

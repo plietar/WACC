@@ -140,7 +140,9 @@ genStmt (_, StmtFree expr@(ty, _)) = do
 
 genStmt (_, StmtReturn expr) = do
   v <- genExpr expr
-  tell [IReturn { iValue = v }]
+  s <- asks totalFrameSize
+  tell [ IFrameFree { iSize = s }
+       , IReturn { iValue = v }]
 
 genStmt (_, StmtExit expr) = do
   v <- genExpr expr
