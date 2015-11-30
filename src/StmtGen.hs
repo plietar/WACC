@@ -35,11 +35,7 @@ genExpr (_ , ExprBinOp operator expr1 expr2) = do
   return binOpVar
 
 -- Variable
-genExpr (_, ExprVar ident) = do
-  outVar <- allocateVar
-  offset <- variableOffset ident
-  tell [ IFrameRead { iOffset = offset, iDest = outVar} ]
-  return outVar
+genExpr (_, ExprVar ident) = genFrameRead ident
 
 -- ArrayElem
 genExpr (_, ExprArrayElem (_, ArrayElem ident xs)) = do
@@ -59,7 +55,9 @@ genArrayRead :: Var -> Annotated Expr TypeA -> CodeGen Var
 genArrayRead arrayVar indexExpr =do
   outVar <- allocateVar
   indexVar <- genExpr indexExpr
-  tell [ IArrayRead { iArray = arrayVar
+  tell [ IBoundsCheck { iArray = arrayVar
+                      , iIndex = indexVar },
+         IArrayRead { iArray = arrayVar
                     , iIndex = indexVar
                     , iDest = outVar } ]
   return outVar
@@ -71,7 +69,8 @@ genAssign (_, LHSVar ident) valueVar = do
 
 genAssign (_, LHSPairElem (_, PairElem side pairExpr)) valueVar = do
   pairVar <- genExpr pairExpr
-  tell [ IPairWrite { iPair = pairVar, iSide = side, iValue = valueVar } ]
+  tell [ INullCheck { iValue = pairVar }
+       , IPairWrite { iPair = pairVar, iSide = side, iValue = valueVar } ]
 
 genAssign (_, LHSArrayElem (_, ArrayElem ident exprs)) valueVar = do
   let readIndexExprs  = init exprs
@@ -81,7 +80,9 @@ genAssign (_, LHSArrayElem (_, ArrayElem ident exprs)) valueVar = do
   subArrayVar <- foldM genArrayRead arrayVar readIndexExprs
 
   writeIndexVar <- genExpr writeIndexExpr
-  tell [ IArrayWrite { iArray = subArrayVar
+  tell [ IBoundsCheck { iArray = subArrayVar
+                      , iIndex = writeIndexVar }
+       , IArrayWrite { iArray = subArrayVar
                      , iIndex = writeIndexVar
                      , iValue = valueVar } ]
 
@@ -109,7 +110,8 @@ genRHS (_, RHSNewPair fstExpr sndExpr) = do
 genRHS (_, RHSPairElem (_, PairElem side pairExpr)) = do
   outVar <- allocateVar
   pairVar <- genExpr pairExpr
-  tell [ IPairRead { iPair = pairVar, iSide = side, iDest = outVar } ]
+  tell [ INullCheck { iValue = pairVar }
+       , IPairRead { iPair = pairVar, iSide = side, iDest = outVar } ]
   return outVar
 
 genRHS (_, RHSCall name exprs) = do
@@ -131,12 +133,12 @@ genStmt (_, StmtAssign lhs@(ty,_) rhs) = do
 
 genStmt (_, StmtRead lhs@(ty, _)) = do
   v <- allocateVar
-  tell [IRead { iDest = v, iType = ty }]
+  tell [ IRead { iDest = v, iType = ty }]
   genAssign lhs v
 
 genStmt (_, StmtFree expr@(ty, _)) = do
   v <- genExpr expr
-  tell [IFree { iValue = v, iType = ty }]
+  tell [ IFree { iValue = v, iType = ty }]
 
 genStmt (_, StmtReturn expr) = do
   v <- genExpr expr
