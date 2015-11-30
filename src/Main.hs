@@ -163,7 +163,7 @@ compile filename contents output
     typedAst  = waccSemCheck        =<< ast
     funcs     = (\(_, Program fs) -> fs) <$> typedAst
     ir        = map genFunction <$> funcs
-    cfg       = map basicBlocks <$> ir :: WACCResult [Gr [IR] ()]
+    cfg       = map (deadCodeElimination . basicBlocks) <$> ir :: WACCResult [Gr [IR] ()]
     flow      = map blockDataFlow <$> cfg
     live      = zipWith liveVariables <$> cfg <*> flow
     rig       = map interferenceGraph <$> live :: WACCResult [Gr Var ()]

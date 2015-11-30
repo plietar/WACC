@@ -12,8 +12,14 @@ import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 
-import Data.Graph.Inductive.Graph (Graph)
+import Data.Graph.Inductive.Graph (Graph, DynGraph)
 import qualified Data.Graph.Inductive.Graph as Graph
+import qualified Data.Graph.Inductive.Query.BFS as Graph
+
+deadCodeElimination :: DynGraph gr => gr [IR] () -> gr [IR] ()
+deadCodeElimination cfg = Graph.nfilter (\n -> Set.member n reachable) cfg
+  where
+    reachable = Set.fromList (Graph.bfs 0 cfg)
 
 basicBlocks :: Graph gr => [IR] -> gr [IR] ()
 basicBlocks ir = Graph.mkGraph cfgNodes (map (\e -> Graph.toLEdge e ()) cfgEdges)
