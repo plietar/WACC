@@ -7,6 +7,7 @@ import RegisterAllocation.ControlFlow
 import CodeGen
 import Data.Maybe
 import Data.Tuple (swap)
+import Data.List
 
 import Data.Map (Map, (!))
 import qualified Data.Map as Map
@@ -25,7 +26,7 @@ data FlowInfo = FlowInfo
   deriving Show
 
 interferenceGraph :: Graph gr => [Set Var] -> gr Var ()
-interferenceGraph liveVariables = Graph.mkGraph nodes (map (\e -> Graph.toLEdge e ()) edges)
+interferenceGraph liveVariables = Graph.mkGraph nodes (map (\e -> Graph.toLEdge e ()) (nub edges))
   where
     nodes :: [Graph.LNode Var]
     nodes = zip [0..] (Set.elems (Set.unions liveVariables))
