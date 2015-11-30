@@ -1,15 +1,18 @@
-module ScopedMap
+module Common.ScopedMap
   (ScopedMap
   , insertIfNotExists
-  , ScopedMap.insert
-  , ScopedMap.lookup
-  , ScopedMap.empty
+  , insert
+  , lookup
+  , empty
   , newScope
   , localTable
   ) where
+
 import Data.Maybe
-import Data.Map as Map
-import Control.Applicative
+import Data.Map (Map)
+import qualified Data.Map as Map
+import Control.Applicative ((<|>))
+import Prelude hiding (lookup)
 
 data ScopedMap k v = ScopedMap {
   table :: Map k v,
@@ -28,7 +31,7 @@ insert key value scopedMap
 
 lookup :: Ord k => k -> ScopedMap k v -> Maybe v
 lookup key scopedMap
-  = Map.lookup key (table scopedMap) <|> ((ScopedMap.lookup key) =<< (parent scopedMap))
+  = Map.lookup key (table scopedMap) <|> (lookup key =<< parent scopedMap)
 
 empty :: ScopedMap k v
 empty = ScopedMap { table = Map.empty, parent = Nothing }

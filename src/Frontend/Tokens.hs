@@ -1,4 +1,4 @@
-module Tokens where
+module Frontend.Tokens where
 
 data Token =
     TokKeyword String | 

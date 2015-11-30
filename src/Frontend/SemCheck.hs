@@ -1,18 +1,21 @@
 {-# LANGUAGE TupleSections #-}
 
-module SemCheck where
-import qualified Data.Map as Map
-import Control.Monad.State
+module Frontend.SemCheck where
 
-import ScopedMap
-import AST
-import Common
+import Common.AST
+import Common.ScopedMap as ScopedMap
+import Common.WACCResult
+
+import Control.Monad.State
 import Control.Monad.Trans
 import Control.Applicative
 
+import Data.Map (Map)
+import qualified Data.Map as Map
+
 data Context = Context
   { variables  :: ScopedMap String Type
-  , functions  :: Map.Map String ([Type], Type)
+  , functions  :: Map String ([Type], Type)
   , returnType :: Type
   }
 type ContextState a = StateT Context WACCResult a

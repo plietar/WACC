@@ -1,9 +1,8 @@
 {-# LANGUAGE FlexibleInstances #-}
 
-module Common where
+module Common.WACCResult where
 
 import Control.Applicative
-
 import Control.Monad.State
 import Control.Monad.Trans
 
@@ -34,9 +33,6 @@ instance Monad WACCResult where
   (OK value)       >>= f = f value
   (Error kind msg) >>= _ = Error kind msg
 
-type Pos = (Int, Int, String)
-type Span = (Pos, Pos)
-
 class ErrorContext m where
   withErrorContext :: String -> m -> m
 
@@ -56,5 +52,3 @@ semanticError :: String -> WACCResult a
 semanticError e = Error SemanticError [e]
 codegenError :: String -> WACCResult a
 codegenError e = Error CodeGenError [e]
-
-

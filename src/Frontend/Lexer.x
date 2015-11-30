@@ -1,8 +1,10 @@
 {
 {-# OPTIONS_GHC -fno-warn-tabs #-}
-module Lexer where
-import Tokens
-import Common
+module Frontend.Lexer where
+
+import Common.Span
+import Common.WACCResult
+import Frontend.Tokens
 }
 
 %wrapper "posn"
@@ -69,7 +71,7 @@ tokens :-
 
 
 {
---alexScanTokens :: String -> [token]
+waccLexer :: String -> String -> WACCResult [(Pos, Token)]
 waccLexer fname str = fmap (addfname fname) $ go (alexStartPos,'\n',[],str)
   where go inp@(pos,_,_,str) =
           case alexScan inp 0 of
@@ -87,12 +89,5 @@ firstWord str = takeWhile (/= ' ') str
 addfname :: String -> [((Int, Int), Token)] -> [((Int, Int, String), Token)]
 addfname fname xs = map (\((line, col), tok) -> ((line, col, fname), tok)) xs
 
---addfname :: ((Int, Int), Token) -> ((Int, Int, String), Token)
---addfname fname ((line, col), tok) = ((line, col, fname), tok))
-
-
 }
-
-
-
 

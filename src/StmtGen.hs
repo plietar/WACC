@@ -2,8 +2,9 @@
 
 module StmtGen where
 
-import AST
+import Common.AST
 import CodeGen
+
 import Control.Monad.Writer
 import Control.Monad.Reader
 import qualified Data.Map as Map

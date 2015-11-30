@@ -4,9 +4,9 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module AST where
+module Common.AST where
 
-import Common
+import Common.Span
 
 class ( Show (Ann a Program)
       , Show (Ann a FuncDef)

@@ -2,12 +2,12 @@
 
 module CodeGen where
 
-import AST
-import Common
+import Common.AST
+
+import Control.Applicative
 import Control.Monad.Writer
 import Control.Monad.State
 import Control.Monad.Reader
-import Control.Applicative
 import Data.Map as Map
 import Data.Maybe
 

@@ -1,13 +1,13 @@
 module FunctionCodeGen where
 
-import AST
-import ARMTypes
+import Common.AST
 import CodeGen 
 import StmtGen
+
 import Control.Monad.Reader
+import Control.Monad.State
 import Control.Monad.Writer
 import Data.Map as Map
-import Control.Monad.State
 
 genFunction :: Annotated FuncDef TypeA -> [IR]
 genFunction (_, FuncDef returnType fname params body) 

@@ -1,18 +1,20 @@
 {-# LANGUAGE TypeFamilies #-}
 
-module Parser (waccParser) where
+module Frontend.Parser (waccParser) where
 
+import Common.AST
+import Common.Span
+import Common.WACCResult
+import Frontend.Tokens
+
+import Control.Applicative
+import Data.Int
+import Text.Parsec.Combinator
+import Text.Parsec.Expr
 import qualified Text.Parsec.Prim as P
+import Text.Parsec.Pos
 import Text.Parsec.Prim ((<?>))
 import Text.Parsec.String ()
-import Control.Applicative
-import Text.Parsec.Combinator
-import Text.Parsec.Pos
-import Text.Parsec.Expr
-import Tokens
-import Common
-import AST
-import Data.Int
 
 infixl 4 $>
 ($>) :: Functor f => f a -> b -> f b

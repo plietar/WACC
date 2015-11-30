@@ -2,16 +2,23 @@
 {-# LANGUAGE CPP #-}
 
 module Main where
-import Parser
-import Lexer
-import Common
-import Tokens
-import ScopedMap
+import Common.AST
+import Common.Span
+import Common.WACCResult
+import Frontend.Parser
+import Frontend.Lexer
+import Frontend.Tokens
+import Frontend.SemCheck
+import FunctionCodeGen
+import CodeGen
+import Arguments
+
+import RegisterAllocation.ControlFlow
+import RegisterAllocation.DataFlow
+import RegisterAllocation.GraphColouring
 
 import System.Environment
 import System.Exit
-import SemCheck
-import AST
 
 import Data.List
 import Data.Maybe
@@ -24,22 +31,11 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 
 import Data.Graph.Inductive.Graph (Graph)
+import Data.Graph.Inductive.PatriciaTree (Gr)
 import qualified Data.Graph.Inductive.Graph as Graph
 
 import Control.Monad.State
 import Control.Monad.Writer
-
-import ARMTypes
-import FunctionCodeGen
-import CodeGen
-
-import RegisterAllocation.ControlFlow
-import RegisterAllocation.DataFlow
-import RegisterAllocation.GraphColouring
-
-import Data.Graph.Inductive.PatriciaTree (Gr)
-
-import Arguments
 
 #if WITH_GRAPHVIZ
 import qualified Data.GraphViz as GraphViz
