@@ -11,9 +11,9 @@ import Control.Monad.Trans
 import Control.Applicative
 
 data Context = Context
-  { variables :: ScopedMap String Type
-  , functions :: Map.Map String ([Type], Type)
-  , returnAllowed :: Bool
+  { variables  :: ScopedMap String Type
+  , functions  :: Map.Map String ([Type], Type)
+  , returnType :: Type
   }
 type ContextState a = StateT Context WACCResult a
 
@@ -44,7 +44,7 @@ getFunction name context
       Nothing    -> semanticError ("Unknown function " ++ show name)
 
 emptyContext :: Context
-emptyContext = Context ScopedMap.empty Map.empty False
+emptyContext = Context ScopedMap.empty Map.empty TyVoid
 
 newContext :: Context -> Context
 newContext parent
@@ -268,12 +268,10 @@ checkBlock (_, Block stmts) parent = do
   let context = newContext parent
   (stmts', finalContext) <- runStateT (mapM checkPosStmt stmts) context
 
-  let tys = [(always, ty) | ((always, ty), _) <- stmts', ty /= TyVoid]
-  (al,ty) <- foldM (\(al1, ty1) (al2, ty2) -> (al1 || al2,) <$> mergeTypes ty1 ty2) (False, TyAny) tys
-
+  let alwaysReturns = or (map fst stmts')
   let locals = Map.keys (ScopedMap.localTable (variables finalContext))
 
-  return (((al,ty), locals), Block stmts')
+  return ((alwaysReturns, locals), Block stmts')
 
 
 checkPosStmt :: Annotated Stmt SpanA -> ContextState (Annotated Stmt TypeA)
@@ -284,7 +282,7 @@ checkPosStmt stmt@(((line,column,fname),_), _)
 
 
 checkStmt :: Annotated Stmt SpanA -> ContextState (Annotated Stmt TypeA)
-checkStmt (_, StmtSkip) = return ((False, TyVoid), StmtSkip)
+checkStmt (_, StmtSkip) = return (False, StmtSkip)
 
 checkStmt (_, StmtVar varType varname rhs) = do
   context <- get
@@ -294,7 +292,7 @@ checkStmt (_, StmtVar varType varname rhs) = do
        (lift (semanticError ("Cannot assign RHS of type " ++ show rhsType
                           ++ " to LHS of type " ++ show varType)))
   addVariable varname varType
-  return ((False, TyVoid), StmtVar varType varname rhs')
+  return (False, StmtVar varType varname rhs')
 
 checkStmt (_, StmtAssign lhs rhs) = do
   context <- get
@@ -303,7 +301,7 @@ checkStmt (_, StmtAssign lhs rhs) = do
   when (not (compatibleType lhsType rhsType))
        (lift (semanticError ("Cannot assign RHS of type " ++ show rhsType
                           ++ " to LHS of type " ++ show lhsType)))
-  return ((False, TyVoid), StmtAssign lhs' rhs')
+  return (False, StmtAssign lhs' rhs')
 
 checkStmt (_, StmtRead lhs) = do
   context <- get
@@ -311,47 +309,43 @@ checkStmt (_, StmtRead lhs) = do
   when (not (isReadableType lhsType))
        (lift (semanticError ("Cannot read variable of type " 
                                                              ++ show lhsType)))
-  return ((False, TyVoid), StmtRead lhs')
+  return (False, StmtRead lhs')
 
 checkStmt (_, StmtFree expr) = do
   context <- get
   expr'@(exprType, _) <- lift $ checkExpr expr context
   when (not (isHeapType exprType))
        (lift (semanticError ("Cannot free variable of type " ++ show exprType)))
-  return ((False, TyVoid), StmtFree expr')
+  return (False, StmtFree expr')
 
 checkStmt (_, StmtReturn expr) = do
   context <- get
   expr'@(exprType, _) <- lift $ checkExpr expr context
-  when (not (returnAllowed context))
-       (lift (semanticError ("Cannot return from global context")))
-  return ((True, exprType), StmtReturn expr')
+  retType <- lift $ mergeTypes (returnType context) exprType
+  return (True, StmtReturn expr')
 
 checkStmt (_, StmtExit expr) = do
   context <- get
   expr'@(exprType, _) <- lift $ checkExpr expr context
   when (not (compatibleType TyInt exprType))
        (lift (semanticError ("Expected int in exit statement, got " ++ show exprType)))
-  return ((True, TyAny), StmtExit expr')
+  return (True, StmtExit expr')
 
 checkStmt (_, StmtPrint expr ln) = do
   context <- get
   expr' <- lift $ checkExpr expr context
-  return ((False, TyVoid), StmtPrint expr' ln)
+  return (False, StmtPrint expr' ln)
 
 checkStmt (_, StmtIf predicate b1 b2) = do
   context <- get
   predicate'@(predicateType, _) <- lift $ checkExpr predicate context
   when (not (compatibleType TyBool predicateType))
        (lift (semanticError ("Condition cannot be of type " ++ show predicateType)))
-  b1'@(((al1, t1),_),_) <- lift $ checkBlock b1 context
-  b2'@(((al2, t2),_),_) <- lift $ checkBlock b2 context
+  b1'@((al1,_),_) <- lift $ checkBlock b1 context
+  b2'@((al2,_),_) <- lift $ checkBlock b2 context
 
-  ty <- if isVoidType t1 || isVoidType t2
-        then return TyVoid
-        else lift $ mergeTypes t1 t2
   let al = al1 && al2
-  return ((al, ty), StmtIf predicate' b1' b2')
+  return (al, StmtIf predicate' b1' b2')
 
 checkStmt (_, StmtWhile predicate block) = do
   context <- get
@@ -359,45 +353,40 @@ checkStmt (_, StmtWhile predicate block) = do
   when (not (compatibleType TyBool predicateType))
        (lift (semanticError ("Condition cannot be of type " ++ show predicateType)))
 
-  block'@(((_, ty),_),_) <- lift $ checkBlock block context
-  return ((False, ty), StmtWhile predicate' block')
+  block' <- lift $ checkBlock block context
+  return (False, StmtWhile predicate' block')
 
 checkStmt (_, StmtScope block) = do
   context <- get
-  block'@(((al, ty),_),_) <- lift $ checkBlock block context
-  return ((al, ty), StmtScope block')
+  block'@((al, _),_) <- lift $ checkBlock block context
+  return (al, StmtScope block')
 
 
 checkFunction :: Annotated FuncDef SpanA -> Context -> WACCResult (Annotated FuncDef TypeA)
 checkFunction (_, FuncDef expectedReturnType name args block) globalContext
   = withErrorContext ("In function " ++ show name) $ do
-      let allowReturn = modify (\c -> c { returnAllowed = True })
-      let addArguments = forM_ args (\(argType, argName) -> addVariable argName argType)
+      let setupContext = do
+           modify (\c -> c { returnType = expectedReturnType })
+           forM_ args (\(argType, argName) -> addVariable argName argType)
 
-      context <- execStateT (allowReturn >> addArguments) globalContext 
-      block'@(((alwaysReturns, actualReturnType), _), _) <- checkBlock block context
+      context <- execStateT setupContext globalContext 
+      block'@((alwaysReturns, _), _) <- checkBlock block context
 
-      when (isVoidType actualReturnType)
-           (syntaxError ("Function " ++ show name ++ " does not return anything"))
+      unless (isVoidType expectedReturnType || alwaysReturns)
+             (syntaxError ("Function " ++ show name ++ " does not always return"))
 
-      when (not alwaysReturns)
-           (syntaxError ("Function " ++ show name ++ " does not always return"))
-
-      when (not (compatibleType expectedReturnType actualReturnType))
-           (semanticError ("Function " ++ show name
-                        ++ " should return type " ++ show expectedReturnType
-                        ++ " but returns " ++ show actualReturnType ++ " instead"))
       return ((), FuncDef expectedReturnType name args block')
 
 checkProgram :: Annotated Program SpanA -> WACCResult (Annotated Program TypeA)
-checkProgram (_, Program funcs block) = do
-  let defineFunc (_, FuncDef returnType name args _)
+checkProgram (_, Program funcs) = do
+  let defineFunc (_, FuncDef returnType (FuncName name) args _)
         = addFunction name (map fst args, returnType)
+      defineFunc (_, FuncDef _ MainFunc _ _) = return ()
+
       defineAllFuncs = forM_ funcs defineFunc
   context <- execStateT defineAllFuncs emptyContext
   funcs' <- forM funcs (\f -> checkFunction f context)
-  block' <- checkBlock block context
-  return ((), Program funcs' block')
+  return ((), Program funcs')
 
 
 waccSemCheck :: Annotated Program SpanA -> WACCResult (Annotated Program TypeA)

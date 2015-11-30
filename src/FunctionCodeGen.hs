@@ -20,10 +20,10 @@ genFunction (_, FuncDef returnType fname params body)
         labels = Prelude.map UnnamedLabel [0..]
       }
       generation = do 
-        tell [ILabel {iLabel = NamedLabel ("f_" ++ fname)}
-             , IFunctionBegin]
+        tell [ ILabel {iLabel = NamedLabel (show fname)}
+             , IFunctionBegin ]
         genBlock body
-        tell [IFunctionEnd]
+        tell [ IFunctionEnd ]
 
 
 saveParam :: [(Type, String)] -> Int -> Map String Int -> Map String Int

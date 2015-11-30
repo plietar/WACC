@@ -23,8 +23,10 @@ class ( Show (Ann a Program)
 type Annotated (t :: * -> *) (a :: *)
   = (Ann a t, t a)
 
-data Program a = Program [Annotated FuncDef a] (Annotated Block a)
-data FuncDef a = FuncDef Type Identifier [(Type, Identifier)] (Annotated Block a)
+data FuncName = FuncName Identifier | MainFunc
+
+data Program a = Program [Annotated FuncDef a]
+data FuncDef a = FuncDef Type FuncName [(Type, Identifier)] (Annotated Block a)
 data Block a = Block [Annotated Stmt a]
 
 data Stmt a
@@ -150,6 +152,10 @@ instance Show PairSide where
   show PairFst = "fst"
   show PairSnd = "snd"
 
+instance Show FuncName where
+  show MainFunc = "main"
+  show (FuncName name) = "f_" ++ name
+
 data SpanA
 instance Annotation SpanA where
   type Ann SpanA t = Span
@@ -158,8 +164,8 @@ data TypeA
 instance Annotation TypeA where
   type Ann TypeA Program = ()
   type Ann TypeA FuncDef = ()
-  type Ann TypeA Block = ((Bool, Type), [String])
-  type Ann TypeA Stmt = (Bool, Type)
+  type Ann TypeA Block = (Bool, [String])
+  type Ann TypeA Stmt = Bool
   type Ann TypeA Expr = Type
   type Ann TypeA AssignLHS = Type
   type Ann TypeA AssignRHS = Type

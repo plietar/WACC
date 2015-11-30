@@ -293,15 +293,20 @@ function = spanned $ do
   _ <- keyword "is"
   b <- block
   _ <- keyword "end"
-  return (FuncDef t i x b)
+  return (FuncDef t (FuncName i) x b)
+
+mainFunc :: Parser (Annotated FuncDef SpanA)
+mainFunc = spanned $ do
+  b <- block
+  return (FuncDef TyVoid MainFunc [] b)
 
 program :: Parser (Annotated Program SpanA)
 program = spanned $ do
   _ <- keyword "begin"
   f <- many function
-  b <- block
+  m <- mainFunc
   _ <- keyword "end"
-  return (Program f b)
+  return (Program (m:f))
 
 waccParser :: String -> [(Pos, Token)] -> WACCResult (Annotated Program SpanA)
 waccParser fname tokens

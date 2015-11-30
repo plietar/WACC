@@ -161,8 +161,8 @@ compile filename contents output
     tokens    = waccLexer  filename contents
     ast       = waccParser filename =<< tokens
     typedAst  = waccSemCheck        =<< ast
-    block     = (\(_, Program _ b) -> b) <$> typedAst
-    ir        = genFunction . (\b -> ((), FuncDef TyVoid "main" [] b)) <$> block
+    func      = (\(_, Program (f:_)) -> f) <$> typedAst
+    ir        = genFunction <$> func
     cfg       = basicBlocks <$> ir :: WACCResult (Gr [IR] ())
     flow      = blockDataFlow <$> cfg
     live      = liveVariables <$> cfg <*> flow
