@@ -80,8 +80,26 @@ data Frame = Frame
   , frameSize :: Int
   }
 
-emptyFrame :: Frame
-emptyFrame = Frame Map.empty Nothing False 0
+typeSize :: Type -> Int
+typeSize TyBool = 1
+typeSize TyChar = 1
+typeSize _      = 4
+
+rootFrame :: Frame
+rootFrame = Frame Map.empty Nothing False 0
+childFrame :: Frame -> Frame
+childFrame parent = Frame Map.empty (Just parent) True 0
+ 
+setVariables :: [(String, Type)] -> Int -> Frame -> Frame
+setVariables variables initialOffset original
+  = original { offsets = Map.fromList offsetTable
+             , frameSize = totalSize }
+  where
+    (offsetTable, totalSize) = walkVariables variables initialOffset
+    walkVariables [] off = ([], off)
+    walkVariables ((n,t):vs) off
+      = let (vs', off') = walkVariables vs (off + typeSize t)
+        in ((n,off):vs', off')
 
 variableOffset :: String -> CodeGen Int
 variableOffset s = asks (getOffset s)
@@ -92,7 +110,8 @@ getOffset var Frame{..} =
     Nothing -> frameSize + getOffset var (fromJust parent)
     Just offset -> offset
 
-totalFrameSize :: Frame -> Int
-totalFrameSize Frame{..}
-  = frameSize + fromMaybe 0 (totalFrameSize <$> parent)
+totalAllocatedFrameSize :: Frame -> Int
+totalAllocatedFrameSize Frame{..}
+  = if allocated then frameSize else 0 +
+    fromMaybe 0 (totalAllocatedFrameSize <$> parent)
 

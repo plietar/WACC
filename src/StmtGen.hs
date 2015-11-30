@@ -143,7 +143,7 @@ genStmt (_, StmtFree expr@(ty, _)) = do
 
 genStmt (_, StmtReturn expr) = do
   v <- genExpr expr
-  s <- asks totalFrameSize
+  s <- asks totalAllocatedFrameSize
   tell [ IFrameFree { iSize = s }
        , IReturn { iValue = v }]
 
@@ -185,32 +185,14 @@ genStmt (_, StmtScope block) = genBlock block
 
 
 -- Block code generation
-
 genBlock :: Annotated Block TypeA -> CodeGen ()
-genBlock ((_, varNames), Block stmts) = do
+genBlock ((_, locals), Block stmts) = do
   local createFrame generation 
   where
-      offs = off varNames 0
-      sizeFrame = snd $ offs !! (length offs - 1)
-      createFrame = (\frame -> Frame { offsets = Map.fromList (take (length offs - 1) offs)
-                                     , parent = Just frame
-                                     , allocated = True
-                                     , frameSize = sizeFrame})
+      createFrame = setVariables locals 0 . childFrame
       generation = do 
         s <- asks frameSize
         tell [ IFrameAllocate { iSize = s } ]
         forM_ stmts genStmt
         tell [ IFrameFree { iSize = s } ]
-
--- Specify offsets from SP for variables depending on type
--- Possible improve: Store in regs
-off :: [(String, Type)] -> Int -> [(String, Int)]
-off [] totalSize  = [("",totalSize)]
-off ((v, t) : vs) x = 
-  case t of
-    TyBool  -> f 1
-    TyChar  -> f 1
-    _       -> f 4
-  where
-    f n = (v,x) : off vs (x + n) 
 
