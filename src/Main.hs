@@ -147,27 +147,27 @@ compile filename contents output
     OutputTokens       -> showTokens <$> tokens
     OutputAST          -> (:[]) . show <$> ast
     OutputTypedAST     -> (:[]) . show <$> typedAst
-    OutputIR           -> showIR <$> ir
-    OutputCFG          -> showCFG <$> cfg
-    OutputRIG          -> showRIG <$> rig
-    OutputColouring    -> showColouring <$> colouring
+    OutputIR           -> concatMap showIR <$> ir
+    OutputCFG          -> concatMap showCFG <$> cfg
+    OutputRIG          -> concatMap showRIG <$> rig
+    OutputColouring    -> concatMap showColouring <$> colouring
 #if WITH_GRAPHVIZ
-    OutputDotCFG       -> showDotCFG <$> cfg
-    OutputDotRIG       -> showDotRIG <$> rig
-    OutputDotColouring -> showDotColouring <$> rig <*> colouring
+    OutputDotCFG       -> concatMap showDotCFG <$> cfg
+    OutputDotRIG       -> concatMap showDotRIG <$> rig
+    OutputDotColouring -> concat <$> (zipWith showDotColouring <$> rig <*> colouring)
 #endif
 
   where
     tokens    = waccLexer  filename contents
     ast       = waccParser filename =<< tokens
     typedAst  = waccSemCheck        =<< ast
-    func      = (\(_, Program (f:_)) -> f) <$> typedAst
-    ir        = genFunction <$> func
-    cfg       = basicBlocks <$> ir :: WACCResult (Gr [IR] ())
-    flow      = blockDataFlow <$> cfg
-    live      = liveVariables <$> cfg <*> flow
-    rig       = interferenceGraph <$> live :: WACCResult (Gr Var ())
-    colouring = colourGraph <$> rig <*> pure [0..15] >>= \case
+    funcs     = (\(_, Program fs) -> fs) <$> typedAst
+    ir        = map genFunction <$> funcs
+    cfg       = map basicBlocks <$> ir :: WACCResult [Gr [IR] ()]
+    flow      = map blockDataFlow <$> cfg
+    live      = zipWith liveVariables <$> cfg <*> flow
+    rig       = map interferenceGraph <$> live :: WACCResult [Gr Var ()]
+    colouring = sequence <$> map (\g -> colourGraph g [0..15]) <$> rig >>= \case
                 Just c  -> OK c
                 Nothing -> codegenError "Graph Colouring failed"
 

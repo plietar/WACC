@@ -48,7 +48,7 @@ data IR
   | IExit { iValue :: Var }
 
   | IFunctionBegin { }
-  | IFunctionEnd { }
+  | IReturn { iValue :: Var }
   deriving Show
 
 data CodeGenState = CodeGenState {

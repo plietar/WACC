@@ -112,9 +112,13 @@ genRHS (_, RHSPairElem (_, PairElem side pairExpr)) = do
   tell [ IPairRead { iPair = pairVar, iSide = side, iDest = outVar } ]
   return outVar
 
-genRHS (_, RHSCall name exprs) = undefined
---  argVars <- forM exprs genExpr
---  tell [ ICall { iLabel = name, iArgs = argVars } ]
+genRHS (_, RHSCall name exprs) = do
+  outVar <- allocateVar
+  argVars <- forM exprs genExpr
+  tell [ ICall { iLabel = NamedLabel name
+               , iArgs = argVars
+               , iDest = outVar } ]
+  return outVar
 
 genStmt :: Annotated Stmt TypeA -> CodeGen ()
 genStmt (_, StmtSkip) = return ()
@@ -134,7 +138,9 @@ genStmt (_, StmtFree expr@(ty, _)) = do
   v <- genExpr expr
   tell [IFree { iValue = v, iType = ty }]
 
-genStmt (_, StmtReturn expr) = undefined
+genStmt (_, StmtReturn expr) = do
+  v <- genExpr expr
+  tell [IReturn { iValue = v }]
 
 genStmt (_, StmtExit expr) = do
   v <- genExpr expr
