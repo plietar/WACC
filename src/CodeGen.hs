@@ -19,9 +19,9 @@ data Label = NamedLabel String | UnnamedLabel Int
 
 data IR
   = ILiteral { iDest :: Var, iLiteral :: Literal }
-
   | IBinOp { iBinOp :: BinOp, iDest :: Var, iLeft :: Var, iRight :: Var }
   | IUnOp { iUnOp :: UnOp, iDest :: Var, iValue :: Var }
+  | IMove { iValue :: Var, iDest :: Var }
 
   | ICondJump { iLabel :: Label, iValue :: Var }
   | IJump { iLabel :: Label }

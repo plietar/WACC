@@ -5,6 +5,7 @@ module RegisterAllocation.DataFlow where
 import CodeGen
 
 import Data.Maybe
+import Data.List
 import Data.Tuple (swap)
 import Data.List
 
@@ -96,34 +97,35 @@ bbUse bb = bbUse' (reverse bb) Set.empty
     bbUse' (ir:irs) use = bbUse' irs (Set.union (Set.difference use (irDef ir)) (irUse ir))
 
 irDef :: IR -> Set Var
-irDef (ILiteral{..})       = Set.singleton iDest
-irDef (IBinOp{..})         = Set.singleton iDest
-irDef (IUnOp{..})          = Set.singleton iDest
-irDef (ICall{..})          = Set.singleton iDest
-irDef (IFrameRead{..})     = Set.singleton iDest
-irDef (IArrayAllocate{..}) = Set.singleton iDest
-irDef (IArrayRead{..})     = Set.singleton iDest
-irDef (IArrayLength{..})   = Set.singleton iDest
-irDef (IPairAllocate{..})  = Set.singleton iDest
-irDef (IPairRead{..})      = Set.singleton iDest
-irDef (IRead{..})          = Set.singleton iDest
-irDef _                    = Set.empty
+irDef ILiteral{..}       = Set.singleton iDest
+irDef IBinOp{..}         = Set.singleton iDest
+irDef IUnOp{..}          = Set.singleton iDest
+irDef IMove{..}          = Set.singleton iDest
+irDef ICall{..}          = Set.singleton iDest
+irDef IFrameRead{..}     = Set.singleton iDest
+irDef IArrayAllocate{..} = Set.singleton iDest
+irDef IArrayRead{..}     = Set.singleton iDest
+irDef IArrayLength{..}   = Set.singleton iDest
+irDef IPairAllocate{..}  = Set.singleton iDest
+irDef IPairRead{..}      = Set.singleton iDest
+irDef IRead{..}          = Set.singleton iDest
+irDef _                  = Set.empty
 
 irUse :: IR -> Set Var
-irUse (IBinOp{..})         = Set.fromList [ iRight, iLeft ]
-irUse (IUnOp{..})          = Set.singleton iValue
-irUse (ICall{..})          = Set.fromList  iArgs
-irUse (IFrameWrite{..})    = Set.singleton iValue
-irUse (IArrayRead{..})     = Set.fromList [ iArray, iIndex ]
-irUse (IArrayWrite{..})    = Set.fromList [ iArray, iIndex, iValue ]
-irUse (IArrayLength{..})   = Set.singleton iArray
-irUse (IPairRead{..})      = Set.singleton iPair
-irUse (IPairWrite{..})     = Set.fromList [ iPair, iValue ]
-irUse (INullCheck{..})     = Set.singleton iValue
-irUse (IBoundsCheck{..})   = Set.fromList [ iArray, iIndex ]
-irUse (IPrint{..})         = Set.singleton iValue
-irUse (IFree{..})          = Set.singleton iValue
-irUse (IExit{..})          = Set.singleton iValue
-irUse (IReturn{..})        = Set.singleton iValue
-irUse _                    = Set.empty
+irUse IBinOp{..}         = Set.fromList [ iRight, iLeft ]
+irUse IUnOp{..}          = Set.singleton iValue
+irUse IMove{..}          = Set.singleton iValue
+irUse ICall{..}          = Set.fromList  iArgs
+irUse IFrameWrite{..}    = Set.singleton iValue
+irUse IArrayRead{..}     = Set.fromList [ iArray, iIndex ]
+irUse IArrayWrite{..}    = Set.fromList [ iArray, iIndex, iValue ]
+irUse IArrayLength{..}   = Set.singleton iArray
+irUse IPairRead{..}      = Set.singleton iPair
+irUse IPairWrite{..}     = Set.fromList [ iPair, iValue ]
+irUse INullCheck{..}     = Set.singleton iValue
+irUse IBoundsCheck{..}   = Set.fromList [ iArray, iIndex ]
+irUse IPrint{..}         = Set.singleton iValue
+irUse IFree{..}          = Set.singleton iValue
+irUse IExit{..}          = Set.singleton iValue
+irUse IReturn{..}        = Set.singleton iValue
 
