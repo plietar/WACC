@@ -12,6 +12,8 @@ type Stack = [Int]
 type Colour = Int
 type Colours = [Colour]
 
+-- Colour a graph such that no to vertices in the same edge share
+-- the same colour
 colourGraph :: Graph gr => gr a () -> Colours -> Maybe (Map Node Colour)
 colourGraph rig colours
   = case stack of
@@ -20,6 +22,9 @@ colourGraph rig colours
   where
     stack = buildStack rig [] (length colours)
     
+-- Build a stack of all nodes in the graph by always pushing a node
+-- that is valid (i.e has less than maxR number of neighbors) and update
+-- the graph at each step
 buildStack :: Graph gr => gr a () -> Stack -> Int -> Maybe Stack
 buildStack rig stack maxR
   | isEmpty rig = Just stack
@@ -27,12 +32,16 @@ buildStack rig stack maxR
         Just n  -> buildStack (delNode n rig) (n : stack) maxR
         Nothing -> Nothing
      
+-- Get a node from the graph which has less than maxR neighbors,
+-- where maxR is the number of available colours to colour the graph
 findValidNode :: Graph gr => gr a () -> [Node] -> Int -> Maybe Node
 findValidNode rig (x:xs) maxR
   | length (neighbors rig x) < maxR = Just x
   | otherwise                       = findValidNode rig xs maxR
 findValidNode _ [] _ = Nothing
 
+-- Find a valid colouring for a graph and (Maybe) return
+-- the mapping that is found 
 findColouring :: Graph gr => [Node] -> gr a () -> [Colour] -> Maybe (Map Node Colour)
 findColouring nodes rig allCol
   = foldl maybeColour (Just Map.empty) nodes
@@ -43,7 +52,10 @@ findColouring nodes rig allCol
       case getNewColour (neighbors rig node) allCol colouring of
         Just col -> Just $ Map.insert node col colouring
         Nothing  -> Nothing
- 
+
+-- Find available colour that does not clash with any of 
+-- its neihbors.
+-- Nothing if there isnt an available colour
 getNewColour :: [Node] -> [Colour] -> Map Node Colour -> Maybe Colour
 getNewColour (_:_) [] _
   = Nothing
