@@ -163,9 +163,9 @@ genARMInstruction (IPrint { iValue = Var value, iType = t, iNewline = newline })
   emit [ "MOV r0, r" ++ show value]
   case t of
     TyInt -> emit ["BL p_print_int"]
-    TyBool -> emit ["BL p_print_int"]
-    TyChar -> emit ["BL p_print_int"]
-    TyArray TyChar -> emit ["BL p_print_int"]
+    TyBool -> emit ["BL p_print_bool"]
+    TyChar -> emit ["BL p_print_char"]
+    TyArray TyChar -> emit ["BL p_print_string"]
     _ -> emit ["BL p_print_reference"]
   when newline (emit ["BL p_print_ln"])
  
