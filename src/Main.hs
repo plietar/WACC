@@ -139,6 +139,7 @@ compile filename contents output
     OutputRIG          -> concatMap showRIG <$> rig
     OutputColouring    -> concatMap showColouring <$> colouring
     OutputIRAlloc      -> concatMap showIR <$> allocIR
+    OutputCFGColoured  -> concatMap showCFG <$> cfgColoured
 #if WITH_GRAPHVIZ
     OutputDotCFG       -> concatMap showDotCFG <$> cfg
     OutputDotRIG       -> concatMap showDotRIG <$> rig
@@ -159,6 +160,8 @@ compile filename contents output
                 Just c  -> OK c
                 Nothing -> codegenError "Graph Colouring failed"
     allocIR   = zipWith applyColouring <$> ir <*> colouring
+    cfgColoured = zipWith (\g m -> Graph.nmap ((flip applyColouring) m) g)
+                    <$> cfg <*> colouring :: WACCResult [Gr [IR] ()]
 main :: IO ()
 main = do
   args <- waccArguments
