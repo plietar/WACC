@@ -153,8 +153,7 @@ genARMInstruction (INullCheck { iValue = Var value })
 genARMInstruction (IBoundsCheck { iArray = Var array, iIndex = Var dest })
   = emit ["BL p_check_array_bounds"]
 
--- General - do I need to return after each case?
--- recursion not quite right
+-- do I need to return after each case?
 genARMInstruction (IPrint { iValue = Var value, iType = t, iNewline = True })
   = case t of
       TyInt -> emit ["BL p_print_int\nBL p_print_ln"]
@@ -163,47 +162,45 @@ genARMInstruction (IPrint { iValue = Var value, iType = t, iNewline = True })
       TyPair t1 t2 -> emit 
       TyArray t1 -> case t1 of
                       TyChar -> emit ["BL p_print_string\nBL p_print_ln"]
-                      default -> genARMInstruction (IPrint {iValue = value , iType = t1, iNewline = True}) 
-                              ++ genARMInstruction (IPrint {iValue = value , iType = t2, iNewline = True})
-      TyAny -> emit []
-      TyVoid -> emit []
+                      TyInt -> emit ["BL p_print_reference\nBL p_print_ln"]
+                      TyBool -> emit ["BL p_print_reference\nBL p_print_ln"]
+                      TyArray -> genARMInstruction (IPrint {iValue = value , iType = t1, iNewline = True}) 
 
+-- Print
 genARMInstruction (IPrint { iValue = Var value, iType = Type t, iNewline = False })
   = case t of
       TyInt -> emit ["BL p_print_int"]
       TyBool -> emit ["BL p_print_bool"]
       TyChar -> emit ["BL putchar"]
       TyPair Type Type -> emit []
-      TyArray -. emit []
-      TyAny -> emit []
-      TyVoid -> emit []
-
+      TyArray t1 -> case t1 of
+                      TyChar -> emit ["BL p_print_string"]
+                      TyInt -> emit ["BL p_print_reference"]
+                      TyBool -> emit ["BL p_print_reference"]
+                      TyArray -> genARMInstruction (IPrint {iValue = value , iType = t1, iNewline = True}) 
+ 
+-- Read
 genARMInstruction (IRead { iDest = Var dest, iType = t})
   = case t of
       TyInt -> emit ["BL p_read_int"]
       TyBool -> emit ["BL p_read_bool"]
       TyChar -> emit ["BL p_read_char"]
-      TyPair Type Type -> emit []
-      TyArray Type -> emit []
-      TyAny -> emit []
-      TyVoid -> emit []
+      -- How do you get if you are reading fst or snd?
+      TyPair t1 t2 -> genARMInstruction ((IRead { iDest = Var dest, iType = t1}))
 
+-- Free
 genARMInstruction (IFree { iValue = Var value, iType = t})
   = case t of
-      TyInt -> emit []
-      TyBool -> emit []
-      TyChar -> emit []
-      TyPair Type Type -> emit []
-      TyArray Type -> emit []
-      TyAny -> emit []
-      TyVoid -> emit []
-
+      TyPair _ _ -> emit ["BL p_free_pair"]
+      TyArray _ -> emit ["BL p_free_array"]
+  
+-- Exit
 genARMInstruction (IExit { iValue = Var value })
-  = emit []
+  = emit ["BL exit"]
 
+-- Function
 genARMInstruction (IFunctionBegin { })
   = emit ["PUSH {lr}"]
-
 genARMInstruction (IFunctionEnd { })
   = emit ["POP {pc}"]
 
