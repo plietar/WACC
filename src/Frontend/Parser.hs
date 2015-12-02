@@ -72,7 +72,7 @@ literal = (lit >>= check) <?> "literal"
     matchTok _                      = Nothing
 
     check :: Literal -> Parser Literal
-    check x@(LitInt l) = if l > toInteger (maxBound :: Int32)
+    check x@(LitInt l) = if l > maxBound
                          then (fail "Integer litteral too large")
                          else return x
     check x = return x

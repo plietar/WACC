@@ -131,9 +131,9 @@ genARMInstruction (IArrayAllocate { iDest = Var dest, iSize = size })
          , "BL malloc"
          , "MOV r" ++ show dest ++ ", r0"]
 genARMInstruction (IArrayRead { iArray = Var array, iIndex = Var index, iDest = Var dest })
-  = emit ["LDR r" ++ show dest ++ ", [" ++ show array ++ ", r" ++ show index ++  ", lsl #2]"]
+  = emit ["LDR r" ++ show dest ++ ", [r" ++ show array ++ ", r" ++ show index ++ "]"]
 genARMInstruction (IArrayWrite { iArray = Var array, iIndex = Var index, iValue = Var value })
-  = emit ["STR r" ++ show value ++ ", [" ++ show array ++ ", r" ++ show index ++  ", lsl #2]"]
+  = emit ["STR r" ++ show value ++ ", [r" ++ show array ++ ", r" ++ show index ++ "]"]
 
 --Pair
 genARMInstruction (IPairAllocate { iDest = Var dest })

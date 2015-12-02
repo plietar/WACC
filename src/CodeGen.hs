@@ -86,7 +86,9 @@ data Frame = Frame
 typeSize :: Type -> Int
 typeSize TyBool = 1
 typeSize TyChar = 1
-typeSize _      = 4
+typeSize (TyPair t t') = typeSize t + typeSize t'
+typeSize (TyArray t) = 4
+typeSize _ = 4
 
 rootFrame :: Frame
 rootFrame = Frame Map.empty Nothing False 0

@@ -89,15 +89,18 @@ genAssign (_, LHSArrayElem (_, ArrayElem ident exprs)) valueVar = do
 
 genRHS :: Annotated AssignRHS TypeA -> CodeGen Var
 genRHS (_, RHSExpr expr) = genExpr expr
-genRHS (_, RHSArrayLit exprs) = do
+genRHS (TyArray t, RHSArrayLit exprs) = do
   arrayVar <- allocateVar
-  tell [ IArrayAllocate { iDest = arrayVar, iSize = length exprs }]
+  tell [ IArrayAllocate { iDest = arrayVar, iSize = size }]
   forM (zip exprs [0..]) $ \(expr, index) -> do
     indexVar <- allocateVar
     elemVar <- genExpr expr
-    tell [ ILiteral { iDest = indexVar, iLiteral = LitInt index }
+    tell [ ILiteral { iDest = indexVar, iLiteral = LitInt (4 + index * tSize) }
          , IArrayWrite { iArray = arrayVar, iIndex = indexVar, iValue = elemVar } ]
   return arrayVar
+    where
+      size = 4 + tSize * (length exprs)
+      tSize = typeSize t
 
 genRHS (_, RHSNewPair fstExpr sndExpr) = do
   pairVar <- allocateVar
