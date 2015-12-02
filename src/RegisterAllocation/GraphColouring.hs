@@ -1,7 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module RegisterAllocation.GraphColouring
-  (colourGraph, applyColouring, Colour) where
+  (colourGraph, applyColouring) where
 import Data.Graph.Inductive
 import Data.List
 import qualified Data.Map as Map
@@ -9,13 +9,9 @@ import CodeGen
 import Data.Map (Map,(!))
 import Data.Maybe
 
-type Stack = [Int]
-type Colour = Int
-type Colours = [Colour]
-
 -- Colour a graph such that no to vertices in the same edge share
 -- the same colour
-colourGraph :: (Graph gr, Ord a) => gr a () -> Colours -> Maybe (Map a Colour)
+colourGraph :: (Graph gr, Ord a, Eq c) => gr a () -> [c] -> Maybe (Map a c)
 colourGraph rig colours
   = case stack of
     Just s -> Map.mapKeys (fromJust . lab rig) <$> findColouring s rig colours
@@ -26,7 +22,7 @@ colourGraph rig colours
 -- Build a stack of all nodes in the graph by always pushing a node
 -- that is valid (i.e has less than maxR number of neighbors) and update
 -- the graph at each step
-buildStack :: Graph gr => gr a () -> Stack -> Int -> Maybe Stack
+buildStack :: Graph gr => gr a () -> [Node] -> Int -> Maybe [Node]
 buildStack rig stack maxR
   | isEmpty rig = Just stack
   | otherwise = case findValidNode rig (nodes rig) maxR of 
@@ -43,11 +39,10 @@ findValidNode _ [] _ = Nothing
 
 -- Find a valid colouring for a graph and (Maybe) return
 -- the mapping that is found 
-findColouring :: Graph gr => [Node] -> gr a () -> [Colour] -> Maybe (Map Node Colour)
+findColouring :: Eq c => Graph gr => [Node] -> gr a () -> [c] -> Maybe (Map Node c)
 findColouring nodes rig allCol
   = foldl maybeColour (Just Map.empty) nodes
   where
-    maybeColour :: Maybe (Map Node Colour) -> Node -> Maybe (Map Node Colour) 
     maybeColour Nothing _ = Nothing
     maybeColour (Just colouring) node = 
       case getNewColour (neighbors rig node) allCol colouring of
@@ -57,7 +52,7 @@ findColouring nodes rig allCol
 -- Find available colour that does not clash with any of 
 -- its neihbors.
 -- Nothing if there isnt an available colour
-getNewColour :: [Node] -> [Colour] -> Map Node Colour -> Maybe Colour
+getNewColour :: Eq c => [Node] -> [c] -> Map Node c -> Maybe c
 getNewColour (_:_) [] _
   = Nothing
 getNewColour (n : rest) cols coloured
@@ -68,16 +63,16 @@ getNewColour [] cols _
   = Just (head cols)
 
 -- Apply Graph Colouring to the Intermediate Representation
-applyColouring :: [IR] -> Map Var Colour -> [IR]
+applyColouring :: [IR] -> Map Var Var -> [IR]
 applyColouring irs colouring
   = map (\ir -> colourIR ir colouring) irs
 
 
 -- Helper method
-get :: Var -> Map Var Colour -> Var
-get v colouring = Var (colouring ! v)
+get :: Var -> Map Var Var -> Var
+get v colouring = (colouring ! v)
 
-colourIR :: IR -> Map Var Colour -> IR
+colourIR :: IR -> Map Var Var -> IR
 colourIR ILiteral{..} colouring
   = ILiteral { iDest = get iDest colouring
              , iLiteral = iLiteral }

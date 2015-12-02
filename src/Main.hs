@@ -26,6 +26,7 @@ import Control.Applicative
 
 import Data.Map (Map,(!))
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 
 import Data.Graph.Inductive.Graph (Graph)
 import Data.Graph.Inductive.PatriciaTree (Gr)
@@ -73,10 +74,10 @@ showRIG rig = execWriter $ do
     tell [(show (Graph.lab' ctx) ++ " - " ++
            show (map (fromJust . Graph.lab rig) (Graph.suc' ctx)))]
 
-showColouring :: Map Var Colour -> [String]
+showColouring :: Map Var Var -> [String]
 showColouring colouring = execWriter $ do
   forM_ (Map.toList colouring) $ \(v,col) -> do
-    tell ["Var: " ++ show v ++ " -> " ++ "Colour: " ++ show col]
+    tell [show v ++ " -> " ++ ": " ++ show col]
 
 #if WITH_GRAPHVIZ
 showDotCFG :: Graph gr => gr [IR] () -> [String]
@@ -109,17 +110,20 @@ dotRIGParams = GraphViz.nonClusteredParams
 
     fn (_, l) = [(GraphViz.toLabel . show) l]
 
-showDotColouring :: Graph gr => gr Var () -> Map Var Colour -> [String]
+showDotColouring :: (Graph gr, Eq a, Ord a) => gr Var () -> Map Var a -> [String]
 showDotColouring cfg colouring
   = (:[]) . unpack . GraphViz.printDotGraph . GraphViz.setDirectedness GraphViz.graphToDot (dotColouringParams colouring) $ cfg
 
-dotColouringParams :: Map Var Colour -> GraphViz.GraphvizParams Int Var () () Var
+dotColouringParams :: (Eq a, Ord a) => Map Var a -> GraphViz.GraphvizParams Int Var () () Var
 dotColouringParams colouring = dotRIGParams { GraphViz.fmtNode = fn }
   where
     fn (_, l) = [(GraphViz.toLabel . show) l
-                , GraphViz.FillColor (GraphViz.toColorList [colour (colouring ! l)])]
+                , GraphViz.FillColor (GraphViz.toColorList [colourMap ! l])]
 
-    colourCount = length (nub (Map.elems colouring))
+    colourSet = Set.fromList (Map.elems colouring)
+    colourMap = Map.map (\v -> colour (Set.findIndex v colourSet)) colouring
+
+    colourCount = Set.size colourSet
     colourStep = 1.0 / (fromIntegral (colourCount + 1))
 
     colour    i = GraphViz.HSV (colourHue i) (colourSat i) (colourVal i)
@@ -135,7 +139,7 @@ compile filename contents output
     OutputTokens       -> showTokens <$> tokens
     OutputAST          -> (:[]) . show <$> ast
     OutputTypedAST     -> (:[]) . show <$> typedAst
-    OutputIR           -> concatMap showIR <$> ir
+    OutputIR           -> concatMap (map show) <$> live
     OutputCFG          -> concatMap showCFG <$> cfg
     OutputRIG          -> concatMap showRIG <$> rig
     OutputColouring    -> concatMap showColouring <$> colouring
@@ -158,7 +162,7 @@ compile filename contents output
     flow      = map blockDataFlow <$> cfg
     live      = zipWith liveVariables <$> cfg <*> flow
     rig       = map interferenceGraph <$> live :: WACCResult [Gr Var ()]
-    colouring = sequence <$> map (\g -> colourGraph g [0..15]) <$> rig >>= \case
+    colouring = sequence <$> map (\g -> colourGraph g (fmap Var [4..12])) <$> rig >>= \case
                 Just c  -> OK c
                 Nothing -> codegenError "Graph Colouring failed"
     allocIR   = zipWith applyColouring <$> ir <*> colouring
