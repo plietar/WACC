@@ -1,8 +1,11 @@
-module RegisterAllocation.GraphColouring (colourGraph, Colour) where
+{-# LANGUAGE RecordWildCards #-}
 
+module RegisterAllocation.GraphColouring
+  (colourGraph, applyColouring, Colour) where
 import Data.Graph.Inductive
 import Data.List
 import qualified Data.Map as Map
+import CodeGen
 import Data.Map (Map)
 
 type Stack = [Int]
@@ -40,7 +43,7 @@ findColouring nodes rig allCol
       case getNewColour (neighbors rig node) allCol colouring of
         Just col -> Just $ Map.insert node col colouring
         Nothing  -> Nothing
-    
+ 
 getNewColour :: [Node] -> [Colour] -> Map Node Colour -> Maybe Colour
 getNewColour (_:_) [] _
   = Nothing
@@ -50,3 +53,110 @@ getNewColour (n : rest) cols coloured
       Just c -> getNewColour rest (cols \\ [c]) coloured
 getNewColour [] cols _
   = Just (head cols)
+
+-- Apply Graph Colouring to the Intermediate Representation
+applyColouring :: [IR] -> Map Node Colour -> [IR]
+applyColouring irs colouring
+  = map (\ir -> colourIR ir colouring) irs
+
+
+-- Helper method
+get :: Var -> Map Node Colour -> Var
+get (Var x) colouring =
+  case Map.lookup x colouring of
+    Nothing -> Var x -- If no reg allocation is found for x
+    Just y  -> Var y
+
+colourIR :: IR -> Map Node Colour -> IR
+colourIR ILiteral{..} colouring
+  = ILiteral { iDest = get iDest colouring
+             , iLiteral = iLiteral }
+
+colourIR IBinOp{..} colouring
+  = IBinOp { iBinOp = iBinOp
+           , iDest  = get iDest colouring
+           , iLeft  = get iLeft colouring
+           , iRight = get iRight colouring }
+
+colourIR IUnOp{..} colouring
+  = IUnOp { iUnOp   = iUnOp
+           , iDest  = get iDest colouring
+           , iValue = get iValue colouring }
+
+colourIR IMove{..} colouring
+  = IMove { iValue = get iValue colouring
+           , iDest = get iDest colouring }
+
+colourIR ICondJump{..} colouring
+  = ICondJump { iLabel = iLabel
+              , iValue = get iValue colouring }
+
+colourIR ICall{..} colouring
+  = ICall { iLabel = iLabel
+          , iArgs  = iArgs
+          , iDest  = get iDest colouring }
+
+colourIR IFrameRead{..} colouring
+  = IFrameRead { iOffset = iOffset
+               , iDest  = get iDest colouring }
+
+colourIR IFrameWrite{..} colouring
+  = IFrameWrite { iOffset = iOffset
+                , iValue = get iValue colouring }
+
+colourIR IArrayAllocate{..} colouring
+  = IArrayAllocate { iDest = get iDest colouring
+                   , iSize = iSize }
+
+colourIR IArrayRead{..} colouring
+  = IArrayRead { iArray = get iArray colouring
+               , iIndex = get iIndex colouring
+               , iDest  = get iDest colouring }
+
+colourIR IArrayWrite{..} colouring
+  = IArrayWrite { iArray = get iArray colouring
+                , iIndex = get iIndex colouring
+                , iValue = get iValue colouring }
+
+colourIR IArrayLength{..} colouring
+  = IArrayLength { iArray = get iArray colouring
+                 , iDest  = get iDest colouring }
+
+colourIR IPairAllocate{..} colouring
+  = IPairAllocate { iDest = get iDest colouring }
+
+colourIR IPairRead{..} colouring
+  = IPairRead { iPair = get iPair colouring
+              , iDest = get iDest colouring
+              , iSide = iSide }
+
+colourIR IPairWrite{..} colouring
+  = IPairWrite { iPair  = get iPair colouring
+               , iValue = get iValue colouring
+               , iSide  = iSide }
+
+colourIR INullCheck{..} colouring
+  = INullCheck { iValue = get iValue colouring }
+
+colourIR IBoundsCheck{..} colouring
+  = IBoundsCheck { iArray = get iArray colouring
+                 , iIndex = get iIndex colouring }
+
+colourIR IRead{..} colouring
+  = IRead { iDest = get iDest colouring
+          , iType = iType }
+
+colourIR IFree{..} colouring
+  = IFree { iValue = get iValue colouring
+          , iType  = iType }
+
+colourIR IExit{..} colouring
+  = IExit { iValue = get iValue colouring }
+
+colourIR IReturn{..} colouring
+  = IReturn { iValue = get iValue colouring }
+-- Base Case
+colourIR x colouring  = x
+
+
+

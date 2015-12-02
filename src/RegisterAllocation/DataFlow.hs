@@ -128,4 +128,5 @@ irUse IPrint{..}         = Set.singleton iValue
 irUse IFree{..}          = Set.singleton iValue
 irUse IExit{..}          = Set.singleton iValue
 irUse IReturn{..}        = Set.singleton iValue
+irUse _                  = Set.empty
 
