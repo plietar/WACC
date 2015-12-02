@@ -116,6 +116,7 @@ irUse IBinOp{..}         = Set.fromList [ iRight, iLeft ]
 irUse IUnOp{..}          = Set.singleton iValue
 irUse IMove{..}          = Set.singleton iValue
 irUse ICall{..}          = Set.fromList  iArgs
+irUse ICondJump{..}      = Set.singleton iValue
 irUse IFrameWrite{..}    = Set.singleton iValue
 irUse IArrayRead{..}     = Set.fromList [ iArray, iIndex ]
 irUse IArrayWrite{..}    = Set.fromList [ iArray, iIndex, iValue ]
