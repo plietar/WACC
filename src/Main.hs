@@ -12,6 +12,7 @@ import Frontend.SemCheck
 import FunctionCodeGen
 import CodeGen
 import Arguments
+import ARMGen
 
 import RegisterAllocation.ControlFlow
 import RegisterAllocation.DataFlow
@@ -140,6 +141,7 @@ compile filename contents output
     OutputColouring    -> concatMap showColouring <$> colouring
     OutputIRAlloc      -> concatMap showIR <$> allocIR
     OutputCFGColoured  -> concatMap showCFG <$> cfgColoured
+    OutputASM          -> concatMap (concatMap snd . Graph.labNodes) <$> asm
 #if WITH_GRAPHVIZ
     OutputDotCFG       -> concatMap showDotCFG <$> cfg
     OutputDotRIG       -> concatMap showDotRIG <$> rig
@@ -162,6 +164,9 @@ compile filename contents output
     allocIR   = zipWith applyColouring <$> ir <*> colouring
     cfgColoured = zipWith (\g m -> Graph.nmap ((flip applyColouring) m) g)
                     <$> cfg <*> colouring :: WACCResult [Gr [IR] ()]
+
+    asm       = map (Graph.nmap (assembly . genARM)) <$> cfgColoured
+
 main :: IO ()
 main = do
   args <- waccArguments
