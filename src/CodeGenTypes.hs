@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module CodeGen where
+module CodeGenTypes where
 
 import Common.AST
 

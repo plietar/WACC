@@ -1,9 +1,9 @@
 {-# LANGUAGE TypeFamilies #-}
 
-module StmtGen where
+module CodeGen where
 
 import Common.AST
-import CodeGen
+import CodeGenTypes
 
 import Control.Monad.Writer
 import Control.Monad.Reader
@@ -44,6 +44,7 @@ genExpr (_, ExprArrayElem (_, ArrayElem ident xs)) = do
   outVar <- foldM genArrayRead frameVar xs
   return outVar
 
+-- Read from Frame
 genFrameRead :: String -> CodeGen Var
 genFrameRead ident = do
   outVar <- allocateVar
@@ -52,6 +53,7 @@ genFrameRead ident = do
                     , iDest = outVar } ]
   return outVar
 
+-- Read from Array
 genArrayRead :: Var -> Annotated Expr TypeA -> CodeGen Var
 genArrayRead arrayVar indexExpr =do
   outVar <- allocateVar
@@ -63,16 +65,19 @@ genArrayRead arrayVar indexExpr =do
                     , iDest = outVar } ]
   return outVar
 
+-- LHS Assign
 genAssign :: Annotated AssignLHS TypeA -> Var -> CodeGen ()
 genAssign (_, LHSVar ident) valueVar = do
   offset <- variableOffset ident
   tell [ IFrameWrite { iOffset = offset, iValue = valueVar } ]
 
+-- LHS Pair 
 genAssign (_, LHSPairElem (_, PairElem side pairExpr)) valueVar = do
   pairVar <- genExpr pairExpr
   tell [ INullCheck { iValue = pairVar }
        , IPairWrite { iPair = pairVar, iSide = side, iValue = valueVar } ]
 
+-- LHS Array Indexing 
 genAssign (_, LHSArrayElem (_, ArrayElem ident exprs)) valueVar = do
   let readIndexExprs  = init exprs
       writeIndexExpr  = last exprs
@@ -87,6 +92,7 @@ genAssign (_, LHSArrayElem (_, ArrayElem ident exprs)) valueVar = do
                      , iIndex = writeIndexVar
                      , iValue = valueVar } ]
 
+-- RHS Expression Assignment
 genRHS :: Annotated AssignRHS TypeA -> CodeGen Var
 genRHS (_, RHSExpr expr) = genExpr expr
 genRHS (TyArray t, RHSArrayLit exprs) = do

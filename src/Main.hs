@@ -10,7 +10,7 @@ import Frontend.Lexer
 import Frontend.Tokens
 import Frontend.SemCheck
 import FunctionCodeGen
-import CodeGen
+import CodeGenTypes
 import Arguments
 import ARMGen
 

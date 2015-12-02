@@ -5,7 +5,7 @@ module RegisterAllocation.GraphColouring
 import Data.Graph.Inductive
 import Data.List
 import qualified Data.Map as Map
-import CodeGen
+import CodeGenTypes
 import Data.Map (Map,(!))
 import Data.Maybe
 

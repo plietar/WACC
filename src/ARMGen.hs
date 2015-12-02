@@ -1,7 +1,7 @@
 module ARMGen where
 
 import Common.AST
-import CodeGen
+import CodeGenTypes
 import Data.Monoid
 import Control.Monad.Writer
 import Control.Monad.State

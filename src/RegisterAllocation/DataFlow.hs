@@ -2,7 +2,7 @@
 
 module RegisterAllocation.DataFlow where
 
-import CodeGen
+import CodeGenTypes
 
 import Data.Maybe
 import Data.List

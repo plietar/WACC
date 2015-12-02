@@ -1,8 +1,8 @@
 module FunctionCodeGen where
 
 import Common.AST
-import CodeGen
-import StmtGen
+import CodeGenTypes
+import CodeGen 
 
 import Control.Monad.Reader
 import Control.Monad.State
