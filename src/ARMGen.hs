@@ -1,6 +1,6 @@
-module GenARM where
+module ARMGen where
 
-import AST
+import Common.AST
 import CodeGen
 import Data.Monoid
 import Control.Monad.Writer
@@ -28,9 +28,14 @@ emitLiteral :: String -> WriterT ARMWriter (State ARMState) String
 emitLiteral s = do
   (l:ls) <- gets literals
   modify (\s -> s { literals = ls })
-  return ("msg_ " ++ show l)
+  return ("msg_" ++ show l)
+
+genARM :: [IR] -> ARMWriter
+genARM irs = evalState (execWriterT (mapM genARMInstruction irs)) (ARMState [0..])
 
 genARMInstruction :: IR -> WriterT ARMWriter (State ARMState) ()
+genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitNull }) 
+  = emit ["MOV r" ++ (show dest) ++ ", #0"]
 genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitInt n }) 
   = emit ["LDR r" ++ (show dest) ++ ", =" ++ (show n)]
 genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitBool True } ) 
@@ -39,8 +44,6 @@ genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitBool False } )
   = emit ["MOV r" ++ (show dest) ++ ", #0"]
 genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitChar chr } ) 
   = emit ["MOV r" ++ (show dest) ++ ", #" ++ (show chr)]
--- Not right, need a reference of the number of strings in the scope.
--- For the moment I'll just put msg_0.
 genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitString str  } ) = do
   message <- emitLiteral str 
   emit ["LDR r" ++ (show dest) ++ ", =" ++ message]
@@ -92,15 +95,12 @@ genARMInstruction IUnOp { iUnOp = op, iDest = Var dest,
   = case op of
       UnOpNot -> emit ["EOR r" ++ (show dest) ++ ", r" ++ (show value) ++ ", #1"]
       UnOpNeg -> emit ["RSBS r" ++ (show dest) ++ ", r" ++ (show value) ++ ", #0"]
-      UnOpLen -> emit ["LDR r" ++ (show dest) ++ ", =msg_0",
-                       "LDR r" ++ (show value) ++ ", =msg_0"]
-      UnOpOrd -> emit [""]
-      UnOpChr -> emit [""]
+      UnOpLen -> emit ["LDR r" ++ (show dest) ++ ", [r" ++ show value]
 
 --Jumps
 genARMInstruction (ICondJump { iLabel = label, iValue = value}) 
   = emit ["CMP r" ++ (show value) ++ ", #0",
-          "BNE" ++ (show label)]
+          "BNE " ++ (show label)]
 genARMInstruction (IJump {iLabel = label} ) 
   = emit ["B " ++ (show label)]
 
@@ -109,16 +109,17 @@ genARMInstruction (ICall { iLabel = label, iArgs = vars, iDest = dest })
   = undefined
 
 --Labels
-genARMInstruction (ILabel { iLabel = NamedLabel label} )
-  = emit [label ++ ":"] 
-genARMInstruction (ILabel { iLabel = UnnamedLabel n }) 
-  = emit ["L" ++ (show n) ++ ":"]
+genARMInstruction (ILabel { iLabel = label} )
+  = emit [show label ++ ":"] 
 
 --Frame
+genARMInstruction (IFrameAllocate { iSize = 0 }) = return ()
 genARMInstruction (IFrameAllocate { iSize = size })
-  = emit ["SUB sp, sp, #" ++ (show size) ++ "\nBL malloc"]
+  = emit ["SUB sp, sp, #" ++ show size]
+
+genARMInstruction (IFrameFree { iSize = 0 }) = return ()
 genARMInstruction (IFrameFree { iSize = size } )
-  = emit ["ADD sp, sp, #" ++ (show size)]
+  = emit ["ADD sp, sp, #" ++ show size]
 genARMInstruction (IFrameRead {iOffset = offset, iDest = Var dest} ) 
   = emit ["LDR r" ++ (show dest) ++ ", [sp, #" ++ (show offset) ++ "]"]
 genARMInstruction (IFrameWrite {iOffset = offset, iValue = Var value} )
@@ -126,58 +127,47 @@ genARMInstruction (IFrameWrite {iOffset = offset, iValue = Var value} )
 
 -- Array
 genARMInstruction (IArrayAllocate { iDest = Var dest, iSize = size })
-  = emit ["LDR r" ++ (show dest) ++ ", =" ++ show (size) ++ "\nBL malloc"]
+  = emit [ "LDR r0, =" ++ show size
+         , "BL malloc"
+         , "MOV r" ++ show dest ++ ", r0"]
 genARMInstruction (IArrayRead { iArray = Var array, iIndex = Var index, iDest = Var dest })
-  = emit ["LDR r" ++ (show arr) ++ ", [" ++ (show index) ++ "]\nMOV r" ++ (show dest) ++ " r" ++ (show array)]
+  = emit ["LDR r" ++ show dest ++ ", [" ++ show array ++ ", r" ++ show index ++  ", lsl #2]"]
 genARMInstruction (IArrayWrite { iArray = Var array, iIndex = Var index, iValue = Var value })
-  = emit ["STR r" ++ (show value) ++ ", [r" ++ (show array) ++ ", #" == (show index) ++ "]"]
-genARMInstruction (IArrayLength { iArray = Var array, iDest = Var dest })
-  = emit [""]
+  = emit ["STR r" ++ show value ++ ", [" ++ show array ++ ", r" ++ show index ++  ", lsl #2]"]
 
 --Pair
 genARMInstruction (IPairAllocate { iDest = Var dest })
-  = emit ["LDR r" (show dest) ++ " =4 \nBL malloc"]
-genARMInstruction (IPairRead { iPair = Var pair, iDest = Var dest, iSide = fst })
-  = emit ["LDR r" ++ (show pair) ++ "[r" ++ (show dest) ++ "]"
-genARMInstruction (IPairRead { iPair = Var pair, iDest = Var dest, iSide = snd })
-  = emit ["LDR r" ++ (show dest) ++ ", [r" (show pair) ++ ", #4]" ]
-genARMInstruction (IPairWrite { iPair = Var pair, iValue = Var value, iSide = fst})
-  = emit ["STR r" (show value) ++ ", [r" ++ (show pair) ++ "]"]
-genARMInstruction (IPairWrite { iPair = Var pair, iValue = Var value, iSide = snd })
-  = emit ["STR r" (show pair) ++ ", [r" ++ (show value) ++ ", #4]"]
+  = emit [ "LDR r0, =8"
+         , "BL malloc"
+         , "MOV r" ++ show dest ++ ", r0"]
+genARMInstruction (IPairRead { iPair = Var pair, iDest = Var dest, iSide = PairFst })
+  = emit [ "LDR r" ++ show dest ++ ", [r" ++ show pair ++ "]" ]
+genARMInstruction (IPairRead { iPair = Var pair, iDest = Var dest, iSide = PairSnd })
+  = emit [ "LDR r" ++ show dest ++ ", [r" ++ show pair ++ ", #4]" ]
+genARMInstruction (IPairWrite { iPair = Var pair, iValue = Var value, iSide = PairFst })
+  = emit [ "STR r" ++ show value ++ ", [r" ++ show pair ++ "]" ]
+genARMInstruction (IPairWrite { iPair = Var pair, iValue = Var value, iSide = PairSnd })
+  = emit [ "STR r" ++ show value ++ ", [r" ++ show pair ++ ", #4]" ]
 
 
--- cases where BL p_check_null_pointer is generated but no call to INullCheck eg. readPair.wacc
 genARMInstruction (INullCheck { iValue = Var value })
-  = emit ["BL p_check_null_pointer"]
-genARMInstruction (IBoundsCheck { iArray = Var array, iIndex = Var dest })
-  = emit ["BL p_check_array_bounds"]
-
--- do I need to return after each case?
-genARMInstruction (IPrint { iValue = Var value, iType = t, iNewline = True })
-  = case t of
-      TyInt -> emit ["BL p_print_int\nBL p_print_ln"]
-      TyBool -> emit ["BL p_print_bool\nBL p_print_ln"]
-      TyChar -> emit ["BL putchar\nBL p_print_ln"]
-      TyPair t1 t2 -> emit 
-      TyArray t1 -> case t1 of
-                      TyChar -> emit ["BL p_print_string\nBL p_print_ln"]
-                      TyInt -> emit ["BL p_print_reference\nBL p_print_ln"]
-                      TyBool -> emit ["BL p_print_reference\nBL p_print_ln"]
-                      TyArray -> genARMInstruction (IPrint {iValue = value , iType = t1, iNewline = True}) 
+  = emit [ "MOV r0, r" ++ show value
+         , "BL p_check_null_pointer" ]
+genARMInstruction (IBoundsCheck { iArray = Var array, iIndex = Var index })
+  = emit [ "MOV r0, r" ++ show array
+         , "MOV r1, r" ++ show index
+         , "BL p_check_array_bounds" ]
 
 -- Print
-genARMInstruction (IPrint { iValue = Var value, iType = Type t, iNewline = False })
-  = case t of
-      TyInt -> emit ["BL p_print_int"]
-      TyBool -> emit ["BL p_print_bool"]
-      TyChar -> emit ["BL putchar"]
-      TyPair Type Type -> emit []
-      TyArray t1 -> case t1 of
-                      TyChar -> emit ["BL p_print_string"]
-                      TyInt -> emit ["BL p_print_reference"]
-                      TyBool -> emit ["BL p_print_reference"]
-                      TyArray -> genARMInstruction (IPrint {iValue = value , iType = t1, iNewline = True}) 
+genARMInstruction (IPrint { iValue = Var value, iType = t, iNewline = newline }) = do
+  emit [ "MOV r0, r" ++ show value]
+  case t of
+    TyInt -> emit ["BL p_print_int"]
+    TyBool -> emit ["BL p_print_int"]
+    TyChar -> emit ["BL p_print_int"]
+    TyArray TyChar -> emit ["BL p_print_int"]
+    _ -> emit ["BL p_print_reference"]
+  when newline (emit ["BL p_print_ln"])
  
 -- Read
 genARMInstruction (IRead { iDest = Var dest, iType = t})
@@ -185,26 +175,21 @@ genARMInstruction (IRead { iDest = Var dest, iType = t})
       TyInt -> emit ["BL p_read_int"]
       TyBool -> emit ["BL p_read_bool"]
       TyChar -> emit ["BL p_read_char"]
-      -- How do you get if you are reading fst or snd?
-      TyPair t1 t2 -> genARMInstruction ((IRead { iDest = Var dest, iType = t1}))
 
 -- Free
 genARMInstruction (IFree { iValue = Var value, iType = t})
-  = case t of
-      TyPair _ _ -> emit ["BL p_free_pair"]
-      TyArray _ -> emit ["BL p_free_array"]
+  = emit [ "MOV r0, r" ++ show value
+         , "BL free" ]
   
 -- Exit
 genARMInstruction (IExit { iValue = Var value })
-  = emit ["BL exit"]
+  = emit [ "MOV r0, r" ++ show value
+         , "BL exit" ]
 
 -- Function
 genARMInstruction (IFunctionBegin { })
-  = emit ["PUSH {lr}"]
-genARMInstruction (IFunctionEnd { })
-  = emit ["POP {pc}"]
-
-
-
-
+  = emit [ "PUSH {lr}" ]
+genARMInstruction (IReturn { iValue = Var value })
+  = emit [ "MOV r0, r" ++ show value
+         , "POP {pc}" ]
 

@@ -15,7 +15,11 @@ import Data.Maybe
 data Var = Var Int
   deriving (Show, Ord, Eq)
 data Label = NamedLabel String | UnnamedLabel Int
-  deriving (Show, Ord, Eq)
+  deriving (Ord, Eq)
+
+instance Show Label where
+  show (UnnamedLabel i) = "L" ++ show i
+  show (NamedLabel   n) = n
 
 data IR
   = ILiteral { iDest :: Var, iLiteral :: Literal }
@@ -36,7 +40,6 @@ data IR
   | IArrayAllocate { iDest :: Var, iSize :: Int }
   | IArrayRead { iArray :: Var, iIndex :: Var, iDest :: Var }
   | IArrayWrite { iArray :: Var, iIndex :: Var, iValue :: Var }
-  | IArrayLength { iArray :: Var, iDest :: Var }
 
   | IPairAllocate { iDest :: Var }
   | IPairRead { iPair :: Var, iDest :: Var, iSide :: PairSide }
