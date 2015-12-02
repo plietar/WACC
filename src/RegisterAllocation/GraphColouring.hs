@@ -6,7 +6,8 @@ import Data.Graph.Inductive
 import Data.List
 import qualified Data.Map as Map
 import CodeGen
-import Data.Map (Map)
+import Data.Map (Map,(!))
+import Data.Maybe
 
 type Stack = [Int]
 type Colour = Int
@@ -14,10 +15,10 @@ type Colours = [Colour]
 
 -- Colour a graph such that no to vertices in the same edge share
 -- the same colour
-colourGraph :: Graph gr => gr a () -> Colours -> Maybe (Map Node Colour)
+colourGraph :: (Graph gr, Ord a) => gr a () -> Colours -> Maybe (Map a Colour)
 colourGraph rig colours
   = case stack of
-    Just s -> findColouring s rig colours 
+    Just s -> Map.mapKeys (fromJust . lab rig) <$> findColouring s rig colours
     Nothing -> Nothing
   where
     stack = buildStack rig [] (length colours)
@@ -67,19 +68,16 @@ getNewColour [] cols _
   = Just (head cols)
 
 -- Apply Graph Colouring to the Intermediate Representation
-applyColouring :: [IR] -> Map Node Colour -> [IR]
+applyColouring :: [IR] -> Map Var Colour -> [IR]
 applyColouring irs colouring
   = map (\ir -> colourIR ir colouring) irs
 
 
 -- Helper method
-get :: Var -> Map Node Colour -> Var
-get (Var x) colouring =
-  case Map.lookup x colouring of
-    Nothing -> Var x -- If no reg allocation is found for x
-    Just y  -> Var y
+get :: Var -> Map Var Colour -> Var
+get v colouring = Var (colouring ! v)
 
-colourIR :: IR -> Map Node Colour -> IR
+colourIR :: IR -> Map Var Colour -> IR
 colourIR ILiteral{..} colouring
   = ILiteral { iDest = get iDest colouring
              , iLiteral = iLiteral }
@@ -129,10 +127,6 @@ colourIR IArrayWrite{..} colouring
   = IArrayWrite { iArray = get iArray colouring
                 , iIndex = get iIndex colouring
                 , iValue = get iValue colouring }
-
-colourIR IArrayLength{..} colouring
-  = IArrayLength { iArray = get iArray colouring
-                 , iDest  = get iDest colouring }
 
 colourIR IPairAllocate{..} colouring
   = IPairAllocate { iDest = get iDest colouring }

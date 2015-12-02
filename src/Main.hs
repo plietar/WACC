@@ -72,10 +72,10 @@ showRIG rig = execWriter $ do
     tell [(show (Graph.lab' ctx) ++ " - " ++
            show (map (fromJust . Graph.lab rig) (Graph.suc' ctx)))]
 
-showColouring :: Map Int Colour -> [String]
+showColouring :: Map Var Colour -> [String]
 showColouring colouring = execWriter $ do
   forM_ (Map.toList colouring) $ \(v,col) -> do
-    tell ["Node: " ++ show v ++ " -> " ++ "Colour: " ++ show col]
+    tell ["Var: " ++ show v ++ " -> " ++ "Colour: " ++ show col]
 
 #if WITH_GRAPHVIZ
 showDotCFG :: Graph gr => gr [IR] () -> [String]
@@ -108,15 +108,15 @@ dotRIGParams = GraphViz.nonClusteredParams
 
     fn (_, l) = [(GraphViz.toLabel . show) l]
 
-showDotColouring :: Graph gr => gr Var () -> Map Int Colour -> [String]
+showDotColouring :: Graph gr => gr Var () -> Map Var Colour -> [String]
 showDotColouring cfg colouring
   = (:[]) . unpack . GraphViz.printDotGraph . GraphViz.setDirectedness GraphViz.graphToDot (dotColouringParams colouring) $ cfg
 
-dotColouringParams :: Map Int Colour -> GraphViz.GraphvizParams Int Var () () Var
+dotColouringParams :: Map Var Colour -> GraphViz.GraphvizParams Int Var () () Var
 dotColouringParams colouring = dotRIGParams { GraphViz.fmtNode = fn }
   where
-    fn (n, l) = [(GraphViz.toLabel . show) l
-                , GraphViz.FillColor (GraphViz.toColorList [colour (colouring ! n)])]
+    fn (_, l) = [(GraphViz.toLabel . show) l
+                , GraphViz.FillColor (GraphViz.toColorList [colour (colouring ! l)])]
 
     colourCount = length (nub (Map.elems colouring))
     colourStep = 1.0 / (fromIntegral (colourCount + 1))
