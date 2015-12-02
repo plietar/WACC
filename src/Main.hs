@@ -9,8 +9,8 @@ import Frontend.Parser
 import Frontend.Lexer
 import Frontend.Tokens
 import Frontend.SemCheck
-import FunctionCodeGen
 import CodeGenTypes
+import CodeGen
 import Arguments
 import ARMGen
 
