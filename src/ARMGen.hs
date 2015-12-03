@@ -188,11 +188,12 @@ genARMInstruction (IPrint { iValue = Var value, iType = t, iNewline = newline })
   when newline (emit ["BL p_print_ln"])
 
 -- Read
-genARMInstruction (IRead { iDest = Var dest, iType = t})
-  = case t of
-      TyInt -> emit ["BL p_read_int"]
-      TyBool -> emit ["BL p_read_bool"]
-      TyChar -> emit ["BL p_read_char"]
+genARMInstruction (IRead { iDest = Var dest, iType = t}) = do
+  case t of
+    TyInt -> emit ["BL p_read_int"]
+    TyBool -> emit ["BL p_read_bool"]
+    TyChar -> emit ["BL p_read_char"]
+  emit [ "MOV r" ++ show dest ++ ", r0" ]
 
 -- Free
 genARMInstruction (IFree { iValue = Var value, iType = t})
