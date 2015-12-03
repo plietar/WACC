@@ -133,6 +133,11 @@ dotColouringParams colouring = dotRIGParams { GraphViz.fmtNode = fn }
 
 #endif
 
+tabbedInstruction :: String -> String
+tabbedInstruction inst
+  | isSuffixOf ":" inst = "\t"   ++ inst
+  | otherwise         = "\t\t" ++ inst
+
 compile :: String -> String -> OutputType -> WACCResult [String]
 compile filename contents output
   = case output of
@@ -169,8 +174,13 @@ compile filename contents output
 
     irFinal   = concatMap (concatMap snd . Graph.labNodes) <$> cfgFinal
 
-    armWriter = genARM <$> irFinal
-    asm       = (++) <$> (dataSegment <$> armWriter) <*> (textSegment <$> armWriter)
+    armWriter = genARM <$> irFinal :: WACCResult ARMWriter
+    feat      = mergeFeatures <$> features <$> armWriter :: WACCResult ([String], [String])
+    asmSimple = concat <$> sequence [dataSegment 
+                       <$> armWriter, return (fst f), textSegment 
+                       <$> armWriter, return (snd f)] :: WACCResult [String]
+    asm       = map tabbedInstruction <$> asmSimple
+   
 
 main :: IO ()
 main = do

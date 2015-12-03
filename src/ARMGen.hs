@@ -12,16 +12,19 @@ data Feature = CheckDivideByZero
               | CheckArrayBounds
               | PrintInt
               | PrintBool
-              | PrintChar
               | PrintString
               | PrintReference
               | PrintLine
               | ReadInt
+              | ReadChar
               | ThrowRuntimeError
               | ThrowOverflowError
               | FreePair
-              deriving (Show, Eq, Ord)
+              deriving (Show, Eq, Ord, Enum)
 
+allFeatures = [CheckDivideByZero .. FreePair]
+
+f = mconcat (map genFeature allFeatures)
 data ARMState = ARMState
   {
     stringLiteralLabels :: [String]
@@ -213,7 +216,6 @@ genARMInstruction (IPrint { iValue = Var value, iType = t, iNewline = newline })
     TyBool -> do emit ["BL p_print_bool"]
                  emitFeature PrintBool
     TyChar -> do emit ["BL putchar"]
-                 emitFeature PrintChar
     TyArray TyChar -> do emit ["BL p_print_string"]
                          emitFeature PrintString
     _ -> do emit ["BL p_print_reference"]
@@ -243,33 +245,44 @@ genARMInstruction (IReturn { iValue = Var value })
   = emit [ "MOV r0, r" ++ show value
          , "POP {pc}" ]
 
+mergeFeatures :: Set Feature -> ([String], [String])
+mergeFeatures features
+  = foldl f ([],[]) (Set.elems features) 
+  where
+    f (a, b) feature = (a ++ (fst res), b ++ (snd res))
+      where
+        res = genFeature feature
+
 genFeature :: Feature -> ([String], [String])
-genFeature CheckDivideByZero = (["p_check_divide_by_zero:", 
+genFeature CheckDivideByZero = (["msg_p_check_divide_by_zero:", 
                                  ".word 45",
                                  ".ascii \"DivideByZeroError: divide or modulo by zero\\n\\0\""] 
-                               ,["PUSH {lr}",
+                               ,["p_check_divide_by_zero:",
+                                 "PUSH {lr}",
                                  "CMP r1, #0",
                                  "LDREQ r0, =msg_check_p_divide_by_zero",
                                  "BLEQ p_throw_runtime_error",
                                  "POP {pc}"])
 
-genFeature CheckNullPointer = (["p_check_null_pointer", 
+genFeature CheckNullPointer = (["msg_p_check_null_pointer:", 
                                  ".word 50",
                                  ".ascii \"NullReferenceError: derefence a null reference \\n\\0\""] 
-                               ,["PUSH {lr}",
+                               ,["p_check_null_pointer:",
+                                 "PUSH {lr}",
                                  "CMP r0, #0",
                                  "LDREQ r0, =msg_p_check_null_pointer",
                                  "BLEQ p_throw_runtime_error",
                                  "POP {pc}"])
 
 --Calls another feature: p_throw_runtime_error.
-genFeature CheckArrayBounds =  (["p_check_array_bounds_1:", 
+genFeature CheckArrayBounds =  (["msg_p_check_array_bounds_1:", 
                                  ".word 44",
                                  ".ascii \"ArrayIndexOutOfBoundsError: negative index\\0\"",
-                                 "p_check_array_bounds_2:", 
+                                 "msg_p_check_array_bounds_2:", 
                                  ".word 45",
                                  ".ascii \"ArrayIndexOutOfBoundsError: index too large\\0\""]
-                               ,["PUSH {lr}",
+                               ,["p_check_array_bounds:",
+                                 "PUSH {lr}",
                                  "CMP r0, #0",
                                  "LDRLT r0, =msg_p_check_array_bounds_1",
                                  "BLLT p_throw_runtime_error",
@@ -279,10 +292,11 @@ genFeature CheckArrayBounds =  (["p_check_array_bounds_1:",
                                  "BLCS p_throw_runtime_error",
                                  "POP {pc}"])
 
-genFeature PrintInt =  (["p_print_string:", 
+genFeature PrintInt =  (["msg_p_print_int:", 
                          ".word 3",
                          ".ascii \"%.d\\0\""] 
-                       ,["PUSH {lr}",
+                       ,["p_print_int:",
+                         "PUSH {lr}",
                          "MOV r1, r0",
                          "LDR r0, =msg_p_print_int",
                          "ADD r0, r0, #4",
@@ -291,13 +305,14 @@ genFeature PrintInt =  (["p_print_string:",
                          "BL fflush",
                          "POP {pc}"])
 
-genFeature PrintBool = (["p_print_bool_1:", 
+genFeature PrintBool = (["msg_p_print_bool_1:", 
                          ".word 5",
                          ".ascii \"true\\0\"",
-                         "p_print_bool_2:",
+                         "msg_p_print_bool_2:",
                          ".word 6",
                          ".ascii \"false\\0\""] 
-                       ,["PUSH {lr}",
+                       ,["p_print_bool:",
+                         "PUSH {lr}",
                          "CMP r0, #0",
                          "LDRNE r0, =msg_p_print_bool_1",
                          "LDREQ r0, =msg_p_print_bool_2",
@@ -307,10 +322,11 @@ genFeature PrintBool = (["p_print_bool_1:",
                          "BL fflush",
                          "POP {pc}"])
 
-genFeature PrintString = (["p_print_string:", 
+genFeature PrintString = (["msg_p_print_string:", 
                            ".word 5",
                            ".ascii \"%.*s\0"] 
-                         ,["PUSH {lr}",
+                         ,["p_print_string:",
+                           "PUSH {lr}",
                            "LDR r1, [r0]",
                            "ADD r2, r0, #4",
                            "LDR r0, =msg_p_print_string",
@@ -320,22 +336,24 @@ genFeature PrintString = (["p_print_string:",
                            "BL fflush",
                            "POP {pc}"])
 
-genFeature PrintReference = (["p_print_reference:", 
+genFeature PrintReference = (["msg_p_print_reference:", 
                               ".word 3",
                               ".ascii \"%p\0\""] 
-                            ,["PUSH {lr}",
+                            ,["p_print_reference:",
+                              "PUSH {lr}",
                               "MOV r1, r0",
-                              "LDR r0, =p_print_reference:",
+                              "LDR r0, =msg_p_print_reference",
                               "ADD r0, r0, #4",
                               "BL printf",
                               "MOV r0, #0",
                               "BL fflush",
                               "POP {pc}"])
 
-genFeature PrintLine = (["p_print_ln:", 
+genFeature PrintLine = (["msg_p_print_ln:", 
                          ".word 1",
                          ".ascii \"\\0\""] 
-                       ,["PUSH {lr}",
+                       ,["p_print_ln",
+                         "PUSH {lr}",
                          "LDR r0, =msg_p_print_ln",
                          "ADD r0, r0, #4",
                          "BL puts",
@@ -343,10 +361,11 @@ genFeature PrintLine = (["p_print_ln:",
                          "BL fflush",
                          "POP {pc}"])
 
-genFeature ReadInt = (["p_read_int:", 
+genFeature ReadInt = (["msg_p_read_int:", 
                          ".word 3",
                          ".ascii \"%d\\0\""] 
-                       ,["PUSH {lr}",
+                       ,["p_read_int:",
+                         "PUSH {lr}",
                          "MOV r1, r0",
                          "LDR r0, =msg_p_read_int",
                          "ADD r0, r0, #4",
@@ -354,10 +373,11 @@ genFeature ReadInt = (["p_read_int:",
                          "POP {pc}"])
 
 
-genFeature ReadChar = (["p_read_char:", 
+genFeature ReadChar = (["msg_p_read_char:", 
                          ".word 4",
                          ".ascii \" %c\\0\""] 
-                       ,["PUSH {lr}",
+                       ,["p_read_char:",
+                         "PUSH {lr}",
                          "MOV r1, r0",
                          "LDR r0, =msg_p_read_char",
                          "BL puts",
@@ -367,23 +387,25 @@ genFeature ReadChar = (["p_read_char:",
 
 --Calls another feature: p_print_string.
 genFeature ThrowRuntimeError = ([""] 
-                               ,["BL p_print_string",
+                               ,["p_throw_runtime_error:",
+                                 "BL p_print_string",
                                  "MOV r0, #-1",
                                  "BL exit"])
 
---Calls another feature: p_throw_overflow_error.
-genFeature ThrowOverflowError =  (["p_throw_overflow_error:",
+genFeature ThrowOverflowError =  (["msg_p_throw_overflow_error:",
                                    ".word 82",
                                    ".ascii \"OverflowError: the result is too small/large to store \
                                     \in a 4-byte signed-integer. \\n\""] 
-                                 ,["LDR r0, =msg_p_throw_overflow_error",
-                                   "POP {pc}"])
+                                 ,["p_throw_overflow_error:",
+                                   "LDR r0, =msg_p_throw_overflow_error",
+                                   "BL p_throw_runtime_error"])
 
 --Calls another feature: p_throw_runtime_error.
-genFeature FreePair = (["p_free_pair:",
+genFeature FreePair = (["msg_p_free_pair:",
                         ".word 50",
                         ".ascii \"NullReferenceError: derefence a null reference\\n\\0\""]
-                      ,["PUSH {lr}",
+                      ,["p_free_pair:",
+                        "PUSH {lr}",
                         "CMP r0, #0",
                         "LDREQ r0, =msg_p_free_pair",
                         "BEQ p_throw_runtime_error",
@@ -396,6 +418,7 @@ genFeature FreePair = (["p_free_pair:",
                         "POP {r0}",
                         "BL free",
                         "POP {pc}"])
+genFeature a = error (show a)
 
 strInstr :: Type -> String
 strInstr TyBool = "STRB"

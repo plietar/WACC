@@ -7,6 +7,7 @@ import Common.AST
 import CodeGenTypes
 
 import Control.Monad.RWS
+import Control.Applicative
 
 import qualified Data.Map as Map
 import Data.Tuple(swap)
