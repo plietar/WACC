@@ -104,9 +104,8 @@ irDef IMove{..}          = Set.singleton iDest
 irDef ICall{..}          = Set.singleton iDest
 irDef IFrameRead{..}     = Set.singleton iDest
 irDef IArrayAllocate{..} = Set.singleton iDest
-irDef IArrayRead{..}     = Set.singleton iDest
+irDef IHeapRead{..}      = Set.singleton iDest
 irDef IPairAllocate{..}  = Set.singleton iDest
-irDef IPairRead{..}      = Set.singleton iDest
 irDef IRead{..}          = Set.singleton iDest
 irDef _                  = Set.empty
 
@@ -114,13 +113,17 @@ irUse :: IR -> Set Var
 irUse IBinOp{..}         = Set.fromList [ iRight, iLeft ]
 irUse IUnOp{..}          = Set.singleton iValue
 irUse IMove{..}          = Set.singleton iValue
-irUse ICall{..}          = Set.fromList  iArgs
+irUse ICall{..}          = Set.fromList  (map snd iArgs)
 irUse ICondJump{..}      = Set.singleton iValue
 irUse IFrameWrite{..}    = Set.singleton iValue
-irUse IArrayRead{..}     = Set.fromList [ iArray, iIndex ]
-irUse IArrayWrite{..}    = Set.fromList [ iArray, iIndex, iValue ]
-irUse IPairRead{..}      = Set.singleton iPair
-irUse IPairWrite{..}     = Set.fromList [ iPair, iValue ]
+irUse IHeapWrite{..}
+  = case iOperand of
+    OperandVar v _ -> Set.fromList [ iHeapVar, iValue, v ]       
+    OperandLit x -> Set.fromList [ iHeapVar, iValue ]
+irUse IHeapRead{..}
+  = case iOperand of
+    OperandVar v _ -> Set.fromList [ iHeapVar, v ]       
+    OperandLit x -> Set.fromList [ iHeapVar ]
 irUse INullCheck{..}     = Set.singleton iValue
 irUse IBoundsCheck{..}   = Set.fromList [ iArray, iIndex ]
 irUse IPrint{..}         = Set.singleton iValue

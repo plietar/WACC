@@ -74,7 +74,7 @@ genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitBool True } )
   = emit ["MOV r" ++ (show dest) ++ ", #1"]
 genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitBool False } )
   = emit ["MOV r" ++ (show dest) ++ ", #0"]
-genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitChar chr } )
+genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitChar chr } ) 
   = emit ["MOV r" ++ (show dest) ++ ", #" ++ (show chr)]
 genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitString str  } ) = do
   message <- emitLiteral str
@@ -128,8 +128,11 @@ genARMInstruction IUnOp { iUnOp = op, iDest = Var dest,
         iValue = Var value }
   = case op of
       UnOpNot -> emit ["EOR r" ++ (show dest) ++ ", r" ++ (show value) ++ ", #1"]
-      UnOpNeg -> emit ["RSBS r" ++ (show dest) ++ ", r" ++ (show value) ++ ", #0"]
-      UnOpLen -> emit ["LDR r" ++ (show dest) ++ ", [r" ++ show value]
+      UnOpNeg -> emit ["RSB r" ++ (show dest) ++ ", r" ++ (show value) ++ ", #0"]
+      UnOpLen -> emit ["LDR r" ++ (show dest) ++ ", [r" ++ show value ++ "]"]
+
+genARMInstruction IMove { iDest = Var dest, iValue = Var value }
+  = emit ["MOV r" ++ show dest ++ ", r" ++ show value]
 
 --Jumps
 genARMInstruction (ICondJump { iLabel = label, iValue = Var value})
@@ -139,8 +142,12 @@ genARMInstruction (IJump {iLabel = label} )
   = emit ["B " ++ (show label)]
 
 --Call
-genARMInstruction (ICall { iLabel = label, iArgs = vars, iDest = dest })
-  = undefined
+genARMInstruction (ICall { iLabel = label, iArgs = args, iDest = dest }) = do
+  forM args $ \(ty, Var arg) -> do
+    emit [strInstr ty ++ " r" ++ show arg ++ ", [sp, #" ++ show (typeSize ty) ++ "]!"]
+  emit ["BL " ++ show label ]
+  unless (null args) (emit ["ADD sp, sp, #" ++ show (sum (map (typeSize . fst) args))])
+  emit [ "MOV r" ++ show dest ++ ", r0" ]
 
 --Labels
 genARMInstruction (ILabel { iLabel = label} )
@@ -154,35 +161,38 @@ genARMInstruction (IFrameAllocate { iSize = size })
 genARMInstruction (IFrameFree { iSize = 0 }) = return ()
 genARMInstruction (IFrameFree { iSize = size } )
   = emit ["ADD sp, sp, #" ++ show size]
-genARMInstruction (IFrameRead {iOffset = offset, iDest = Var dest} )
-  = emit ["LDR r" ++ (show dest) ++ ", [sp, #" ++ (show offset) ++ "]"]
-genARMInstruction (IFrameWrite {iOffset = offset, iValue = Var value} )
-  = emit ["STR r" ++ (show value) ++ ", [sp, #" ++ (show offset) ++ "]"]
+genARMInstruction (IFrameRead {iOffset = offset, iDest = Var dest, iType = ty} )
+  = emit [ldrInstr ty ++ " r" ++ (show dest) ++ ", [sp, #" ++ (show offset) ++ "]"]
+genARMInstruction (IFrameWrite {iOffset = offset, iValue = Var value, iType = ty} )
+  = emit [strInstr ty ++ " r" ++ (show value) ++ ", [sp, #" ++ (show offset) ++ "]"]
 
 -- Array
 genARMInstruction (IArrayAllocate { iDest = Var dest, iSize = size })
   = emit [ "LDR r0, =" ++ show size
          , "BL malloc"
          , "MOV r" ++ show dest ++ ", r0"]
-genARMInstruction (IArrayRead { iArray = Var array, iIndex = Var index, iDest = Var dest })
-  = emit ["LDR r" ++ show dest ++ ", [r" ++ show array ++ ", r" ++ show index ++ "]"]
-genARMInstruction (IArrayWrite { iArray = Var array, iIndex = Var index, iValue = Var value })
-  = emit ["STR r" ++ show value ++ ", [r" ++ show array ++ ", r" ++ show index ++ "]"]
+
+-- Heap Read (i.e Pairs and Arrays)
+genARMInstruction (IHeapRead { iHeapVar = Var heapVar, iDest = Var dest, iOperand = OperandVar (Var offset) shift, iType = ty })
+  = emit [ldrInstr ty ++ " r" ++ show dest ++ ", [r" ++ show heapVar ++ ", r" ++ show offset ++ scaling ++ "]"]
+    where scaling = if shift /= 0 then ", lsl #" ++ show shift else ""
+genARMInstruction (IHeapRead { iHeapVar = Var heapVar, iDest = Var dest, iOperand = OperandLit offset, iType = ty })
+  = emit [ldrInstr ty ++ " r" ++ show dest ++ ", [r" ++ show heapVar ++ ", #" ++ show offset ++ "]"]
+
+
+-- Heap Write (i.e Pairs and Arrays)
+genARMInstruction (IHeapWrite { iHeapVar = Var heapVar, iValue = Var value, iOperand = OperandVar (Var offset) shift, iType = ty })
+  = emit [strInstr ty ++ " r" ++ show value ++ ", [r" ++ show heapVar ++ ", r" ++ show offset ++ scaling ++ "]"] 
+    where scaling = if shift /= 0 then ", lsl #" ++ show shift else ""
+genARMInstruction (IHeapWrite { iHeapVar = Var heapVar, iValue = Var value, iOperand = OperandLit offset, iType = ty })
+  = emit [strInstr ty ++ " r" ++ show value ++ ", [r" ++ show heapVar ++ ", #" ++ show offset ++ "]"] 
+ 
 
 --Pair
 genARMInstruction (IPairAllocate { iDest = Var dest })
-  = emit [ "LDR r0, =8"
+  = emit [ "MOV r0, #8"
          , "BL malloc"
          , "MOV r" ++ show dest ++ ", r0"]
-genARMInstruction (IPairRead { iPair = Var pair, iDest = Var dest, iSide = PairFst })
-  = emit [ "LDR r" ++ show dest ++ ", [r" ++ show pair ++ "]" ]
-genARMInstruction (IPairRead { iPair = Var pair, iDest = Var dest, iSide = PairSnd })
-  = emit [ "LDR r" ++ show dest ++ ", [r" ++ show pair ++ ", #4]" ]
-genARMInstruction (IPairWrite { iPair = Var pair, iValue = Var value, iSide = PairFst })
-  = emit [ "STR r" ++ show value ++ ", [r" ++ show pair ++ "]" ]
-genARMInstruction (IPairWrite { iPair = Var pair, iValue = Var value, iSide = PairSnd })
-  = emit [ "STR r" ++ show value ++ ", [r" ++ show pair ++ ", #4]" ]
-
 
 genARMInstruction (INullCheck { iValue = Var value })
   = do emit [ "MOV r0, r" ++ show value
@@ -216,7 +226,6 @@ genARMInstruction (IRead { iDest = Var dest, iType = t})
   = case t of
       TyInt -> emit ["BL p_read_int"]
       TyChar -> emit ["BL p_read_char"]
-
 -- Free
 genARMInstruction (IFree { iValue = Var value, iType = t})
   = emit [ "MOV r0, r" ++ show value
@@ -387,4 +396,14 @@ genFeature FreePair = (["p_free_pair:",
                         "POP {r0}",
                         "BL free",
                         "POP {pc}"])
+
+strInstr :: Type -> String
+strInstr TyBool = "STRB"
+strInstr TyChar = "STRB"
+strInstr _      = "STR"
+
+ldrInstr :: Type -> String
+ldrInstr TyBool = "LDRB"
+ldrInstr TyChar = "LDRSB"
+ldrInstr _      = "LDR"
 

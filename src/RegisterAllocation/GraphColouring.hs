@@ -98,43 +98,45 @@ colourIR ICondJump{..} colouring
 
 colourIR ICall{..} colouring
   = ICall { iLabel = iLabel
-          , iArgs  = iArgs
+          , iArgs  = map (\(ty, v) -> (ty, get v colouring)) iArgs
           , iDest  = get iDest colouring }
 
 colourIR IFrameRead{..} colouring
   = IFrameRead { iOffset = iOffset
-               , iDest  = get iDest colouring }
+               , iDest   = get iDest colouring
+               , iType   = iType }
 
 colourIR IFrameWrite{..} colouring
   = IFrameWrite { iOffset = iOffset
-                , iValue = get iValue colouring }
+                , iValue  = get iValue colouring
+                , iType   = iType }
 
 colourIR IArrayAllocate{..} colouring
   = IArrayAllocate { iDest = get iDest colouring
                    , iSize = iSize }
 
-colourIR IArrayRead{..} colouring
-  = IArrayRead { iArray = get iArray colouring
-               , iIndex = get iIndex colouring
-               , iDest  = get iDest colouring }
+colourIR IHeapRead{..} colouring
+  = IHeapRead { iHeapVar = get iHeapVar colouring 
+              , iDest    = get iDest colouring
+              , iOperand = operand
+              , iType    = iType }
+  where
+    operand = case iOperand of
+      OperandLit x -> OperandLit x
+      OperandVar v s -> OperandVar (get v colouring) s
 
-colourIR IArrayWrite{..} colouring
-  = IArrayWrite { iArray = get iArray colouring
-                , iIndex = get iIndex colouring
-                , iValue = get iValue colouring }
+colourIR IHeapWrite{..} colouring
+    = IHeapWrite { iHeapVar = get iHeapVar colouring 
+                 , iValue = get iValue colouring
+                 , iOperand = operand
+                 , iType = iType}
+    where
+      operand = case iOperand of
+        OperandLit x -> OperandLit x
+        OperandVar v s -> OperandVar (get v colouring) s
 
 colourIR IPairAllocate{..} colouring
   = IPairAllocate { iDest = get iDest colouring }
-
-colourIR IPairRead{..} colouring
-  = IPairRead { iPair = get iPair colouring
-              , iDest = get iDest colouring
-              , iSide = iSide }
-
-colourIR IPairWrite{..} colouring
-  = IPairWrite { iPair  = get iPair colouring
-               , iValue = get iValue colouring
-               , iSide  = iSide }
 
 colourIR INullCheck{..} colouring
   = INullCheck { iValue = get iValue colouring }

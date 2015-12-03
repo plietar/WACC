@@ -1,4 +1,5 @@
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TupleSections #-}
 
 module CodeGen where
 
@@ -57,98 +58,145 @@ genExpr (_ , ExprBinOp operator expr1 expr2) = do
   return binOpVar
 
 -- Variable
-genExpr (_, ExprVar ident) = genFrameRead ident
+genExpr (ty, ExprVar ident) = genFrameRead ty ident
 
 -- ArrayElem
-genExpr (_, ExprArrayElem (_, ArrayElem ident xs)) = do
-  frameVar <- genFrameRead ident
-  outVar <- foldM genArrayRead frameVar xs
+genExpr (elemTy, ExprArrayElem (_, ArrayElem ident exprs)) = do
+  let initIndexExprs = init exprs
+      lastIndexExpr  = last exprs
+
+  -- Here we don't care / know what's inside the arrays
+  -- The type is only used to determine the type of instruction (LDR vs LDRB)
+  arrayVar <- genFrameRead (TyArray TyAny) ident
+  subArrayVar <- foldM (genArrayRead (TyArray TyAny)) arrayVar initIndexExprs
+
+  outVar <- genArrayRead elemTy subArrayVar lastIndexExpr
+
   return outVar
 
 -- Read from Frame
-genFrameRead :: String -> CodeGen Var
-genFrameRead ident = do
+genFrameRead :: Type -> String -> CodeGen Var
+genFrameRead ty ident = do
   outVar <- allocateVar
   offset <- variableOffset ident
   tell [ IFrameRead { iOffset = offset
-                    , iDest = outVar } ]
+                    , iDest   = outVar
+                    , iType   = ty} ]
   return outVar
 
 -- Read from Array
-genArrayRead :: Var -> Annotated Expr TypeA -> CodeGen Var
-genArrayRead arrayVar indexExpr =do
+genArrayRead :: Type -> Var -> Annotated Expr TypeA -> CodeGen Var
+genArrayRead elemTy arrayVar indexExpr = do
   outVar <- allocateVar
+  arrayOffsetVar <- allocateVar 
+  offsetedArray <- allocateVar
   indexVar <- genExpr indexExpr
   tell [ IBoundsCheck { iArray = arrayVar
-                      , iIndex = indexVar },
-         IArrayRead { iArray = arrayVar
-                    , iIndex = indexVar
-                    , iDest = outVar } ]
+                      , iIndex = indexVar }
+        , ILiteral { iDest    = arrayOffsetVar
+                   , iLiteral = LitInt 4 }
+        , IBinOp { iBinOp = BinOpAdd
+                 , iDest  = offsetedArray
+                 , iLeft  = arrayOffsetVar
+                 , iRight = arrayVar }
+        , IHeapRead { iHeapVar = offsetedArray
+                    , iDest    = outVar
+                    , iOperand = OperandVar arrayOffsetVar (typeShift elemTy)
+                    , iType    = elemTy } ]
   return outVar
 
 -- LHS Assign
 genAssign :: Annotated AssignLHS TypeA -> Var -> CodeGen ()
-genAssign (_, LHSVar ident) valueVar = do
+genAssign (ty, LHSVar ident) valueVar = do
   offset <- variableOffset ident
-  tell [ IFrameWrite { iOffset = offset, iValue = valueVar } ]
+  tell [ IFrameWrite { iOffset = offset, iValue = valueVar, iType = ty } ]
 
--- LHS Pair
-genAssign (_, LHSPairElem (_, PairElem side pairExpr)) valueVar = do
+-- LHS Pair 
+-- TODO: fix type of a snd pair(change semcheck to pass the list of previous types in the tuple (extension)
+genAssign (elemTy, LHSPairElem (_, PairElem side pairExpr)) valueVar = do
   pairVar <- genExpr pairExpr
   tell [ INullCheck { iValue = pairVar }
-       , IPairWrite { iPair = pairVar, iSide = side, iValue = valueVar } ]
+       , IHeapWrite { iHeapVar = pairVar, iValue = valueVar, iOperand = OperandLit (pairOffset side TyInt), iType = elemTy } ]
 
--- LHS Array Indexing
-genAssign (_, LHSArrayElem (_, ArrayElem ident exprs)) valueVar = do
+-- LHS Array Indexing 
+genAssign (elemTy, LHSArrayElem (_, ArrayElem ident exprs)) valueVar = do
   let readIndexExprs  = init exprs
       writeIndexExpr  = last exprs
 
-  arrayVar <- genFrameRead ident
-  subArrayVar <- foldM genArrayRead arrayVar readIndexExprs
+  -- Here we don't care / know what's inside the arrays
+  -- The type is only used to determine the type of instruction (LDR vs LDRB)
+  arrayVar <- genFrameRead (TyArray TyAny) ident
+  subArrayVar <- foldM (genArrayRead (TyArray TyAny)) arrayVar readIndexExprs
+  offsetedBase <- allocateVar
 
   writeIndexVar <- genExpr writeIndexExpr
+  arrayOffsetVar <- allocateVar
   tell [ IBoundsCheck { iArray = subArrayVar
                       , iIndex = writeIndexVar }
-       , IArrayWrite { iArray = subArrayVar
-                     , iIndex = writeIndexVar
-                     , iValue = valueVar } ]
+       , ILiteral { iDest = arrayOffsetVar, iLiteral = LitInt 4 }
+       , IBinOp { iBinOp = BinOpAdd, iDest = offsetedBase
+                , iLeft = arrayOffsetVar, iRight = subArrayVar } 
+       , IHeapWrite { iHeapVar = offsetedBase 
+                    , iValue  = valueVar
+                    , iOperand = OperandVar writeIndexVar (typeShift elemTy)
+                    , iType = elemTy } ]
+
+-- Shift depending on size of type
+typeShift :: Type -> Int
+typeShift TyChar = 0
+typeShift TyBool = 0
+typeShift _      = 2
+
+-- Offset for a pair 
+pairOffset :: PairSide -> Type -> Int
+pairOffset PairFst (TyPair _ _)= 0
+pairOffset PairSnd (TyPair t _)  = typeSize t
+
 
 -- RHS Expression Assignment
 genRHS :: Annotated AssignRHS TypeA -> CodeGen Var
 genRHS (_, RHSExpr expr) = genExpr expr
-genRHS (TyArray t, RHSArrayLit exprs) = do
+genRHS (TyArray elemTy, RHSArrayLit exprs) = do
   arrayVar <- allocateVar
-  tell [ IArrayAllocate { iDest = arrayVar, iSize = size }]
+  arrayLen <- allocateVar
+  tell [ IArrayAllocate { iDest = arrayVar, iSize = size }
+       , ILiteral { iDest = arrayLen, iLiteral = LitInt (length exprs) }
+       , IHeapWrite { iHeapVar = arrayVar
+                    , iValue = arrayLen
+                    , iOperand = OperandLit 0
+                    , iType = TyInt }]
   forM (zip exprs [0..]) $ \(expr, index) -> do
-    indexVar <- allocateVar
     elemVar <- genExpr expr
-    tell [ ILiteral { iDest = indexVar, iLiteral = LitInt (4 + index * tSize) }
-         , IArrayWrite { iArray = arrayVar, iIndex = indexVar, iValue = elemVar } ]
+    tell [ IHeapWrite  { iHeapVar = arrayVar
+                       , iValue = elemVar
+                       , iOperand = OperandLit (4 + index * tSize)
+                       , iType = elemTy } ]
   return arrayVar
     where
       size = 4 + tSize * (length exprs)
-      tSize = typeSize t
+      tSize = typeSize elemTy
 
-genRHS (_, RHSNewPair fstExpr sndExpr) = do
+genRHS (t@(TyPair t1 t2), RHSNewPair fstExpr sndExpr) = do
   pairVar <- allocateVar
   fstVar <- genExpr fstExpr
   sndVar <- genExpr sndExpr
   tell [ IPairAllocate { iDest = pairVar }
-       , IPairWrite { iPair = pairVar, iSide = PairFst, iValue = fstVar }
-       , IPairWrite { iPair = pairVar, iSide = PairSnd, iValue = sndVar } ]
+       , IHeapWrite { iHeapVar = pairVar, iValue = fstVar, iOperand = OperandLit (pairOffset PairFst t), iType = t1 }
+       , IHeapWrite { iHeapVar = pairVar, iValue = sndVar, iOperand = OperandLit (pairOffset PairSnd t), iType = t2 } ]
   return pairVar
-
-genRHS (_, RHSPairElem (_, PairElem side pairExpr)) = do
+--
+-- TODO: fix type of a snd pair(change semcheck to pass the list of previous types in the tuple (extension)
+genRHS (elemTy, RHSPairElem (_, PairElem side pairExpr)) = do
   outVar <- allocateVar
   pairVar <- genExpr pairExpr
   tell [ INullCheck { iValue = pairVar }
-       , IPairRead { iPair = pairVar, iSide = side, iDest = outVar } ]
+       , IHeapRead { iHeapVar = pairVar, iDest = outVar, iOperand = OperandLit (pairOffset side TyInt), iType = elemTy } ]
   return outVar
 
 genRHS (_, RHSCall name exprs) = do
   outVar <- allocateVar
-  argVars <- forM exprs genExpr
-  tell [ ICall { iLabel = NamedLabel name
+  argVars <- forM exprs (\e@(ty,_) -> (ty,) <$> genExpr e)
+  tell [ ICall { iLabel = NamedLabel ("f_" ++ name)
                , iArgs = argVars
                , iDest = outVar } ]
   return outVar
