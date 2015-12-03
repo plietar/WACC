@@ -106,7 +106,7 @@ checkLiteral (LitInt _)    = TyInt
 checkLiteral (LitBool _)   = TyBool
 checkLiteral (LitChar _)   = TyChar
 checkLiteral (LitString _) = TyArray TyChar
-checkLiteral  LitNull      = TyAny
+checkLiteral  LitNull      = TyPair TyAny TyAny
 
 
 checkExpr :: Annotated Expr SpanA -> Context -> WACCResult (Annotated Expr TypeA)
