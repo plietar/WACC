@@ -53,7 +53,7 @@ genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitBool True } )
   = emit ["MOV r" ++ (show dest) ++ ", #1"]
 genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitBool False } )
   = emit ["MOV r" ++ (show dest) ++ ", #0"]
-genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitChar chr } )
+genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitChar chr } ) 
   = emit ["MOV r" ++ (show dest) ++ ", #" ++ (show chr)]
 genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitString str  } ) = do
   message <- emitLiteral str
@@ -148,25 +148,26 @@ genARMInstruction (IArrayAllocate { iDest = Var dest, iSize = size })
   = emit [ "LDR r0, =" ++ show size
          , "BL malloc"
          , "MOV r" ++ show dest ++ ", r0"]
-genARMInstruction (IArrayRead { iArray = Var array, iIndex = Var index, iDest = Var dest })
-  = emit ["LDR r" ++ show dest ++ ", [r" ++ show array ++ ", r" ++ show index ++ "]"]
-genARMInstruction (IArrayWrite { iArray = Var array, iIndex = Var index, iValue = Var value })
-  = emit ["STR r" ++ show value ++ ", [r" ++ show array ++ ", r" ++ show index ++ "]"]
+
+-- Heap Read (i.e Pairs and Arrays)
+genARMInstruction (IHeapRead { iHeapVar = Var heapVar, iDest = Var dest, iOperand = OperandVar (Var offset) shift })
+  = emit ["LDR r" ++ show dest ++ ", [r" ++ show heapVar ++ ", r" ++ show offset ++ ", lsl #" ++ show shift ++ "]"]
+genARMInstruction (IHeapRead { iHeapVar = Var heapVar, iDest = Var dest, iOperand = OperandLit offset })
+  = emit ["LDR r" ++ show dest ++ ", [r" ++ show heapVar ++ ", #" ++ show offset ++ "]"]
+
+
+-- Heap Write (i.e Pairs and Arrays)
+genARMInstruction (IHeapWrite { iHeapVar = Var heapVar, iValue = Var value, iOperand = OperandVar (Var offset) shift })
+  = emit ["STR r" ++ show value ++ ", [r" ++ show heapVar ++ ", r" ++ show offset ++ ", lsl #" ++ show shift ++ "]"] 
+genARMInstruction (IHeapWrite { iHeapVar = Var heapVar, iValue = Var value, iOperand = OperandLit offset })
+  = emit ["STR r" ++ show value ++ ", [r" ++ show heapVar ++ ", #" ++ show offset ++ "]"] 
+ 
 
 --Pair
 genARMInstruction (IPairAllocate { iDest = Var dest })
   = emit [ "LDR r0, =8"
          , "BL malloc"
          , "MOV r" ++ show dest ++ ", r0"]
-genARMInstruction (IPairRead { iPair = Var pair, iDest = Var dest, iSide = PairFst })
-  = emit [ "LDR r" ++ show dest ++ ", [r" ++ show pair ++ "]" ]
-genARMInstruction (IPairRead { iPair = Var pair, iDest = Var dest, iSide = PairSnd })
-  = emit [ "LDR r" ++ show dest ++ ", [r" ++ show pair ++ ", #4]" ]
-genARMInstruction (IPairWrite { iPair = Var pair, iValue = Var value, iSide = PairFst })
-  = emit [ "STR r" ++ show value ++ ", [r" ++ show pair ++ "]" ]
-genARMInstruction (IPairWrite { iPair = Var pair, iValue = Var value, iSide = PairSnd })
-  = emit [ "STR r" ++ show value ++ ", [r" ++ show pair ++ ", #4]" ]
-
 
 genARMInstruction (INullCheck { iValue = Var value })
   = emit [ "MOV r0, r" ++ show value

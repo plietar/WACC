@@ -113,28 +113,26 @@ colourIR IArrayAllocate{..} colouring
   = IArrayAllocate { iDest = get iDest colouring
                    , iSize = iSize }
 
-colourIR IArrayRead{..} colouring
-  = IArrayRead { iArray = get iArray colouring
-               , iIndex = get iIndex colouring
-               , iDest  = get iDest colouring }
+colourIR IHeapRead{..} colouring
+  = IHeapRead { iHeapVar = get iHeapVar colouring 
+              , iDest    = get iDest colouring
+              , iOperand = operand }
+  where
+    operand = case iOperand of
+      OperandLit x -> OperandLit x
+      OperandVar v s -> OperandVar (get v colouring) s
 
-colourIR IArrayWrite{..} colouring
-  = IArrayWrite { iArray = get iArray colouring
-                , iIndex = get iIndex colouring
-                , iValue = get iValue colouring }
+colourIR IHeapWrite{..} colouring
+    = IHeapWrite { iHeapVar = get iHeapVar colouring 
+                 , iValue = get iValue colouring
+                 , iOperand = operand }
+    where
+      operand = case iOperand of
+        OperandLit x -> OperandLit x
+        OperandVar v s -> OperandVar (get v colouring) s
 
 colourIR IPairAllocate{..} colouring
   = IPairAllocate { iDest = get iDest colouring }
-
-colourIR IPairRead{..} colouring
-  = IPairRead { iPair = get iPair colouring
-              , iDest = get iDest colouring
-              , iSide = iSide }
-
-colourIR IPairWrite{..} colouring
-  = IPairWrite { iPair  = get iPair colouring
-               , iValue = get iValue colouring
-               , iSide  = iSide }
 
 colourIR INullCheck{..} colouring
   = INullCheck { iValue = get iValue colouring }
