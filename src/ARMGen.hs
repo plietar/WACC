@@ -262,7 +262,7 @@ genFeature CheckDivideByZero = (["msg_p_check_divide_by_zero:",
                                ,["p_check_divide_by_zero:",
                                  "PUSH {lr}",
                                  "CMP r1, #0",
-                                 "LDREQ r0, =msg_check_p_divide_by_zero",
+                                 "LDREQ r0, =msg_p_check_divide_by_zero",
                                  "BLEQ p_throw_runtime_error",
                                  "POP {pc}"])
 
@@ -326,7 +326,7 @@ genFeature PrintBool = (["msg_p_print_bool_1:",
 
 genFeature PrintString = (["msg_p_print_string:", 
                            ".word 5",
-                           ".ascii \"%.*s\0"] 
+                           ".ascii \"%.*s\\0\""] 
                          ,["p_print_string:",
                            "PUSH {lr}",
                            "LDR r1, [r0]",
@@ -340,7 +340,7 @@ genFeature PrintString = (["msg_p_print_string:",
 
 genFeature PrintReference = (["msg_p_print_reference:", 
                               ".word 3",
-                              ".ascii \"%p\0\""] 
+                              ".ascii \"%p\\0\""] 
                             ,["p_print_reference:",
                               "PUSH {lr}",
                               "MOV r1, r0",
@@ -354,7 +354,7 @@ genFeature PrintReference = (["msg_p_print_reference:",
 genFeature PrintLine = (["msg_p_print_ln:", 
                          ".word 1",
                          ".ascii \"\\0\""] 
-                       ,["p_print_ln",
+                       ,["p_print_ln:",
                          "PUSH {lr}",
                          "LDR r0, =msg_p_print_ln",
                          "ADD r0, r0, #4",
@@ -382,9 +382,8 @@ genFeature ReadChar = (["msg_p_read_char:",
                          "PUSH {lr}",
                          "MOV r1, r0",
                          "LDR r0, =msg_p_read_char",
-                         "BL puts",
-                         "MOV r0, #0",
-                         "BL fflush",
+                         "ADD r0, r0, #4",
+                         "BL scanf",
                          "POP {pc}"])
 
 --Calls another feature: p_print_string.
@@ -397,7 +396,7 @@ genFeature ThrowRuntimeError = ([""]
 genFeature ThrowOverflowError =  (["msg_p_throw_overflow_error:",
                                    ".word 82",
                                    ".ascii \"OverflowError: the result is too small/large to store \
-                                    \in a 4-byte signed-integer. \\n\""] 
+                                     \in a 4-byte signed-integer. \\n\""] 
                                  ,["p_throw_overflow_error:",
                                    "LDR r0, =msg_p_throw_overflow_error",
                                    "BL p_throw_runtime_error"])
