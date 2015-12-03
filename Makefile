@@ -1,7 +1,7 @@
 CABAL=cabal
 all:
 	$(CABAL) update
-	$(CABAL) install -f -graphviz --only-dependencies
+	$(CABAL) install fgl optparse-applicative
 	$(CABAL) configure -f -graphviz
 	$(CABAL) build
 
