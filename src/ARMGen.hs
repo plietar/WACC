@@ -8,7 +8,7 @@ import Control.Monad.State
 import Data.Set (Set)
 import qualified Data.Set as Set
 
-data Features = CheckDivideByZero
+data Feature = CheckDivideByZero
               | CheckNullPointer
               | CheckArrayBounds
               | PrintInt
@@ -20,6 +20,7 @@ data Features = CheckDivideByZero
               | ReadInt
               | ReadBool
               | ReadChar
+              deriving (Show, Eq, Ord)
 
 data ARMState = ARMState
   {
@@ -29,7 +30,7 @@ data ARMState = ARMState
 data ARMWriter = ARMWriter
   { assembly :: [String] 
   , allocated :: [(String, String)]
-  , features :: Set Features
+  , features :: Set Feature
   }
 
 instance Monoid ARMWriter where
@@ -45,8 +46,8 @@ emitLiteral s = do
   modify (\s -> s { literals = ls })
   return ("msg_" ++ show l)
 
-emitFeature :: Feature -> WriterT ARMWriter (State ARMState) Feature
-emitFeature ft = tell (ARMWriter [] [] Set.fromList ft)  
+emitFeature :: Feature -> WriterT ARMWriter (State ARMState) ()
+emitFeature ft = tell (ARMWriter [] [] (Set.fromList [ft]))
 
 genARM :: [IR] -> ARMWriter
 genARM irs = evalState (execWriterT (mapM genARMInstruction irs)) (ARMState [0..])
@@ -76,14 +77,16 @@ genARMInstruction (IBinOp { iBinOp = op, iDest = Var dest,
                         (show left) ++ ", r" ++ (show right) ]
       BinOpMul -> emit ["MUL r" ++ (show dest) ++ ", r" ++ 
                         (show left) ++ ", r" ++ (show right) ]
-      BinOpDiv -> emit ["MOV r0, r" ++ (show left),
+      BinOpDiv -> do emit ["MOV r0, r" ++ (show left),
                         "MOV r1, r" ++ (show right),
                         "BL p_check_divide_by_zero",
                         "BL __aeabi_idiv"]
-      BinOpRem -> emit ["MOV r0, r" ++ (show left),
+                     emitFeature CheckDivideByZero
+      BinOpRem -> do emit ["MOV r0, r" ++ (show left),
                         "MOV r1, r" ++ (show right),
                         "BL p_check_divide_by_zero",
                         "BL __aeabi_idivmod"]
+                     emitFeature CheckDivideByZero
       BinOpGT  -> emit ["CMP r" ++ (show left) ++ ", r" ++ (show right),
                         "MOVGT r" ++ (show dest) ++ ", #1",
                         "MOVLE r" ++ (show dest) ++ ", #0"]
@@ -169,23 +172,31 @@ genARMInstruction (IPairWrite { iPair = Var pair, iValue = Var value, iSide = Pa
 
 
 genARMInstruction (INullCheck { iValue = Var value })
-  = emit [ "MOV r0, r" ++ show value
+  = do emit [ "MOV r0, r" ++ show value
          , "BL p_check_null_pointer" ]
+       emitFeature CheckNullPointer
 genARMInstruction (IBoundsCheck { iArray = Var array, iIndex = Var index })
-  = emit [ "MOV r0, r" ++ show array
+  = do emit [ "MOV r0, r" ++ show array
          , "MOV r1, r" ++ show index
          , "BL p_check_array_bounds" ]
+       emitFeature CheckArrayBounds
 
 -- Print
 genARMInstruction (IPrint { iValue = Var value, iType = t, iNewline = newline }) = do
   emit [ "MOV r0, r" ++ show value]
   case t of
-    TyInt -> emit ["BL p_print_int"]
-    TyBool -> emit ["BL p_print_bool"]
-    TyChar -> emit ["BL p_print_char"]
-    TyArray TyChar -> emit ["BL p_print_string"]
-    _ -> emit ["BL p_print_reference"]
-  when newline (emit ["BL p_print_ln"])
+    TyInt -> do emit ["BL p_print_int"]
+                emitFeature PrintInt
+    TyBool -> do emit ["BL p_print_bool"]
+                 emitFeature PrintBool
+    TyChar -> do emit ["BL p_print_char"]
+                 emitFeature PrintChar
+    TyArray TyChar -> do emit ["BL p_print_string"]
+                         emitFeature PrintString
+    _ -> do emit ["BL p_print_reference"]
+            emitFeature PrintReference
+  when newline (do emit ["BL p_print_ln"]
+                   emitFeature PrintLine)
  
 -- Read
 genARMInstruction (IRead { iDest = Var dest, iType = t})
