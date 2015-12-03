@@ -45,7 +45,7 @@ emitLiteral :: String -> ARMGen String
 emitLiteral s = do
   (l:ls) <- gets stringLiteralLabels
   modify (\s -> s { stringLiteralLabels = ls })
-  tell (ARMWriter [] [(l, s)])
+  tell (ARMWriter [] [(l, s)] Set.empty)
   return l
 
 textSegment :: ARMWriter -> [String]
@@ -58,7 +58,7 @@ dataSegment w = ".data" : concatMap genLit (stringLiterals w)
                                 , ".ascii " ++ show value ]
 
 
-emitFeature :: Feature -> WriterT ARMWriter (State ARMState) ()
+emitFeature :: Feature -> ARMGen ()
 emitFeature ft = tell (ARMWriter [] [] (Set.singleton ft))
 
 genARM :: [IR] -> ARMWriter
@@ -93,7 +93,8 @@ genARMInstruction (IBinOp { iBinOp = op, iDest = Var dest,
                         "MOV r1, r" ++ (show right),
                         "BL p_check_divide_by_zero",
                         "BL __aeabi_idiv"]
-      BinOpRem -> emit ["MOV r0, r" ++ (show left),
+                     emitFeature CheckDivideByZero
+      BinOpRem -> do emit ["MOV r0, r" ++ (show left),
                         "MOV r1, r" ++ (show right),
                         "BL p_check_divide_by_zero",
                         "BL __aeabi_idivmod"]
@@ -232,4 +233,25 @@ genARMInstruction (IFunctionBegin { })
 genARMInstruction (IReturn { iValue = Var value })
   = emit [ "MOV r0, r" ++ show value
          , "POP {pc}" ]
+
+genFeature :: Feature -> ([String], [String])
+
+genFeature CheckDivideByZero = (["CheckDivideByZero: \n \
+                                 \.word 45 \n \
+                                 \.ascii \"DivideByZeroError: divide or modulo by zero\n\0\""] 
+                                , ["PUSH {lr} \n \
+                                    \CMP r1, #0 \n\
+                                    \LDREQ r0, =msg_CheckDivideByZero \n\
+                                    \BLEQ p_throw_runtime_error \n\
+                                    \POP {pc}"])
+
+
+
+
+
+
+
+
+
+
 
