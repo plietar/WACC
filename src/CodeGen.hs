@@ -142,7 +142,7 @@ typeShift _      = 2
 
 -- Offset for a pair 
 pairOffset :: PairSide -> Type -> Int
-pairOffset PairFst _ = 0
+pairOffset PairFst (TyPair _ _)= 0
 pairOffset PairSnd (TyPair t _)  = typeSize t
 
 
@@ -175,7 +175,7 @@ genRHS (t, RHSNewPair fstExpr sndExpr) = do
        , IHeapWrite { iHeapVar = pairVar, iValue = fstVar, iOperand = OperandLit 0 }
        , IHeapWrite { iHeapVar = pairVar, iValue = sndVar, iOperand = OperandLit (pairOffset PairFst t) } ]
   return pairVar
-   -- TODO: fix type of a snd pair(change semcheck to pass the list of previous types in the tuple (extension)
+-- TODO: fix type of a snd pair(change semcheck to pass the list of previous types in the tuple (extension)
 genRHS (_, RHSPairElem (_, PairElem side pairExpr)) = do
   outVar <- allocateVar
   pairVar <- genExpr pairExpr
