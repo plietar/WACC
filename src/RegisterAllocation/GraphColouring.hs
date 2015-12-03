@@ -8,7 +8,7 @@ import qualified Data.Map as Map
 import CodeGenTypes
 import Data.Map (Map,(!))
 import Data.Maybe
-import Data.Functor 
+import Control.Applicative
 
 -- Colour a graph such that no to vertices in the same edge share
 -- the same colour
@@ -64,10 +64,9 @@ getNewColour [] cols _
   = Just (head cols)
 
 -- Apply Graph Colouring to the Intermediate Representation
-applyColouring :: [IR] -> Map Var Var -> [IR]
-applyColouring irs colouring
-  = map (\ir -> colourIR ir colouring) irs
-
+applyColouring :: Map Var Var -> [IR] -> [IR]
+applyColouring colouring
+  = map (\ir -> colourIR ir colouring)
 
 -- Helper method
 get :: Var -> Map Var Var -> Var
@@ -143,6 +142,11 @@ colourIR INullCheck{..} colouring
 colourIR IBoundsCheck{..} colouring
   = IBoundsCheck { iArray = get iArray colouring
                  , iIndex = get iIndex colouring }
+
+colourIR IPrint{..} colouring
+  = IPrint { iValue = get iValue colouring
+          , iType = iType
+          , iNewline = iNewline }
 
 colourIR IRead{..} colouring
   = IRead { iDest = get iDest colouring

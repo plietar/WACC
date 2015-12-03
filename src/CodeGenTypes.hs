@@ -5,9 +5,7 @@ module CodeGenTypes where
 import Common.AST
 
 import Control.Applicative
-import Control.Monad.Writer
-import Control.Monad.State
-import Control.Monad.Reader
+import Control.Monad.RWS
 import Data.Map as Map
 import Data.Maybe
 
@@ -62,7 +60,8 @@ data CodeGenState = CodeGenState {
   labels :: [Label]
 }
 
-type CodeGen a = StateT CodeGenState (ReaderT Frame (Writer [IR])) a
+type CodeGen = RWS Frame [IR] CodeGenState
+
 allocateVar :: CodeGen Var
 allocateVar = do
   (v:vs) <- gets variables
