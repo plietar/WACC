@@ -146,7 +146,7 @@ genARMInstruction (IJump {iLabel = label} )
   = emit ["B " ++ (show label)]
 
 --Call
-genARMInstruction (ICall { iLabel = label, iArgs = args, iDest = dest }) = do
+genARMInstruction (ICall { iLabel = label, iArgs = args, iDest = Var dest }) = do
   forM args $ \(ty, Var arg) -> do
     emit [strInstr ty ++ " r" ++ show arg ++ ", [sp, #" ++ show (typeSize ty) ++ "]!"]
   emit ["BL " ++ show label ]
