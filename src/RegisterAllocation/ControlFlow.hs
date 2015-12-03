@@ -3,7 +3,7 @@
 
 module RegisterAllocation.ControlFlow where
 
-import CodeGen
+import CodeGenTypes
 
 import Data.Map (Map,(!))
 import qualified Data.Map as Map
