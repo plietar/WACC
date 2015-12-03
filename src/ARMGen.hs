@@ -54,7 +54,7 @@ genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitBool True } )
 genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitBool False } )
   = emit ["MOV r" ++ (show dest) ++ ", #0"]
 genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitChar chr } ) 
-  = emit ["MOV r" ++ (show dest) ++ ", #" ++ (show (ord chr))]
+  = emit ["MOV r" ++ (show dest) ++ ", #" ++ (show chr)]
 genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitString str  } ) = do
   message <- emitLiteral str
   emit ["LDR r" ++ (show dest) ++ ", =" ++ message]
