@@ -89,6 +89,7 @@ data Frame = Frame
 
 
 typeSize :: Type -> Int
+typeSize TyInt = 4
 typeSize TyBool = 1
 typeSize TyChar = 1
 -- Size of a reference to a pair (e.g. in an array)
