@@ -47,7 +47,7 @@ emitLiteral s = do
   return ("msg_" ++ show l)
 
 emitFeature :: Feature -> WriterT ARMWriter (State ARMState) ()
-emitFeature ft = tell (ARMWriter [] [] (Set.fromList [ft]))
+emitFeature ft = tell (ARMWriter [] [] (Set.singleton ft))
 
 genARM :: [IR] -> ARMWriter
 genARM irs = evalState (execWriterT (mapM genARMInstruction irs)) (ARMState [0..])
@@ -221,4 +221,6 @@ genARMInstruction (IFunctionBegin { })
 genARMInstruction (IReturn { iValue = Var value })
   = emit [ "MOV r0, r" ++ show value
          , "POP {pc}" ]
+
+
 
