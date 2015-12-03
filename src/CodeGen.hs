@@ -1,4 +1,5 @@
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TupleSections #-}
 
 module CodeGen where
 
@@ -147,8 +148,8 @@ genRHS (_, RHSPairElem (_, PairElem side pairExpr)) = do
 
 genRHS (_, RHSCall name exprs) = do
   outVar <- allocateVar
-  argVars <- forM exprs genExpr
-  tell [ ICall { iLabel = NamedLabel name
+  argVars <- forM exprs (\e@(ty,_) -> (ty,) <$> genExpr e)
+  tell [ ICall { iLabel = NamedLabel ("f_" ++ name)
                , iArgs = argVars
                , iDest = outVar } ]
   return outVar

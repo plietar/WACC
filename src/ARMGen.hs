@@ -119,8 +119,12 @@ genARMInstruction (IJump {iLabel = label} )
   = emit ["B " ++ (show label)]
 
 --Call
-genARMInstruction (ICall { iLabel = label, iArgs = vars, iDest = dest })
-  = undefined
+genARMInstruction (ICall { iLabel = label, iArgs = args, iDest = dest }) = do
+  forM args $ \(ty, Var arg) -> do
+    emit [strInstr ty ++ " r" ++ show arg ++ ", [sp, #" ++ show (typeSize ty) ++ "]!"]
+  emit ["BL " ++ show label ]
+  unless (null args) (emit ["ADD sp, sp, #" ++ show (sum (map (typeSize . fst) args))])
+  emit [ "MOV r" ++ show dest ++ ", r0" ]
 
 --Labels
 genARMInstruction (ILabel { iLabel = label} )
@@ -206,4 +210,14 @@ genARMInstruction (IFunctionBegin { })
 genARMInstruction (IReturn { iValue = Var value })
   = emit [ "MOV r0, r" ++ show value
          , "POP {pc}" ]
+
+strInstr :: Type -> String
+strInstr TyBool = "STRB"
+strInstr TyChar = "STRB"
+strInstr _      = "STR"
+
+ldrInstr :: Type -> String
+ldrInstr TyBool = "LDRB"
+ldrInstr TyChar = "LDRB"
+ldrInstr _      = "LDR"
 
