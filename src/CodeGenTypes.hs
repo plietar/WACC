@@ -41,12 +41,7 @@ data IR
   | IHeapWrite { iHeapVar :: Var, iValue :: Var, iOperand :: Operand, iType :: Type }
 
   | IArrayAllocate { iDest :: Var, iSize :: Int }
- -- | IArrayRead { iArray :: Var, iIndex :: Var, iDest :: Var }
- -- | IArrayWrite { iArray :: Var, iIndex :: Var, iValue :: Var }
-
   | IPairAllocate { iDest :: Var }
- -- | IPairRead { iPair :: Var, iDest :: Var, iSide :: PairSide }
- -- | IPairWrite { iPair :: Var, iValue :: Var, iSide :: PairSide }
 
   | INullCheck { iValue :: Var }
   | IBoundsCheck { iArray :: Var, iIndex :: Var }

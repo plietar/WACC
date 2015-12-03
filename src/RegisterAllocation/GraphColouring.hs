@@ -34,8 +34,8 @@ buildStack rig stack maxR
 -- where maxR is the number of available colours to colour the graph
 findValidNode :: Graph gr => gr a () -> [Node] -> Int -> Maybe Node
 findValidNode rig (x:xs) maxR
-  | length (neighbors rig x) < maxR = Just x
-  | otherwise                       = findValidNode rig xs maxR
+  | length (suc rig x) < maxR = Just x
+  | otherwise                 = findValidNode rig xs maxR
 findValidNode _ [] _ = Nothing
 
 -- Find a valid colouring for a graph and (Maybe) return
@@ -46,7 +46,7 @@ findColouring nodes rig allCol
   where
     maybeColour Nothing _ = Nothing
     maybeColour (Just colouring) node = 
-      case getNewColour (neighbors rig node) allCol colouring of
+      case getNewColour (suc rig node) allCol colouring of
         Just col -> Just $ Map.insert node col colouring
         Nothing  -> Nothing
 
