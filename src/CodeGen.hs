@@ -7,22 +7,30 @@ import Common.AST
 import CodeGenTypes
 
 import Control.Monad.RWS
+import Control.Monad.State
 import Control.Applicative
 
 import qualified Data.Map as Map
 import Data.Tuple(swap)
 
--- Functions
-genFunction :: Annotated FuncDef TypeA -> [IR]
-genFunction (_, FuncDef _ fname params body)
-  = snd (execRWS generation topFrame initialState)
-    where
-      topFrame = setVariables (map swap params) 4 rootFrame
-      initialState = CodeGenState {
-        variables = Prelude.map Var [0..],
-        labels = Prelude.map UnnamedLabel [0..]
-      }
+genProgram :: Annotated Program TypeA -> [[IR]]
+genProgram (_, Program fs)
+  = let generate = sequence (map genFunction fs)
+    in evalState generate (map UnnamedLabel [0..])
 
+-- Functions
+genFunction :: Annotated FuncDef TypeA -> State [Label] [IR]
+genFunction (_, FuncDef _ fname params body) = do
+    labs <- get
+    let topFrame = setVariables (map swap params) 4 rootFrame
+        initialState = CodeGenState {
+          variables = Prelude.map Var [0..],
+          labels = labs
+        }
+        (endState, irs) = (execRWS generation topFrame initialState)
+    put (labels endState)
+    return irs
+    where
       generation = do
         tell [ ILabel { iLabel = NamedLabel (show fname) }
              , IFunctionBegin ]
