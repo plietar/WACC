@@ -8,6 +8,7 @@ import qualified Data.Map as Map
 import CodeGenTypes
 import Data.Map (Map,(!))
 import Data.Maybe
+import Data.Functor 
 
 -- Colour a graph such that no to vertices in the same edge share
 -- the same colour
