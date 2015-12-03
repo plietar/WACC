@@ -299,9 +299,30 @@ genFeature PrintString = (["p_print_string:",
                            "BL fflush",
                            "POP {pc}"])
 
-genFeature PrintReference = undefined
+genFeature PrintReference = (["p_print_reference:", 
+                              ".word 3",
+                              ".ascii \"%p\0\""] 
+                            ,["PUSH {lr}",
+                              "MOV r1, r0",
+                              "LDR r0, =p_print_reference:",
+                              "ADD r0, r0, #4",
+                              "BL printf",
+                              "MOV r0, #0"
+                              "BL fflush",
+                              "POP {pc}"])
 
-genFeature PrintLine = undefined
+
+genFeature PrintLine = (["p_print_ln:", 
+                         ".word 1",
+                         ".ascii \"\\0\""] 
+                       ,["PUSH {lr}",
+                         "LDR r0, =msg_p_print_ln",
+                         "ADD r0, r0, #4",
+                         "BL puts",
+                         "MOV r0, #0",
+                         "BL fflush",
+                         "POP {pc}"])
+
 
 genFeature ReadInt = undefined
 
@@ -309,7 +330,11 @@ genFeature ReadBool = undefined
 
 genFeature ReadChar = undefined 
 
-genFeature ThrowRuntimeError = undefined 
+genFeature ThrowRuntimeError = ([""] 
+                               ,["BL p_print_string",
+                                 "MOV r0, #-1",
+                                 "BL exit"])
+
 
 
 
