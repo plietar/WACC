@@ -20,6 +20,8 @@ data Feature = CheckDivideByZero
               | ReadBool
               | ReadChar
               | ThrowRuntimeError
+              | ThrowOverflowError
+              | FreePair
               deriving (Show, Eq, Ord)
 
 data ARMState = ARMState
@@ -307,10 +309,9 @@ genFeature PrintReference = (["p_print_reference:",
                               "LDR r0, =p_print_reference:",
                               "ADD r0, r0, #4",
                               "BL printf",
-                              "MOV r0, #0"
+                              "MOV r0, #0",
                               "BL fflush",
                               "POP {pc}"])
-
 
 genFeature PrintLine = (["p_print_ln:", 
                          ".word 1",
@@ -330,16 +331,35 @@ genFeature ReadBool = undefined
 
 genFeature ReadChar = undefined 
 
+--Calls another feature: p_print_string.
 genFeature ThrowRuntimeError = ([""] 
                                ,["BL p_print_string",
                                  "MOV r0, #-1",
                                  "BL exit"])
 
+--Calls another feature: p_throw_overflow_error.
+genFeature ThrowOverflowError =  (["p_throw_overflow_error:",
+                                   ".word 82",
+                                   ".ascii \"OverflowError: the result is too small/large to store \
+                                    \in a 4-byte signed-integer. \\n\""] 
+                                 ,["LDR r0, =msg_p_throw_overflow_error",
+                                   "POP {pc}"])
 
-
-
-
-
-
-
+--Calls another feature: p_throw_runtime_error.
+genFeature FreePair = (["p_free_pair:",
+                        ".word 50",
+                        ".ascii \"NullReferenceError: derefence a null reference\\n\\0\""]
+                      ,["PUSH {lr}",
+                        "CMP r0, #0",
+                        "LDREQ r0, =msg_p_free_pair",
+                        "BEQ p_throw_runtime_error",
+                        "PUSH {r0}",
+                        "LDR r0, [r0]",
+                        "BL free",
+                        "LDR r0, [sp]",
+                        "LDR r0, [r0, #4]",
+                        "BL free",
+                        "POP {r0}",
+                        "BL free",
+                        "POP {pc}"])
 
