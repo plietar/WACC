@@ -209,7 +209,7 @@ checkPairElem (_, PairElem side expr) context = do
     (PairSnd, TyPair _ s) -> return s
     (_, TyAny           ) -> return TyAny
     (_, _               ) -> semanticError ("Type " ++ show outerType ++ " is not pair")
-  return (innerType, PairElem side expr')
+  return ((innerType, outerType), PairElem side expr')
 
 
 checkAssignLHS :: Annotated AssignLHS SpanA -> Context -> WACCResult (Annotated AssignLHS TypeA)
@@ -218,7 +218,7 @@ checkAssignLHS (_, LHSVar varname) context = do
   return (ty, LHSVar varname)
 
 checkAssignLHS (_, LHSPairElem pairElem) context = do
-  pairElem'@(ty, _) <- checkPairElem pairElem context
+  pairElem'@((ty, _), _) <- checkPairElem pairElem context
   return (ty, LHSPairElem pairElem')
 
 checkAssignLHS (_, LHSArrayElem arrayElem) context = do
@@ -242,7 +242,7 @@ checkAssignRHS (_, RHSNewPair e1 e2) context = do
   return (TyPair t1 t2, RHSNewPair e1' e2')
 
 checkAssignRHS (_, RHSPairElem pairElem) context = do
-  pairElem'@(ty, _) <- checkPairElem pairElem context
+  pairElem'@((ty, _), _) <- checkPairElem pairElem context
   return (ty, RHSPairElem pairElem')
 
 checkAssignRHS (_, RHSCall fname args) context = do

@@ -112,11 +112,10 @@ genAssign (ty, LHSVar ident) valueVar = do
   tell [ IFrameWrite { iOffset = offset, iValue = valueVar, iType = ty } ]
 
 -- LHS Pair 
--- TODO: fix type of a snd pair(change semcheck to pass the list of previous types in the tuple (extension)
-genAssign (elemTy, LHSPairElem (_, PairElem side pairExpr)) valueVar = do
+genAssign (_, LHSPairElem ((elemTy, pairTy), PairElem side pairExpr)) valueVar = do
   pairVar <- genExpr pairExpr
   tell [ INullCheck { iValue = pairVar }
-       , IHeapWrite { iHeapVar = pairVar, iValue = valueVar, iOperand = OperandLit (pairOffset side TyInt), iType = elemTy } ]
+       , IHeapWrite { iHeapVar = pairVar, iValue = valueVar, iOperand = OperandLit (pairOffset side pairTy), iType = elemTy } ]
 
 -- LHS Array Indexing 
 genAssign (elemTy, LHSArrayElem (_, ArrayElem ident exprs)) valueVar = do
@@ -184,13 +183,12 @@ genRHS (t@(TyPair t1 t2), RHSNewPair fstExpr sndExpr) = do
        , IHeapWrite { iHeapVar = pairVar, iValue = fstVar, iOperand = OperandLit (pairOffset PairFst t), iType = t1 }
        , IHeapWrite { iHeapVar = pairVar, iValue = sndVar, iOperand = OperandLit (pairOffset PairSnd t), iType = t2 } ]
   return pairVar
---
--- TODO: fix type of a snd pair(change semcheck to pass the list of previous types in the tuple (extension)
-genRHS (elemTy, RHSPairElem (_, PairElem side pairExpr)) = do
+
+genRHS (_, RHSPairElem ((elemTy, pairTy), PairElem side pairExpr)) = do
   outVar <- allocateVar
   pairVar <- genExpr pairExpr
   tell [ INullCheck { iValue = pairVar }
-       , IHeapRead { iHeapVar = pairVar, iDest = outVar, iOperand = OperandLit (pairOffset side TyInt), iType = elemTy } ]
+       , IHeapRead { iHeapVar = pairVar, iDest = outVar, iOperand = OperandLit (pairOffset side pairTy), iType = elemTy } ]
   return outVar
 
 genRHS (_, RHSCall name exprs) = do

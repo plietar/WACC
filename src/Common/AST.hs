@@ -170,4 +170,4 @@ instance Annotation TypeA where
   type Ann TypeA AssignLHS = Type
   type Ann TypeA AssignRHS = Type
   type Ann TypeA ArrayElem = Type
-  type Ann TypeA PairElem = Type
+  type Ann TypeA PairElem = (Type, Type) -- type of the element, type of the entire tuple
