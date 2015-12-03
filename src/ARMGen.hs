@@ -5,7 +5,21 @@ import CodeGenTypes
 import Data.Monoid
 import Control.Monad.Writer
 import Control.Monad.State
+import Data.Set (Set)
+import qualified Data.Set as Set
 
+data Features = CheckDivideByZero
+              | CheckNullPointer
+              | CheckArrayBounds
+              | PrintInt
+              | PrintBool
+              | PrintChar
+              | PrintString
+              | PrintReference
+              | PrintLine
+              | ReadInt
+              | ReadBool
+              | ReadChar
 
 data ARMState = ARMState
   {
@@ -15,20 +29,24 @@ data ARMState = ARMState
 data ARMWriter = ARMWriter
   { assembly :: [String] 
   , allocated :: [(String, String)]
+  , features :: Set Features
   }
 
 instance Monoid ARMWriter where
-  mempty = ARMWriter [] []
-  mappend (ARMWriter a b) (ARMWriter a' b') = ARMWriter (a ++ a') (b ++ b')
+  mempty = ARMWriter [] [] Set.empty
+  mappend (ARMWriter a b c) (ARMWriter a' b' c') = ARMWriter (a ++ a') (b ++ b') (Set.union c c')
 
-emit :: [String] -> WriterT ARMWriter (State ARMState) ()
-emit xs = tell (ARMWriter xs [])
+emit :: [String] -> WriterT ARMWriter (State ARMState) () 
+emit xs = tell (ARMWriter xs [] Set.empty)
 
 emitLiteral :: String -> WriterT ARMWriter (State ARMState) String 
 emitLiteral s = do
   (l:ls) <- gets literals
   modify (\s -> s { literals = ls })
   return ("msg_" ++ show l)
+
+emitFeature :: Feature -> WriterT ARMWriter (State ARMState) Feature
+emitFeature ft = tell (ARMWriter [] [] Set.fromList ft)  
 
 genARM :: [IR] -> ARMWriter
 genARM irs = evalState (execWriterT (mapM genARMInstruction irs)) (ARMState [0..])
