@@ -236,14 +236,14 @@ genARMInstruction (IReturn { iValue = Var value })
 
 genFeature :: Feature -> ([String], [String])
 
-genFeature CheckDivideByZero = (["CheckDivideByZero: \n \
-                                 \.word 45 \n \
-                                 \.ascii \"DivideByZeroError: divide or modulo by zero\n\0\""] 
-                                , ["PUSH {lr} \n \
-                                    \CMP r1, #0 \n\
-                                    \LDREQ r0, =msg_CheckDivideByZero \n\
-                                    \BLEQ p_throw_runtime_error \n\
-                                    \POP {pc}"])
+genFeature CheckDivideByZero = (["CheckDivideByZero:", 
+                                 ".word 45",
+                                 ".ascii \"DivideByZeroError: divide or modulo by zero\n\0\""] 
+                               ,["PUSH {lr}",
+                                 "CMP r1, #0",
+                                 "LDREQ r0, =msg_CheckDivideByZero",
+                                 "BLEQ p_throw_runtime_error",
+                                 "POP {pc}"])
 
 
 
