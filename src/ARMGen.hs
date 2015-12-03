@@ -5,6 +5,7 @@ import CodeGenTypes
 import Data.Monoid
 import Control.Monad.RWS
 import Data.Set (Set)
+import Data.Char
 import qualified Data.Set as Set
 
 data Feature = CheckDivideByZero
@@ -78,7 +79,7 @@ genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitBool True } )
 genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitBool False } )
   = emit ["MOV r" ++ (show dest) ++ ", #0"]
 genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitChar chr } ) 
-  = emit ["MOV r" ++ (show dest) ++ ", #" ++ (show chr)]
+  = emit ["MOV r" ++ (show dest) ++ ", #" ++ (show (ord chr))]
 genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitString str  } ) = do
   message <- emitLiteral str
   emit ["LDR r" ++ (show dest) ++ ", =" ++ message]
