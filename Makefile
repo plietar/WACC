@@ -1,8 +1,8 @@
 CABAL=cabal
 all:
 	$(CABAL) update
-	$(CABAL) install --only-dependencies
-	$(CABAL) configure
+	$(CABAL) install -f -graphviz --only-dependencies
+	$(CABAL) configure -f -graphviz
 	$(CABAL) build
 
 .PHONY: all

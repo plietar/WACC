@@ -22,7 +22,7 @@ executable wacc
   other-modules:       Frontend.Lexer
   default-language:    Haskell2010
 
-  build-depends:       base >=4.6 && <4.9, array, containers, mtl, parsec, fgl, optparse-applicative
+  build-depends:       base >=4.6 && <4.9, array, containers, mtl, parsec, fgl, optparse-applicative, filepath
   build-tools:         alex
 
   -- Code is quite ready for this
