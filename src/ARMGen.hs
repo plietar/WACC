@@ -244,7 +244,8 @@ genARMInstruction (IFunctionBegin { })
   = emit [ "PUSH {lr}" ]
 genARMInstruction (IReturn { iValue = Var value })
   = emit [ "MOV r0, r" ++ show value
-         , "POP {pc}" ]
+         , "POP {pc}"
+         , ".ltorg"]
 
 mergeFeatures :: Set Feature -> ([String], [String])
 mergeFeatures features
