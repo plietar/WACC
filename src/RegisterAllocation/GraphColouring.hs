@@ -98,7 +98,7 @@ colourIR ICondJump{..} colouring
 
 colourIR ICall{..} colouring
   = ICall { iLabel = iLabel
-          , iArgs  = iArgs
+          , iArgs  = map (\(ty, v) -> (ty, get v colouring)) iArgs
           , iDest  = get iDest colouring }
 
 colourIR IFrameRead{..} colouring

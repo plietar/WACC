@@ -108,6 +108,9 @@ genARMInstruction IUnOp { iUnOp = op, iDest = Var dest,
       UnOpNeg -> emit ["RSBS r" ++ (show dest) ++ ", r" ++ (show value) ++ ", #0"]
       UnOpLen -> emit ["LDR r" ++ (show dest) ++ ", [r" ++ show value]
 
+genARMInstruction IMove { iDest = Var dest, iValue = Var value }
+  = emit ["MOV r" ++ show dest ++ ", r" ++ show value]
+
 --Jumps
 genARMInstruction (ICondJump { iLabel = label, iValue = Var value})
   = emit ["CMP r" ++ (show value) ++ ", #0",
@@ -116,8 +119,12 @@ genARMInstruction (IJump {iLabel = label} )
   = emit ["B " ++ (show label)]
 
 --Call
-genARMInstruction (ICall { iLabel = label, iArgs = vars, iDest = dest })
-  = undefined
+genARMInstruction (ICall { iLabel = label, iArgs = args, iDest = dest }) = do
+  forM args $ \(ty, Var arg) -> do
+    emit [strInstr ty ++ " r" ++ show arg ++ ", [sp, #" ++ show (typeSize ty) ++ "]!"]
+  emit ["BL " ++ show label ]
+  unless (null args) (emit ["ADD sp, sp, #" ++ show (sum (map (typeSize . fst) args))])
+  emit [ "MOV r" ++ show dest ++ ", r0" ]
 
 --Labels
 genARMInstruction (ILabel { iLabel = label} )
@@ -182,11 +189,12 @@ genARMInstruction (IPrint { iValue = Var value, iType = t, iNewline = newline })
   when newline (emit ["BL p_print_ln"])
 
 -- Read
-genARMInstruction (IRead { iDest = Var dest, iType = t})
-  = case t of
-      TyInt -> emit ["BL p_read_int"]
-      TyBool -> emit ["BL p_read_bool"]
-      TyChar -> emit ["BL p_read_char"]
+genARMInstruction (IRead { iDest = Var dest, iType = t}) = do
+  case t of
+    TyInt -> emit ["BL p_read_int"]
+    TyBool -> emit ["BL p_read_bool"]
+    TyChar -> emit ["BL p_read_char"]
+  emit [ "MOV r" ++ show dest ++ ", r0" ]
 
 -- Free
 genARMInstruction (IFree { iValue = Var value, iType = t})
@@ -204,4 +212,14 @@ genARMInstruction (IFunctionBegin { })
 genARMInstruction (IReturn { iValue = Var value })
   = emit [ "MOV r0, r" ++ show value
          , "POP {pc}" ]
+
+strInstr :: Type -> String
+strInstr TyBool = "STRB"
+strInstr TyChar = "STRB"
+strInstr _      = "STR"
+
+ldrInstr :: Type -> String
+ldrInstr TyBool = "LDRB"
+ldrInstr TyChar = "LDRB"
+ldrInstr _      = "LDR"
 

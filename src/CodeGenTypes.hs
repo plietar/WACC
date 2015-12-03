@@ -29,7 +29,7 @@ data IR
 
   | ICondJump { iLabel :: Label, iValue :: Var }
   | IJump { iLabel :: Label }
-  | ICall { iLabel :: Label, iArgs :: [Var], iDest :: Var }
+  | ICall { iLabel :: Label, iArgs :: [(Type, Var)], iDest :: Var }
   | ILabel { iLabel :: Label }
 
   | IFrameAllocate { iSize :: Int }
