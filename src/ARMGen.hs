@@ -124,7 +124,7 @@ genARMInstruction (IBinOp { iBinOp = op, iDest = Var dest,
                         "MOVEQ r" ++ (show dest) ++ ", #0"]
       BinOpAnd -> emit ["AND r" ++ (show dest) ++ ", r" ++
                         (show left) ++ ", r" ++ (show right) ]
-      BinOpOr  -> emit ["OR r" ++ (show dest) ++ ", r" ++
+      BinOpOr  -> emit ["ORR r" ++ (show dest) ++ ", r" ++
                         (show left) ++ ", r" ++ (show right) ]
 
 --UnOp
