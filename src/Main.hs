@@ -23,6 +23,7 @@ import System.Exit
 import Data.List
 import Data.Maybe
 import Control.Applicative
+import System.FilePath.Posix
 
 import Data.Map (Map,(!))
 import qualified Data.Map as Map
@@ -187,11 +188,13 @@ main = do
   args <- waccArguments
 
   let filename = sourceFile args
+  let outputFile = dropExtension (takeFileName filename) <.> "s"
+
   contents <- readFile filename
   
   let result = compile filename contents (outputType args)
   case result of
-    OK output -> putStr (unlines output)
+    OK output -> writeFile outputFile (unlines output)
     Error kind msg -> do
       putStrLn ("Error " ++ show kind)
       putStr (unlines (reverse msg))
