@@ -5,9 +5,7 @@ module CodeGen where
 import Common.AST
 import CodeGenTypes
 
-import Control.Monad.Writer
-import Control.Monad.Reader
-import Control.Monad.State
+import Control.Monad.RWS
 
 import qualified Data.Map as Map
 import Data.Tuple(swap)
@@ -15,7 +13,7 @@ import Data.Tuple(swap)
 -- Functions
 genFunction :: Annotated FuncDef TypeA -> [IR]
 genFunction (_, FuncDef _ fname params body)
-  = execWriter (runReaderT (evalStateT generation initialState) topFrame)
+  = snd (execRWS generation topFrame initialState)
     where
       topFrame = setVariables (map swap params) 4 rootFrame
       initialState = CodeGenState {
@@ -34,7 +32,7 @@ genFunction (_, FuncDef _ fname params body)
 
 -- Literals
 genExpr :: Annotated Expr TypeA -> CodeGen Var
-genExpr (_ , ExprLit literal) = do 
+genExpr (_ , ExprLit literal) = do
   litVar <- allocateVar
   tell [ ILiteral { iDest = litVar, iLiteral = literal} ]
   return litVar
@@ -42,16 +40,16 @@ genExpr (_ , ExprLit literal) = do
 -- UnOp
 genExpr (_, ExprUnOp UnOpChr expr) =
   genExpr expr
-genExpr (_, ExprUnOp UnOpOrd expr) = 
+genExpr (_, ExprUnOp UnOpOrd expr) =
   genExpr expr
-genExpr (_ , ExprUnOp operator expr) = do 
+genExpr (_ , ExprUnOp operator expr) = do
   unOpVar <- allocateVar
   valueVar <- genExpr expr
   tell [ IUnOp { iUnOp = operator, iDest = unOpVar, iValue = valueVar} ]
   return valueVar
 
 -- BinOp
-genExpr (_ , ExprBinOp operator expr1 expr2) = do 
+genExpr (_ , ExprBinOp operator expr1 expr2) = do
   binOpVar <- allocateVar
   value1Var <- genExpr expr1
   value2Var <- genExpr expr2
@@ -94,13 +92,13 @@ genAssign (_, LHSVar ident) valueVar = do
   offset <- variableOffset ident
   tell [ IFrameWrite { iOffset = offset, iValue = valueVar } ]
 
--- LHS Pair 
+-- LHS Pair
 genAssign (_, LHSPairElem (_, PairElem side pairExpr)) valueVar = do
   pairVar <- genExpr pairExpr
   tell [ INullCheck { iValue = pairVar }
        , IPairWrite { iPair = pairVar, iSide = side, iValue = valueVar } ]
 
--- LHS Array Indexing 
+-- LHS Array Indexing
 genAssign (_, LHSArrayElem (_, ArrayElem ident exprs)) valueVar = do
   let readIndexExprs  = init exprs
       writeIndexExpr  = last exprs
@@ -219,10 +217,10 @@ genStmt (_, StmtScope block) = genBlock block
 -- Block code generation
 genBlock :: Annotated Block TypeA -> CodeGen ()
 genBlock ((_, locals), Block stmts) = do
-  local createFrame generation 
+  local createFrame generation
   where
       createFrame = setVariables locals 0 . childFrame
-      generation = do 
+      generation = do
         s <- asks frameSize
         tell [ IFrameAllocate { iSize = s } ]
         forM_ stmts genStmt
