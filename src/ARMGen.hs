@@ -236,16 +236,53 @@ genARMInstruction (IReturn { iValue = Var value })
 
 genFeature :: Feature -> ([String], [String])
 
-genFeature CheckDivideByZero = (["CheckDivideByZero:", 
+genFeature CheckDivideByZero = (["p_check_divide_by_zero:", 
                                  ".word 45",
-                                 ".ascii \"DivideByZeroError: divide or modulo by zero\n\0\""] 
+                                 ".ascii \"DivideByZeroError: divide or modulo by zero\\n\\0\""] 
                                ,["PUSH {lr}",
                                  "CMP r1, #0",
-                                 "LDREQ r0, =msg_CheckDivideByZero",
+                                 "LDREQ r0, =msg_check_p_divide_by_zero",
+                                 "BLEQ p_throw_runtime_error",
+                                 "POP {pc}"])
+genFeature CheckNullPointer = (["p_check_null_pointer", 
+                                 ".word 50",
+                                 ".ascii \"NullReferenceError: derefence a null reference \\n\\0\""] 
+                               ,["PUSH {lr}",
+                                 "CMP r0, #0",
+                                 "LDREQ r0, =msg_p_check_null_pointer",
                                  "BLEQ p_throw_runtime_error",
                                  "POP {pc}"])
 
+genFeature CheckArrayBounds = undefined
 
+genFeature PrintInt = undefined
+
+genFeature PrintBool = undefined
+
+genFeature PrintChar = undefined
+
+genFeature PrintString = (["p_print_string:", 
+                           ".word 5",
+                           ".ascii \"%.*s\0"] 
+                         ,["PUSH {lr}",
+                           "LDR r1, [r0]",
+                           "ADD r2, r0, #4",
+                           "LDR r0, =msg_p_print_string",
+                           "ADD r0, r0, #4",
+                           "BL printf",
+                           "MOV r0, #0",
+                           "BL fflush",
+                           "POP {pc}"])
+
+genFeature PrintReference = undefined
+
+genFeature PrintLine = undefined
+
+genFeature ReadInt = undefined
+
+genFeature ReadBool = undefined
+
+genFeature ReadChar = undefined 
 
 
 
