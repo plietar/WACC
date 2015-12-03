@@ -17,8 +17,6 @@ data Feature = CheckDivideByZero
               | PrintReference
               | PrintLine
               | ReadInt
-              | ReadBool
-              | ReadChar
               | ThrowRuntimeError
               | ThrowOverflowError
               | FreePair
@@ -204,7 +202,7 @@ genARMInstruction (IPrint { iValue = Var value, iType = t, iNewline = newline })
                 emitFeature PrintInt
     TyBool -> do emit ["BL p_print_bool"]
                  emitFeature PrintBool
-    TyChar -> do emit ["BL p_print_char"]
+    TyChar -> do emit ["BL putchar"]
                  emitFeature PrintChar
     TyArray TyChar -> do emit ["BL p_print_string"]
                          emitFeature PrintString
@@ -217,7 +215,6 @@ genARMInstruction (IPrint { iValue = Var value, iType = t, iNewline = newline })
 genARMInstruction (IRead { iDest = Var dest, iType = t})
   = case t of
       TyInt -> emit ["BL p_read_int"]
-      TyBool -> emit ["BL p_read_bool"]
       TyChar -> emit ["BL p_read_char"]
 
 -- Free
@@ -301,8 +298,6 @@ genFeature PrintBool = (["p_print_bool_1:",
                          "BL fflush",
                          "POP {pc}"])
 
-genFeature PrintChar = undefined
-
 genFeature PrintString = (["p_print_string:", 
                            ".word 5",
                            ".ascii \"%.*s\0"] 
@@ -339,12 +334,27 @@ genFeature PrintLine = (["p_print_ln:",
                          "BL fflush",
                          "POP {pc}"])
 
+genFeature ReadInt = (["p_read_int:", 
+                         ".word 3",
+                         ".ascii \"%d\\0\""] 
+                       ,["PUSH {lr}",
+                         "MOV r1, r0",
+                         "LDR r0, =msg_p_read_int",
+                         "ADD r0, r0, #4",
+                         "BL scanf",
+                         "POP {pc}"])
 
-genFeature ReadInt = undefined
 
-genFeature ReadBool = undefined
-
-genFeature ReadChar = undefined 
+genFeature ReadChar = (["p_read_char:", 
+                         ".word 4",
+                         ".ascii \" %c\\0\""] 
+                       ,["PUSH {lr}",
+                         "MOV r1, r0",
+                         "LDR r0, =msg_p_read_char",
+                         "BL puts",
+                         "MOV r0, #0",
+                         "BL fflush",
+                         "POP {pc}"])
 
 --Calls another feature: p_print_string.
 genFeature ThrowRuntimeError = ([""] 
