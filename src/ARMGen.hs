@@ -108,6 +108,9 @@ genARMInstruction IUnOp { iUnOp = op, iDest = Var dest,
       UnOpNeg -> emit ["RSBS r" ++ (show dest) ++ ", r" ++ (show value) ++ ", #0"]
       UnOpLen -> emit ["LDR r" ++ (show dest) ++ ", [r" ++ show value]
 
+genARMInstruction IMove { iDest = Var dest, iValue = Var value }
+  = emit ["MOV r" ++ show dest ++ ", r" ++ show value]
+
 --Jumps
 genARMInstruction (ICondJump { iLabel = label, iValue = Var value})
   = emit ["CMP r" ++ (show value) ++ ", #0",
