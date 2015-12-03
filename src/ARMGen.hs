@@ -105,8 +105,8 @@ genARMInstruction IUnOp { iUnOp = op, iDest = Var dest,
         iValue = Var value }
   = case op of
       UnOpNot -> emit ["EOR r" ++ (show dest) ++ ", r" ++ (show value) ++ ", #1"]
-      UnOpNeg -> emit ["RSBS r" ++ (show dest) ++ ", r" ++ (show value) ++ ", #0"]
-      UnOpLen -> emit ["LDR r" ++ (show dest) ++ ", [r" ++ show value]
+      UnOpNeg -> emit ["RSB r" ++ (show dest) ++ ", r" ++ (show value) ++ ", #0"]
+      UnOpLen -> emit ["LDR r" ++ (show dest) ++ ", [r" ++ show value ++ "]"]
 
 genARMInstruction IMove { iDest = Var dest, iValue = Var value }
   = emit ["MOV r" ++ show dest ++ ", r" ++ show value]
@@ -138,10 +138,10 @@ genARMInstruction (IFrameAllocate { iSize = size })
 genARMInstruction (IFrameFree { iSize = 0 }) = return ()
 genARMInstruction (IFrameFree { iSize = size } )
   = emit ["ADD sp, sp, #" ++ show size]
-genARMInstruction (IFrameRead {iOffset = offset, iDest = Var dest} )
-  = emit ["LDR r" ++ (show dest) ++ ", [sp, #" ++ (show offset) ++ "]"]
-genARMInstruction (IFrameWrite {iOffset = offset, iValue = Var value} )
-  = emit ["STR r" ++ (show value) ++ ", [sp, #" ++ (show offset) ++ "]"]
+genARMInstruction (IFrameRead {iOffset = offset, iDest = Var dest, iType = ty} )
+  = emit [ldrInstr ty ++ " r" ++ (show dest) ++ ", [sp, #" ++ (show offset) ++ "]"]
+genARMInstruction (IFrameWrite {iOffset = offset, iValue = Var value, iType = ty} )
+  = emit [strInstr ty ++ " r" ++ (show value) ++ ", [sp, #" ++ (show offset) ++ "]"]
 
 -- Array
 genARMInstruction (IArrayAllocate { iDest = Var dest, iSize = size })
@@ -150,22 +150,22 @@ genARMInstruction (IArrayAllocate { iDest = Var dest, iSize = size })
          , "MOV r" ++ show dest ++ ", r0"]
 
 -- Heap Read (i.e Pairs and Arrays)
-genARMInstruction (IHeapRead { iHeapVar = Var heapVar, iDest = Var dest, iOperand = OperandVar (Var offset) shift })
-  = emit ["LDR r" ++ show dest ++ ", [r" ++ show heapVar ++ ", r" ++ show offset ++ ", lsl #" ++ show shift ++ "]"]
-genARMInstruction (IHeapRead { iHeapVar = Var heapVar, iDest = Var dest, iOperand = OperandLit offset })
-  = emit ["LDR r" ++ show dest ++ ", [r" ++ show heapVar ++ ", #" ++ show offset ++ "]"]
+genARMInstruction (IHeapRead { iHeapVar = Var heapVar, iDest = Var dest, iOperand = OperandVar (Var offset) shift, iType = ty })
+  = emit [ldrInstr ty ++ " r" ++ show dest ++ ", [r" ++ show heapVar ++ ", r" ++ show offset ++ ", lsl #" ++ show shift ++ "]"]
+genARMInstruction (IHeapRead { iHeapVar = Var heapVar, iDest = Var dest, iOperand = OperandLit offset, iType = ty })
+  = emit [ldrInstr ty ++ " r" ++ show dest ++ ", [r" ++ show heapVar ++ ", #" ++ show offset ++ "]"]
 
 
 -- Heap Write (i.e Pairs and Arrays)
-genARMInstruction (IHeapWrite { iHeapVar = Var heapVar, iValue = Var value, iOperand = OperandVar (Var offset) shift })
-  = emit ["STR r" ++ show value ++ ", [r" ++ show heapVar ++ ", r" ++ show offset ++ ", lsl #" ++ show shift ++ "]"] 
-genARMInstruction (IHeapWrite { iHeapVar = Var heapVar, iValue = Var value, iOperand = OperandLit offset })
-  = emit ["STR r" ++ show value ++ ", [r" ++ show heapVar ++ ", #" ++ show offset ++ "]"] 
+genARMInstruction (IHeapWrite { iHeapVar = Var heapVar, iValue = Var value, iOperand = OperandVar (Var offset) shift, iType = ty })
+  = emit [strInstr ty ++ " r" ++ show value ++ ", [r" ++ show heapVar ++ ", r" ++ show offset ++ ", lsl #" ++ show shift ++ "]"] 
+genARMInstruction (IHeapWrite { iHeapVar = Var heapVar, iValue = Var value, iOperand = OperandLit offset, iType = ty })
+  = emit [strInstr ty ++ " r" ++ show value ++ ", [r" ++ show heapVar ++ ", #" ++ show offset ++ "]"] 
  
 
 --Pair
 genARMInstruction (IPairAllocate { iDest = Var dest })
-  = emit [ "LDR r0, =8"
+  = emit [ "MOV r0, #8"
          , "BL malloc"
          , "MOV r" ++ show dest ++ ", r0"]
 
@@ -181,17 +181,17 @@ genARMInstruction (IBoundsCheck { iArray = Var array, iIndex = Var index })
 genARMInstruction (IPrint { iValue = Var value, iType = t, iNewline = newline }) = do
   emit [ "MOV r0, r" ++ show value]
   case t of
-    TyInt -> emit ["BL p_print_int"]
-    TyBool -> emit ["BL p_print_bool"]
-    TyChar -> emit ["BL p_print_char"]
+    TyInt          -> emit ["BL p_print_int"]
+    TyBool         -> emit ["BL p_print_bool"]
+    TyChar         -> emit ["BL p_print_char"]
     TyArray TyChar -> emit ["BL p_print_string"]
-    _ -> emit ["BL p_print_reference"]
+    _              -> emit ["BL p_print_reference"]
   when newline (emit ["BL p_print_ln"])
 
 -- Read
 genARMInstruction (IRead { iDest = Var dest, iType = t}) = do
   case t of
-    TyInt -> emit ["BL p_read_int"]
+    TyInt  -> emit ["BL p_read_int"]
     TyBool -> emit ["BL p_read_bool"]
     TyChar -> emit ["BL p_read_char"]
   emit [ "MOV r" ++ show dest ++ ", r0" ]
@@ -220,6 +220,6 @@ strInstr _      = "STR"
 
 ldrInstr :: Type -> String
 ldrInstr TyBool = "LDRB"
-ldrInstr TyChar = "LDRB"
+ldrInstr TyChar = "LDRSB"
 ldrInstr _      = "LDR"
 

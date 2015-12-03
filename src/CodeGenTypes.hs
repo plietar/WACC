@@ -34,11 +34,11 @@ data IR
 
   | IFrameAllocate { iSize :: Int }
   | IFrameFree { iSize :: Int }
-  | IFrameRead { iOffset :: Int, iDest :: Var }
-  | IFrameWrite { iOffset :: Int, iValue :: Var }
+  | IFrameRead { iOffset :: Int, iDest :: Var, iType :: Type }
+  | IFrameWrite { iOffset :: Int, iValue :: Var, iType :: Type }
 
-  | IHeapRead { iHeapVar :: Var, iDest :: Var, iOperand :: Operand }
-  | IHeapWrite { iHeapVar :: Var, iValue :: Var, iOperand :: Operand }
+  | IHeapRead { iHeapVar :: Var, iDest :: Var, iOperand :: Operand, iType :: Type }
+  | IHeapWrite { iHeapVar :: Var, iValue :: Var, iOperand :: Operand, iType :: Type }
 
   | IArrayAllocate { iDest :: Var, iSize :: Int }
  -- | IArrayRead { iArray :: Var, iIndex :: Var, iDest :: Var }
