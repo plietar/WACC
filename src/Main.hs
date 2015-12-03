@@ -117,13 +117,13 @@ showDotColouring cfg colouring
 dotColouringParams :: (Eq a, Ord a) => Map Var a -> GraphViz.GraphvizParams Int Var () () Var
 dotColouringParams colouring = dotRIGParams { GraphViz.fmtNode = fn }
   where
-    fn (_, l) = [(GraphViz.toLabel . show) l
+    fn (_, l) = [(GraphViz.toLabel . show) (l, colourCount)
                 , GraphViz.FillColor (GraphViz.toColorList [colourMap ! l])]
 
-    colourSet = Set.fromList (Map.elems colouring)
-    colourMap = Map.map (\v -> colour (Set.findIndex v colourSet)) colouring
+    colours = Map.fromList (zip (nub (Map.elems colouring)) (map colour [0..]))
+    colourMap = Map.map (colours !) colouring
 
-    colourCount = Set.size colourSet
+    colourCount = Map.size colours
     colourStep = 1.0 / (fromIntegral (colourCount + 1))
 
     colour    i = GraphViz.HSV (colourHue i) (colourSat i) (colourVal i)
@@ -139,13 +139,12 @@ compile filename contents output
     OutputTokens       -> showTokens <$> tokens
     OutputAST          -> (:[]) . show <$> ast
     OutputTypedAST     -> (:[]) . show <$> typedAst
-    OutputIR           -> concatMap (map show) <$> live
+    OutputIR           -> concatMap showIR <$> ir
     OutputCFG          -> concatMap showCFG <$> cfg
     OutputRIG          -> concatMap showRIG <$> rig
     OutputColouring    -> concatMap showColouring <$> colouring
-    OutputIRAlloc      -> concatMap showIR <$> allocIR
-    OutputCFGColoured  -> concatMap showCFG <$> cfgColoured
-    OutputASM          -> concatMap (concatMap snd . Graph.labNodes) <$> asm
+    OutputIRFinal      -> showIR <$> irFinal
+    OutputASM          -> asm
 #if WITH_GRAPHVIZ
     OutputDotCFG       -> concatMap showDotCFG <$> cfg
     OutputDotRIG       -> concatMap showDotRIG <$> rig
@@ -165,11 +164,13 @@ compile filename contents output
     colouring = sequence <$> map (\g -> colourGraph g (fmap Var [4..12])) <$> rig >>= \case
                 Just c  -> OK c
                 Nothing -> codegenError "Graph Colouring failed"
-    allocIR   = zipWith applyColouring <$> ir <*> colouring
-    cfgColoured = zipWith (\g m -> Graph.nmap ((flip applyColouring) m) g)
-                    <$> cfg <*> colouring :: WACCResult [Gr [IR] ()]
+    cfgFinal  = zipWith (\c g -> Graph.nmap (applyColouring c) g)
+                    <$> colouring <*> cfg
 
-    asm       = map (Graph.nmap (assembly . genARM)) <$> cfgColoured
+    irFinal   = concatMap (concatMap snd . Graph.labNodes) <$> cfgFinal
+
+    armWriter = genARM <$> irFinal
+    asm       = (++) <$> (dataSegment <$> armWriter) <*> (textSegment <$> armWriter)
 
 main :: IO ()
 main = do

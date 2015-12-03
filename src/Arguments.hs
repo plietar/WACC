@@ -11,8 +11,7 @@ data OutputType = OutputTokens
                 | OutputCFG
                 | OutputRIG
                 | OutputColouring
-                | OutputIRAlloc
-                | OutputCFGColoured
+                | OutputIRFinal
                 | OutputASM
 #if WITH_GRAPHVIZ
                 | OutputDotColouring
@@ -35,8 +34,7 @@ argumentList = Arguments
                     <|> flag' OutputCFG (long "cfg") 
                     <|> flag' OutputRIG (long "rig") 
                     <|> flag' OutputColouring (long "colouring")
-                    <|> flag' OutputIRAlloc (long "allocir")
-                    <|> flag' OutputCFGColoured (long "cfgcoloured")
+                    <|> flag' OutputIRFinal (long "ir-final")
                     <|> flag' OutputASM (long "asm")
 #if WITH_GRAPHVIZ
                     <|> flag' OutputDotCFG (long "dot-cfg") 

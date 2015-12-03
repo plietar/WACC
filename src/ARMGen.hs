@@ -3,60 +3,71 @@ module ARMGen where
 import Common.AST
 import CodeGen
 import Data.Monoid
-import Control.Monad.Writer
-import Control.Monad.State
+import Control.Monad.RWS
 
 
 data ARMState = ARMState
   {
-    literals :: [Int]
+    stringLiteralLabels :: [String]
   }
 
 data ARMWriter = ARMWriter
-  { assembly :: [String] 
-  , allocated :: [(String, String)]
+  { assembly :: [String]
+  , stringLiterals :: [(String, String)]
   }
+
+type ARMGen = RWS () ARMWriter ARMState
 
 instance Monoid ARMWriter where
   mempty = ARMWriter [] []
   mappend (ARMWriter a b) (ARMWriter a' b') = ARMWriter (a ++ a') (b ++ b')
 
-emit :: [String] -> WriterT ARMWriter (State ARMState) ()
+emit :: [String] -> ARMGen ()
 emit xs = tell (ARMWriter xs [])
 
-emitLiteral :: String -> WriterT ARMWriter (State ARMState) String 
+emitLiteral :: String -> ARMGen String
 emitLiteral s = do
-  (l:ls) <- gets literals
-  modify (\s -> s { literals = ls })
-  return ("msg_" ++ show l)
+  (l:ls) <- gets stringLiteralLabels
+  modify (\s -> s { stringLiteralLabels = ls })
+  tell (ARMWriter [] [(l, s)])
+  return l
+
+textSegment :: ARMWriter -> [String]
+textSegment w = ".text" : ".global main" : (assembly w)
+
+dataSegment :: ARMWriter -> [String]
+dataSegment w = ".data" : concatMap genLit (stringLiterals w)
+  where genLit (label, value) = [ label ++ ":"
+                                , ".word " ++ show (length value)
+                                , ".ascii " ++ show value ]
 
 genARM :: [IR] -> ARMWriter
-genARM irs = evalState (execWriterT (mapM genARMInstruction irs)) (ARMState [0..])
+genARM irs = snd $ execRWS (mapM genARMInstruction irs) () (ARMState (map (("msg_" ++) . show) [0..]))
 
-genARMInstruction :: IR -> WriterT ARMWriter (State ARMState) ()
-genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitNull }) 
+genARMInstruction :: IR -> ARMGen ()
+genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitNull })
   = emit ["MOV r" ++ (show dest) ++ ", #0"]
-genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitInt n }) 
+genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitInt n })
   = emit ["LDR r" ++ (show dest) ++ ", =" ++ (show n)]
-genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitBool True } ) 
+genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitBool True } )
   = emit ["MOV r" ++ (show dest) ++ ", #1"]
-genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitBool False } ) 
+genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitBool False } )
   = emit ["MOV r" ++ (show dest) ++ ", #0"]
-genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitChar chr } ) 
+genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitChar chr } )
   = emit ["MOV r" ++ (show dest) ++ ", #" ++ (show chr)]
 genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitString str  } ) = do
-  message <- emitLiteral str 
+  message <- emitLiteral str
   emit ["LDR r" ++ (show dest) ++ ", =" ++ message]
 
 --BinOp
-genARMInstruction (IBinOp { iBinOp = op, iDest = Var dest, 
+genARMInstruction (IBinOp { iBinOp = op, iDest = Var dest,
         iLeft  = Var left, iRight = Var right } )
-  = case op of  
-      BinOpAdd -> emit ["ADD r" ++ (show dest) ++ ", r" ++ 
-                        (show left) ++ ", r" ++ (show right) ] 
-      BinOpSub -> emit ["SUB r" ++ (show dest) ++ ", r" ++ 
+  = case op of
+      BinOpAdd -> emit ["ADD r" ++ (show dest) ++ ", r" ++
                         (show left) ++ ", r" ++ (show right) ]
-      BinOpMul -> emit ["MUL r" ++ (show dest) ++ ", r" ++ 
+      BinOpSub -> emit ["SUB r" ++ (show dest) ++ ", r" ++
+                        (show left) ++ ", r" ++ (show right) ]
+      BinOpMul -> emit ["MUL r" ++ (show dest) ++ ", r" ++
                         (show left) ++ ", r" ++ (show right) ]
       BinOpDiv -> emit ["MOV r0, r" ++ (show left),
                         "MOV r1, r" ++ (show right),
@@ -84,24 +95,24 @@ genARMInstruction (IBinOp { iBinOp = op, iDest = Var dest,
       BinOpNE  -> emit ["CMP r" ++ (show left) ++ ", r" ++ (show right),
                         "MOVNE r" ++ (show dest) ++ ", #1",
                         "MOVEQ r" ++ (show dest) ++ ", #0"]
-      BinOpAnd -> emit ["AND r" ++ (show dest) ++ ", r" ++ 
+      BinOpAnd -> emit ["AND r" ++ (show dest) ++ ", r" ++
                         (show left) ++ ", r" ++ (show right) ]
-      BinOpOr  -> emit ["OR r" ++ (show dest) ++ ", r" ++ 
-                        (show left) ++ ", r" ++ (show right) ] 
+      BinOpOr  -> emit ["OR r" ++ (show dest) ++ ", r" ++
+                        (show left) ++ ", r" ++ (show right) ]
 
 --UnOp
-genARMInstruction IUnOp { iUnOp = op, iDest = Var dest, 
-        iValue = Var value } 
+genARMInstruction IUnOp { iUnOp = op, iDest = Var dest,
+        iValue = Var value }
   = case op of
       UnOpNot -> emit ["EOR r" ++ (show dest) ++ ", r" ++ (show value) ++ ", #1"]
       UnOpNeg -> emit ["RSBS r" ++ (show dest) ++ ", r" ++ (show value) ++ ", #0"]
       UnOpLen -> emit ["LDR r" ++ (show dest) ++ ", [r" ++ show value]
 
 --Jumps
-genARMInstruction (ICondJump { iLabel = label, iValue = value}) 
+genARMInstruction (ICondJump { iLabel = label, iValue = Var value})
   = emit ["CMP r" ++ (show value) ++ ", #0",
           "BNE " ++ (show label)]
-genARMInstruction (IJump {iLabel = label} ) 
+genARMInstruction (IJump {iLabel = label} )
   = emit ["B " ++ (show label)]
 
 --Call
@@ -110,7 +121,7 @@ genARMInstruction (ICall { iLabel = label, iArgs = vars, iDest = dest })
 
 --Labels
 genARMInstruction (ILabel { iLabel = label} )
-  = emit [show label ++ ":"] 
+  = emit [show label ++ ":"]
 
 --Frame
 genARMInstruction (IFrameAllocate { iSize = 0 }) = return ()
@@ -120,7 +131,7 @@ genARMInstruction (IFrameAllocate { iSize = size })
 genARMInstruction (IFrameFree { iSize = 0 }) = return ()
 genARMInstruction (IFrameFree { iSize = size } )
   = emit ["ADD sp, sp, #" ++ show size]
-genARMInstruction (IFrameRead {iOffset = offset, iDest = Var dest} ) 
+genARMInstruction (IFrameRead {iOffset = offset, iDest = Var dest} )
   = emit ["LDR r" ++ (show dest) ++ ", [sp, #" ++ (show offset) ++ "]"]
 genARMInstruction (IFrameWrite {iOffset = offset, iValue = Var value} )
   = emit ["STR r" ++ (show value) ++ ", [sp, #" ++ (show offset) ++ "]"]
@@ -168,7 +179,7 @@ genARMInstruction (IPrint { iValue = Var value, iType = t, iNewline = newline })
     TyArray TyChar -> emit ["BL p_print_string"]
     _ -> emit ["BL p_print_reference"]
   when newline (emit ["BL p_print_ln"])
- 
+
 -- Read
 genARMInstruction (IRead { iDest = Var dest, iType = t})
   = case t of
@@ -180,7 +191,7 @@ genARMInstruction (IRead { iDest = Var dest, iType = t})
 genARMInstruction (IFree { iValue = Var value, iType = t})
   = emit [ "MOV r0, r" ++ show value
          , "BL free" ]
-  
+
 -- Exit
 genARMInstruction (IExit { iValue = Var value })
   = emit [ "MOV r0, r" ++ show value
