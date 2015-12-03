@@ -103,11 +103,13 @@ colourIR ICall{..} colouring
 
 colourIR IFrameRead{..} colouring
   = IFrameRead { iOffset = iOffset
-               , iDest  = get iDest colouring }
+               , iDest   = get iDest colouring
+               , iType   = iType }
 
 colourIR IFrameWrite{..} colouring
   = IFrameWrite { iOffset = iOffset
-                , iValue = get iValue colouring }
+                , iValue  = get iValue colouring
+                , iType   = iType }
 
 colourIR IArrayAllocate{..} colouring
   = IArrayAllocate { iDest = get iDest colouring
@@ -116,7 +118,8 @@ colourIR IArrayAllocate{..} colouring
 colourIR IHeapRead{..} colouring
   = IHeapRead { iHeapVar = get iHeapVar colouring 
               , iDest    = get iDest colouring
-              , iOperand = operand }
+              , iOperand = operand
+              , iType    = iType }
   where
     operand = case iOperand of
       OperandLit x -> OperandLit x
@@ -125,7 +128,8 @@ colourIR IHeapRead{..} colouring
 colourIR IHeapWrite{..} colouring
     = IHeapWrite { iHeapVar = get iHeapVar colouring 
                  , iValue = get iValue colouring
-                 , iOperand = operand }
+                 , iOperand = operand
+                 , iType = iType}
     where
       operand = case iOperand of
         OperandLit x -> OperandLit x

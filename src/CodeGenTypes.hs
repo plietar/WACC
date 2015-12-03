@@ -34,11 +34,11 @@ data IR
 
   | IFrameAllocate { iSize :: Int }
   | IFrameFree { iSize :: Int }
-  | IFrameRead { iOffset :: Int, iDest :: Var }
-  | IFrameWrite { iOffset :: Int, iValue :: Var }
+  | IFrameRead { iOffset :: Int, iDest :: Var, iType :: Type }
+  | IFrameWrite { iOffset :: Int, iValue :: Var, iType :: Type }
 
-  | IHeapRead { iHeapVar :: Var, iDest :: Var, iOperand :: Operand }
-  | IHeapWrite { iHeapVar :: Var, iValue :: Var, iOperand :: Operand }
+  | IHeapRead { iHeapVar :: Var, iDest :: Var, iOperand :: Operand, iType :: Type }
+  | IHeapWrite { iHeapVar :: Var, iValue :: Var, iOperand :: Operand, iType :: Type }
 
   | IArrayAllocate { iDest :: Var, iSize :: Int }
   | IPairAllocate { iDest :: Var }
@@ -84,6 +84,7 @@ data Frame = Frame
 
 
 typeSize :: Type -> Int
+typeSize TyInt = 4
 typeSize TyBool = 1
 typeSize TyChar = 1
 -- Size of a reference to a pair (e.g. in an array)
