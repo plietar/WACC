@@ -16,6 +16,8 @@ data Var = Var Int
   deriving (Show, Ord, Eq)
 data Label = NamedLabel String | UnnamedLabel Int
   deriving (Ord, Eq)
+data Offset = OffsetVar Var | OffsetLit Int
+  deriving (Show)
 
 instance Show Label where
   show (UnnamedLabel i) = "L" ++ show i
@@ -36,6 +38,9 @@ data IR
   | IFrameFree { iSize :: Int }
   | IFrameRead { iOffset :: Int, iDest :: Var }
   | IFrameWrite { iOffset :: Int, iValue :: Var }
+
+  | IHeapRead { iHeapVar :: Var, iDest :: Var, iOffset = Offset }
+  | IHeapWrite { iHeapVar :: Var, iValue = Var, iOffset = Offset }
 
   | IArrayAllocate { iDest :: Var, iSize :: Int }
   | IArrayRead { iArray :: Var, iIndex :: Var, iDest :: Var }
@@ -83,10 +88,12 @@ data Frame = Frame
   , frameSize :: Int
   }
 
+
 typeSize :: Type -> Int
 typeSize TyBool = 1
 typeSize TyChar = 1
-typeSize (TyPair t t') = typeSize t + typeSize t'
+-- Size of a reference to a pair (e.g. in an array)
+typeSize (TyPair _ _) = 4 
 typeSize (TyArray t) = 4
 typeSize _ = 4
 

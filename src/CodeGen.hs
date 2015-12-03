@@ -62,9 +62,9 @@ genExpr (_ , ExprBinOp operator expr1 expr2) = do
 genExpr (_, ExprVar ident) = genFrameRead ident
 
 -- ArrayElem
-genExpr (_, ExprArrayElem (_, ArrayElem ident xs)) = do
+genExpr (TyArray t, ExprArrayElem (_, ArrayElem ident xs)) = do
   frameVar <- genFrameRead ident
-  outVar <- foldM genArrayRead frameVar xs
+  outVar <- foldM (genArrayRead t) frameVar xs
   return outVar
 
 -- Read from Frame
@@ -73,19 +73,38 @@ genFrameRead ident = do
   outVar <- allocateVar
   offset <- variableOffset ident
   tell [ IFrameRead { iOffset = offset
-                    , iDest = outVar } ]
+                    , iDest   = outVar } ]
   return outVar
 
 -- Read from Array
-genArrayRead :: Var -> Annotated Expr TypeA -> CodeGen Var
-genArrayRead arrayVar indexExpr =do
+genArrayRead :: Type -> Var -> Annotated Expr TypeA -> CodeGen Var
+genArrayRead arrayType arrayVar indexExpr = do
   outVar <- allocateVar
   indexVar <- genExpr indexExpr
+  elemSizeVar <- allocateVar
+  arrayOffsetVar <- allocateVar
+  
   tell [ IBoundsCheck { iArray = arrayVar
-                      , iIndex = indexVar },
-         IArrayRead { iArray = arrayVar
-                    , iIndex = indexVar
-                    , iDest = outVar } ]
+                      , iIndex = indexVar }
+        -- IArrayRead { iArray = arrayVar
+        --            , iIndex = indexVar
+        --            , iDest = outVar } ]
+        , ILiteral { iDest = elemSizeVar
+                   , iLiteral = LitInt (typeSize arrayType) }
+        , IBinOp { iBinOp = iBinOpMul
+                 , iDest = indexVar
+                 , iLeft = elemSizeVar }
+        , ILiteral { iDest = arrayOffsetVar
+                   , iLiteral = LitInt 4 }
+        , IBinOp { iBinOp = BinOpAdd
+                 , iDest = indexVar
+                 , iLeft = arrayOffsetVar
+                 , iRight = indexVar } 
+        , IHeapRead { iHeapVar = arrayVar
+                    , iDest = outVar
+                    , iOffset = OffsetVar arrayOffsetVar } 
+
+         
   return outVar
 
 -- LHS Assign
@@ -95,25 +114,45 @@ genAssign (_, LHSVar ident) valueVar = do
   tell [ IFrameWrite { iOffset = offset, iValue = valueVar } ]
 
 -- LHS Pair 
-genAssign (_, LHSPairElem (_, PairElem side pairExpr)) valueVar = do
+-- Check which of the two annotations we need
+genAssign (_, LHSPairElem (TyPair t1 _, PairElem side pairExpr)) valueVar = do
   pairVar <- genExpr pairExpr
   tell [ INullCheck { iValue = pairVar }
-       , IPairWrite { iPair = pairVar, iSide = side, iValue = valueVar } ]
+--       , IPairWrite { iPair = pairVar, iSide = side, iValue = valueVar } ]
+       , IHeapWrite { iHeapVar = pairVar, iValue = valueVar, iOffset = OffsetLit offset }
+    where
+      offset = case side of
+        PairFst -> 0
+        PairSnd -> typeSize t1
 
 -- LHS Array Indexing 
-genAssign (_, LHSArrayElem (_, ArrayElem ident exprs)) valueVar = do
+-- Not sure if the type I need is
+--                 |                |
+--         here    v       or       v
+genAssign (TyArray t, LHSArrayElem (_, ArrayElem ident exprs)) valueVar = do
   let readIndexExprs  = init exprs
       writeIndexExpr  = last exprs
 
   arrayVar <- genFrameRead ident
-  subArrayVar <- foldM genArrayRead arrayVar readIndexExprs
+  subArrayVar <- foldM (genArrayRead t) arrayVar readIndexExprs
 
   writeIndexVar <- genExpr writeIndexExpr
+  elementSizeVar <- allocateVar
+  arrayOffsetVar <- allocateVar
   tell [ IBoundsCheck { iArray = subArrayVar
                       , iIndex = writeIndexVar }
-       , IArrayWrite { iArray = subArrayVar
-                     , iIndex = writeIndexVar
-                     , iValue = valueVar } ]
+       --, IArrayWrite { iArray = subArrayVar
+       --              , iIndex = writeIndexVar
+       --              , iValue = valueVar } ]
+       , ILiteral { iDest = elementSizeVar, iLiteral = LitInt (typeSize t) }
+       , IBinOp { iBinOp = BinOpMul, iDest = writeIndexVar
+                , iLeft = elementSizeVar, iRight = writeIndexVar }
+       , ILiteral { iDest = arrayOffsetVar, iLiteral = LitInt 4 }
+       , IBinOp { iBinOp = BinOpAdd, iDest = writeIndexVar,
+                , iLeft = arrayOffsetVar, iRight = writeIndexVar } 
+       , IHeapWrite { iHeapVar = subArrayVar
+                    , iValue  = valueVar
+                    , iOffset = OffsetVar writeIndexVar } ]
 
 -- RHS Expression Assignment
 genRHS :: Annotated AssignRHS TypeA -> CodeGen Var
@@ -122,10 +161,13 @@ genRHS (TyArray t, RHSArrayLit exprs) = do
   arrayVar <- allocateVar
   tell [ IArrayAllocate { iDest = arrayVar, iSize = size }]
   forM (zip exprs [0..]) $ \(expr, index) -> do
-    indexVar <- allocateVar
+--    indexVar <- allocateVar
     elemVar <- genExpr expr
-    tell [ ILiteral { iDest = indexVar, iLiteral = LitInt (4 + index * tSize) }
-         , IArrayWrite { iArray = arrayVar, iIndex = indexVar, iValue = elemVar } ]
+    tell [ --ILiteral { iDest = indexVar, iLiteral = LitInt (4 + index * tSize) }
+         --, IArrayWrite { iArray = arrayVar, iIndex = indexVar, iValue = elemVar } ]
+         , IHeapWrite  { iHeapVar = arrayVar
+                       , iValue = elemVar
+                       , iOffset = (4 + index * tSize) } ]
   return arrayVar
     where
       size = 4 + tSize * (length exprs)
@@ -136,8 +178,10 @@ genRHS (_, RHSNewPair fstExpr sndExpr) = do
   fstVar <- genExpr fstExpr
   sndVar <- genExpr sndExpr
   tell [ IPairAllocate { iDest = pairVar }
-       , IPairWrite { iPair = pairVar, iSide = PairFst, iValue = fstVar }
-       , IPairWrite { iPair = pairVar, iSide = PairSnd, iValue = sndVar } ]
+       , IHeapWrite { iHeapVar = pairVar, iValue = fstVar, iOffset = 0 }
+       , IHeapWrite { iHeapVar = pairVar, iValue = sndVar, iOffset = 4 } ]
+--       , IPairWrite { iPair = pairVar, iSide = PairFst, iValue = fstVar }
+--       , IPairWrite { iPair = pairVar, iSide = PairSnd, iValue = sndVar } ]
   return pairVar
 
 genRHS (_, RHSPairElem (_, PairElem side pairExpr)) = do

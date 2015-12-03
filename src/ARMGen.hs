@@ -132,6 +132,16 @@ genARMInstruction (IArrayAllocate { iDest = Var dest, iSize = size })
          , "MOV r" ++ show dest ++ ", r0"]
 genARMInstruction (IArrayRead { iArray = Var array, iIndex = Var index, iDest = Var dest })
   = emit ["LDR r" ++ show dest ++ ", [r" ++ show array ++ ", r" ++ show index ++ "]"]
+
+-- Heap Read/Write (i.e Pairs and Arrays)
+genARMInstruction (IHeapRead { iHeapVar = Var heapVar, iDest = Var dest, iOffset = Var reg })
+  = emit ["LDR r" ++ show dest ++ ", [r" ++ show heapVar ++ ", r" ++ show reg ++ "]"]
+genARMInstruction (IHeapRead { iHeapVar = Var heapVar, iDest = Var dest, iOffset =  })
+  = emit ["LDR r" ++ show dest ++ ", [r" ++ show heapVar ++ ", r" ++ show reg ++ "]"]
+
+genARMInstruction (IHeapWrite { iHeapVar = Var heapVar, iValue = Var value, iOffset = Var offset })
+  = emit ["STR r" ++ show value ++ ", [r" ++ show heapVar ++ ", r" ++ show offset ++ "]"] 
+ 
 genARMInstruction (IArrayWrite { iArray = Var array, iIndex = Var index, iValue = Var value })
   = emit ["STR r" ++ show value ++ ", [r" ++ show array ++ ", r" ++ show index ++ "]"]
 
