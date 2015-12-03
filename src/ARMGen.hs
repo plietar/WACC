@@ -238,7 +238,6 @@ genARMInstruction (IReturn { iValue = Var value })
          , "POP {pc}" ]
 
 genFeature :: Feature -> ([String], [String])
-
 genFeature CheckDivideByZero = (["p_check_divide_by_zero:", 
                                  ".word 45",
                                  ".ascii \"DivideByZeroError: divide or modulo by zero\\n\\0\""] 
@@ -247,6 +246,7 @@ genFeature CheckDivideByZero = (["p_check_divide_by_zero:",
                                  "LDREQ r0, =msg_check_p_divide_by_zero",
                                  "BLEQ p_throw_runtime_error",
                                  "POP {pc}"])
+
 genFeature CheckNullPointer = (["p_check_null_pointer", 
                                  ".word 50",
                                  ".ascii \"NullReferenceError: derefence a null reference \\n\\0\""] 
@@ -256,7 +256,22 @@ genFeature CheckNullPointer = (["p_check_null_pointer",
                                  "BLEQ p_throw_runtime_error",
                                  "POP {pc}"])
 
-genFeature CheckArrayBounds = undefined
+--Calls another feature: p_throw_runtime_error.
+genFeature CheckArrayBounds =  (["p_check_array_bounds_1:", 
+                                 ".word 44",
+                                 ".ascii \"ArrayIndexOutOfBoundsError: negative index\\0\"",
+                                 "p_check_array_bounds_2:", 
+                                 ".word 45",
+                                 ".ascii \"ArrayIndexOutOfBoundsError: index too large\\0\""]
+                               ,["PUSH {lr}",
+                                 "CMP r0, #0",
+                                 "LDRLT r0, =msg_p_check_array_bounds_1",
+                                 "BLLT p_throw_runtime_error",
+                                 "LDR r1, [r1]",
+                                 "CMP r0, r1",
+                                 "LDRCS r0, =msg_p_check_array_bounds_2",
+                                 "BLCS p_throw_runtime_error",
+                                 "POP {pc}"])
 
 genFeature PrintInt =  (["p_print_string:", 
                          ".word 3",
