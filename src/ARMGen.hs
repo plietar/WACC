@@ -3,6 +3,7 @@ module ARMGen where
 import Common.AST
 import CodeGenTypes
 import Data.Monoid
+import Data.Char
 import Control.Monad.Writer
 import Control.Monad.State
 
@@ -43,7 +44,8 @@ genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitBool True } )
 genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitBool False } ) 
   = emit ["MOV r" ++ (show dest) ++ ", #0"]
 genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitChar chr } ) 
-  = emit ["MOV r" ++ (show dest) ++ ", #" ++ (show chr)]
+  = emit ["MOV r" ++ (show dest) ++ ", #" ++ (show (ord chr))]
+
 genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitString str  } ) = do
   message <- emitLiteral str 
   emit ["LDR r" ++ (show dest) ++ ", =" ++ message]
