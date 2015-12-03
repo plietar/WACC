@@ -16,7 +16,7 @@ data Var = Var Int
   deriving (Show, Ord, Eq)
 data Label = NamedLabel String | UnnamedLabel Int
   deriving (Ord, Eq)
-data Offset = OffsetVar Var | OffsetLit Int
+data Operand = OperandVar Var Int | OperandLit Int
   deriving (Show)
 
 instance Show Label where
@@ -39,16 +39,16 @@ data IR
   | IFrameRead { iOffset :: Int, iDest :: Var }
   | IFrameWrite { iOffset :: Int, iValue :: Var }
 
-  | IHeapRead { iHeapVar :: Var, iDest :: Var, iOffset = Offset }
-  | IHeapWrite { iHeapVar :: Var, iValue = Var, iOffset = Offset }
+  | IHeapRead { iHeapVar :: Var, iDest :: Var, iOperand :: Operand }
+  | IHeapWrite { iHeapVar :: Var, iValue :: Var, iOperand :: Operand }
 
   | IArrayAllocate { iDest :: Var, iSize :: Int }
-  | IArrayRead { iArray :: Var, iIndex :: Var, iDest :: Var }
-  | IArrayWrite { iArray :: Var, iIndex :: Var, iValue :: Var }
+ -- | IArrayRead { iArray :: Var, iIndex :: Var, iDest :: Var }
+ -- | IArrayWrite { iArray :: Var, iIndex :: Var, iValue :: Var }
 
   | IPairAllocate { iDest :: Var }
-  | IPairRead { iPair :: Var, iDest :: Var, iSide :: PairSide }
-  | IPairWrite { iPair :: Var, iValue :: Var, iSide :: PairSide }
+ -- | IPairRead { iPair :: Var, iDest :: Var, iSide :: PairSide }
+ -- | IPairWrite { iPair :: Var, iValue :: Var, iSide :: PairSide }
 
   | INullCheck { iValue :: Var }
   | IBoundsCheck { iArray :: Var, iIndex :: Var }
@@ -95,7 +95,7 @@ typeSize TyChar = 1
 -- Size of a reference to a pair (e.g. in an array)
 typeSize (TyPair _ _) = 4 
 typeSize (TyArray t) = 4
-typeSize _ = 4
+typeSize t = error (show t)
 
 rootFrame :: Frame
 rootFrame = Frame Map.empty Nothing False 0
