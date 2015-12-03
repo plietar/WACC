@@ -143,6 +143,11 @@ colourIR IBoundsCheck{..} colouring
   = IBoundsCheck { iArray = get iArray colouring
                  , iIndex = get iIndex colouring }
 
+colourIR IPrint{..} colouring
+  = IPrint { iValue = get iValue colouring
+          , iType = iType
+          , iNewline = iNewline }
+
 colourIR IRead{..} colouring
   = IRead { iDest = get iDest colouring
           , iType = iType }
