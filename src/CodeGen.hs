@@ -47,7 +47,7 @@ genExpr (_ , ExprUnOp operator expr) = do
   unOpVar <- allocateVar
   valueVar <- genExpr expr
   tell [ IUnOp { iUnOp = operator, iDest = unOpVar, iValue = valueVar} ]
-  return valueVar
+  return unOpVar
 
 -- BinOp
 genExpr (_ , ExprBinOp operator expr1 expr2) = do
