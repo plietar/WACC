@@ -19,6 +19,7 @@ data Feature = CheckDivideByZero
               | ReadInt
               | ReadBool
               | ReadChar
+              | ThrowRuntimeError
               deriving (Show, Eq, Ord)
 
 data ARMState = ARMState
@@ -255,9 +256,33 @@ genFeature CheckNullPointer = (["p_check_null_pointer",
 
 genFeature CheckArrayBounds = undefined
 
-genFeature PrintInt = undefined
+genFeature PrintInt =  (["p_print_string:", 
+                         ".word 3",
+                         ".ascii \"%.d\\0\""] 
+                       ,["PUSH {lr}",
+                         "MOV r1, r0",
+                         "LDR r0, =msg_p_print_int",
+                         "ADD r0, r0, #4",
+                         "BL printf",
+                         "MOV r0, #0",
+                         "BL fflush",
+                         "POP {pc}"])
 
-genFeature PrintBool = undefined
+genFeature PrintBool = (["p_print_bool_1:", 
+                         ".word 5",
+                         ".ascii \"true\\0\"",
+                         "p_print_bool_2:",
+                         ".word 6",
+                         ".ascii \"false\\0\""] 
+                       ,["PUSH {lr}",
+                         "CMP r0, #0",
+                         "LDRNE r0, =msg_p_print_bool_1",
+                         "LDREQ r0, =msg_p_print_bool_2",
+                         "ADD r0, r0, #4",
+                         "BL printf",
+                         "MOV r0, #0",
+                         "BL fflush",
+                         "POP {pc}"])
 
 genFeature PrintChar = undefined
 
@@ -284,6 +309,7 @@ genFeature ReadBool = undefined
 
 genFeature ReadChar = undefined 
 
+genFeature ThrowRuntimeError = undefined 
 
 
 
