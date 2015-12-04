@@ -33,6 +33,14 @@ import Data.Text.Lazy (unpack)
 showTokens :: [(Pos, Token)] -> [String]
 showTokens = (:[]) . show . map snd
 
+type PrintAST = RWS Int [String] ()
+
+tabs :: Int -> String
+tabs x = concat $ take x (repeat "\t")
+
+showTypedAST :: (Annotated Program TypeA) -> [String]
+showTypedAST program
+  = snd (execRWS (showProgram program) 0 ())
 
 showProgram :: (Annotated Program TypeA) -> PrintAST ()
 showProgram (_, Program fs) = do
