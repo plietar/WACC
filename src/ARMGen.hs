@@ -229,8 +229,10 @@ genARMInstruction (IPrint { iValue = Var value, iType = t, iNewline = newline })
 -- Read
 genARMInstruction (IRead { iDest = Var dest, iType = t})
   = case t of
-      TyInt -> emit ["BL p_read_int"]
-      TyChar -> emit ["BL p_read_char"]
+      TyInt  -> emit [ "BL p_read_int"
+                     , "MOV r" ++ show dest ++ ", r0"]
+      TyChar -> emit [ "BL p_read_char"
+                     , "MOV r" ++ show dest ++ ", r0"]
 -- Free
 genARMInstruction (IFree { iValue = Var value, iType = t})
   = emit [ "MOV r0, r" ++ show value
@@ -370,22 +372,27 @@ genFeature ReadInt = (["msg_p_read_int:",
                          ".ascii \"%d\\0\""] 
                        ,["p_read_int:",
                          "PUSH {lr}",
-                         "MOV r1, r0",
+                         "SUB sp, sp, #4",
+                         "MOV r1, sp",
                          "LDR r0, =msg_p_read_int",
                          "ADD r0, r0, #4",
                          "BL scanf",
+                         "LDR r0, [sp]",
+                         "ADD sp, sp, #4",
                          "POP {pc}"])
-
 
 genFeature ReadChar = (["msg_p_read_char:", 
                          ".word 4",
                          ".ascii \" %c\\0\""] 
                        ,["p_read_char:",
                          "PUSH {lr}",
-                         "MOV r1, r0",
+                         "SUB sp, sp, #1",
+                         "MOV r1, sp",
                          "LDR r0, =msg_p_read_char",
                          "ADD r0, r0, #4",
                          "BL scanf",
+                         "LDRSB r0, [sp]",
+                         "ADD sp, sp, #1",
                          "POP {pc}"])
 
 --Calls another feature: p_print_string.
