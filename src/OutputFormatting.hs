@@ -56,7 +56,7 @@ showFuncDef (_, FuncDef t n args block) = do
          ++ (show t) ++ " " ++ (show n) ++ "(" ++ showArgs args ++ ")" ]
   local (+ 1) (showBlock block)
   return ()
-  
+
 showArgs :: [(Type, Identifier)] -> String
 showArgs ((t, _) : args)
   = (show t) ++ ", " ++ showArgs args
@@ -69,26 +69,26 @@ showStmt (_, StmtVar t id assignrhs) = do
   tell [ (tabs indent) ++ "- "  ++ " VAR " ++ (show t)  ++ " " ++ (show id) ]
   local (+ 1) (showAssignRHS assignrhs)
   return ()
-  
+
 showStmt (_, StmtAssign lhs rhs) = do
   indent <- ask
   tell [ (tabs indent) ++ "- ASSIGN "]
   local (+ 1) (showAssignRHS rhs)
   local (+ 1) (showAssignLHS lhs)
   return ()
- 
+
 showStmt (_, StmtRead lhs) = do
   indent <- ask
   tell [ (tabs indent) ++ "- READ " ]
   local (+ 1) (showAssignLHS lhs)
   return ()
- 
+
 showStmt (_, StmtFree e) = do
   indent <- ask
   tell [ (tabs indent) ++ "- FREE " ]
   local (+ 1) (showExpr e)
   return ()
- 
+
 showStmt (_, StmtReturn e) = do
   indent <- ask
   tell [ (tabs indent) ++ "- RETURN" ]
@@ -168,7 +168,22 @@ showExpr (_, ExprBinOp op e1 e2) = do
 
 
 showAssignLHS :: (Annotated AssignLHS TypeA) -> PrintAST ()
-showAssignLHS = undefined
+showAssignLHS (_, LHSVar id) = do
+  indent <- ask  
+  tell [ (tabs indent) ++ "- LHSVAR " ++ show id ]
+
+showAssignLHS (_, LHSPairElem elem) = do
+  indent <- ask  
+  tell [ (tabs indent) ++ "- LHSPAIRELEM " ]
+  local (+ 1) (showPairElem elem)
+
+showAssignLHS (_, LHSArrayElem elem) = do
+  indent <- ask  
+  tell [ (tabs indent) ++ "- LHSARRAYELEM " ]
+  local (+ 1) (showArrayElem elem)
+
+
+
 showAssignRHS :: (Annotated AssignRHS TypeA) -> PrintAST ()
 showAssignRHS (_, RHSExpr e) = showExpr e
 showAssignRHS (_, RHSArrayLit es) = do
@@ -200,7 +215,6 @@ showPairElem (_, PairElem side e) = do
   tell [ (tabs indent) ++ "- PAIRELEM" ]
   tell [ (tabs (indent + 1)) ++ "- " ++ show side ]
   local (+ 2) (showExpr e)
-
 
 showIR :: [IR] -> [String]
 showIR = map show
