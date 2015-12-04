@@ -178,8 +178,8 @@ compile filename contents output
     armWriter = genARM <$> irFinal :: WACCResult ARMWriter
     feat      = mergeFeatures <$> features <$> armWriter :: WACCResult ([String], [String])
     asmSimple = concat <$> sequence [dataSegment 
-                       <$> armWriter, return (fst f), textSegment 
-                       <$> armWriter, return (snd f)] :: WACCResult [String]
+                       <$> armWriter, fst <$> feat, textSegment 
+                       <$> armWriter, snd <$> feat] :: WACCResult [String]
     asm       = map tabbedInstruction <$> asmSimple
    
 
