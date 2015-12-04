@@ -141,6 +141,7 @@ showBlock ((b, xs), Block stmts) = do
         ++ (concatMap show xs)] 
   mapM_ showStmt stmts 
   return ()
+
 showExpr :: (Annotated Expr TypeA) -> PrintAST ()
 showExpr (_, ExprLit l) = do
   indent <- ask
@@ -162,6 +163,8 @@ showExpr (_, ExprBinOp op e1 e2) = do
   tell [ (tabs indent) ++ "- BINOP " ++ show op ]
   local (+ 1) (showExpr e1)
   local (+ 1) (showExpr e2)
+
+
 
 
 showAssignLHS :: (Annotated AssignLHS TypeA) -> PrintAST ()
@@ -186,6 +189,11 @@ showAssignRHS (_, RHSCall id es) = do
   mapM_ (\e -> local (+ 1) (showExpr e)) es
   return ()
 
+showArrayElem :: (Annotated ArrayElem TypeA) -> PrintAST ()
+showArrayElem (_, ArrayElem id es) = do
+  indent <- ask
+  tell [ (tabs indent) ++ "- ARRAYELEM" ]
+  mapM_ (\e -> local (+ 1) (showExpr e)) es
   
 showIR :: [IR] -> [String]
 showIR = map show
