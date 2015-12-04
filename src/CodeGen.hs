@@ -129,7 +129,7 @@ genArrayRead elemTy arrayVar indexExpr = do
                  , iRight = arrayVar }
         , IHeapRead { iHeapVar = offsetedArray
                     , iDest    = outVar
-                    , iOperand = OperandVar arrayOffsetVar (typeShift elemTy)
+                    , iOperand = OperandVar indexVar (typeShift elemTy)
                     , iType    = elemTy } ]
   return outVar
 
