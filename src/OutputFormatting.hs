@@ -40,6 +40,19 @@ showProgram (_, Program fs) = do
   tell [ (tabs indent) ++ "Program" ]
   forM_ fs (\f -> local (+ 1) (showFuncDef f))
   return ()
+
+showFuncDef :: (Annotated FuncDef TypeA) -> PrintAST ()
+showFuncDef (_, FuncDef t n args block) = do
+  indent <- ask
+  tell [ (tabs indent) ++ "- "
+         ++ (show t) ++ " " ++ (show n) ++ "(" ++ showArgs args ++ ")" ]
+  local (+ 1) (showBlock block)
+  return ()
+  
+showArgs :: [(Type, Identifier)] -> String
+showArgs ((t, _) : args)
+  = (show t) ++ ", " ++ showArgs args
+showArgs [] = ""
  
   
 showIR :: [IR] -> [String]
