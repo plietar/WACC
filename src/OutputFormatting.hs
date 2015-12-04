@@ -179,6 +179,13 @@ showAssignRHS (_, RHSNewPair e1 e2) = do
   local (+ 1) (showExpr e2)
   return ()
 
+showAssignRHS (_, RHSPairElem e) = showPairElem e
+showAssignRHS (_, RHSCall id es) = do
+  indent <- ask
+  tell [ (tabs indent) ++ "- CALL" ++ show id]
+  mapM_ (\e -> local (+ 1) (showExpr e)) es
+  return ()
+
   
 showIR :: [IR] -> [String]
 showIR = map show
