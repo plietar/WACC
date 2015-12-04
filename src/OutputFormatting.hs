@@ -99,7 +99,7 @@ showStmt (_, StmtExit e) = do
   tell [ (tabs indent) ++ "- EXIT" ]
   local (+ 1) (showExpr e)
   return ()
- 
+
 showStmt (_, StmtPrint e b) = do
   indent <- ask
   tell [ (tabs indent) ++ "- PRINT" ++ line ]
@@ -107,7 +107,7 @@ showStmt (_, StmtPrint e b) = do
   return ()
   where
     line = if b then "LN" else ""
- 
+
 showStmt (_, StmtIf cond b1 b2) = do
   indent <- ask
   tell [ (tabs indent) ++ "- IF" ]
@@ -118,7 +118,7 @@ showStmt (_, StmtIf cond b1 b2) = do
   tell [ (tabs (indent + 1)) ++ "- ELSE" ]
   local (+ 2) (showBlock b2)
   return ()
- 
+
 showStmt (_, StmtWhile cond b) = do
   indent <- ask
   tell [ (tabs indent) ++ "- WHILE" ]
@@ -133,13 +133,13 @@ showStmt (_, StmtScope b) = do
   tell [ (tabs indent) ++ "- SCOPE "]
   local (+ 1) (showBlock b)
   return ()
- 
+
 showBlock :: (Annotated Block TypeA) -> PrintAST ()
 showBlock ((b, xs), Block stmts) = do
   indent <- ask
-  tell [ (tabs indent) ++ "Bool: " ++ show b ++ ", types: " 
-        ++ (concatMap show xs)] 
-  mapM_ showStmt stmts 
+  tell [ (tabs indent) ++ "Bool: " ++ show b ++ ", types: "
+        ++ (concatMap show xs)]
+  mapM_ showStmt stmts
   return ()
 
 showExpr :: (Annotated Expr TypeA) -> PrintAST ()
@@ -151,7 +151,7 @@ showExpr (_, ExprVar v) = do
   indent <- ask
   tell [ (tabs indent) ++ "- VAR " ++ show v ]
 
-showExpr (_, ExprArrayElem elem) = showArrayElem elem 
+showExpr (_, ExprArrayElem elem) = showArrayElem elem
 
 showExpr (_, ExprUnOp op e) = do
   indent <- ask
@@ -194,7 +194,14 @@ showArrayElem (_, ArrayElem id es) = do
   indent <- ask
   tell [ (tabs indent) ++ "- ARRAYELEM" ]
   mapM_ (\e -> local (+ 1) (showExpr e)) es
-  
+showPairElem :: (Annotated PairElem TypeA) -> PrintAST ()
+showPairElem (_, PairElem side e) = do
+  indent <- ask
+  tell [ (tabs indent) ++ "- PAIRELEM" ]
+  tell [ (tabs (indent + 1)) ++ "- " ++ show side ]
+  local (+ 2) (showExpr e)
+
+
 showIR :: [IR] -> [String]
 showIR = map show
 
