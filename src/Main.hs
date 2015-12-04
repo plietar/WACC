@@ -11,6 +11,7 @@ import CodeGen
 import Arguments
 import ARMGen
 import OutputFormatting
+import Data.Maybe (fromMaybe)
 
 import Control.Applicative
 
@@ -80,14 +81,19 @@ main = do
   args <- waccArguments
 
   let filename = sourceFile args
-  let outputFile = dropExtension (takeFileName filename) <.> "s"
+  let defaultOutputFile = dropExtension (takeFileName filename) <.> "s"
+
+  let outFile = fromMaybe defaultOutputFile (outputFile args)
+
+  let out = if outFile == "-"
+            then putStr
+            else writeFile outFile
 
   contents <- readFile filename
   
   let result = compile filename contents (outputType args)
   case result of
-    OK output -> writeFile outputFile (unlines output)
---    OK output -> putStr (unlines output)
+    OK output -> out (unlines output)
     Error kind msg -> do
       putStrLn ("Error " ++ show kind)
       putStr (unlines (reverse msg))
