@@ -163,6 +163,22 @@ showExpr (_, ExprBinOp op e1 e2) = do
   local (+ 1) (showExpr e1)
   local (+ 1) (showExpr e2)
 
+
+showAssignLHS :: (Annotated AssignLHS TypeA) -> PrintAST ()
+showAssignLHS = undefined
+showAssignRHS :: (Annotated AssignRHS TypeA) -> PrintAST ()
+showAssignRHS (_, RHSExpr e) = showExpr e
+showAssignRHS (_, RHSArrayLit es) = do
+  indent <- ask  
+  tell [ (tabs indent) ++ "- ARRAYLIT" ]
+  mapM_ showExpr es 
+showAssignRHS (_, RHSNewPair e1 e2) = do
+  indent <- ask
+  tell [ (tabs indent) ++ "- NEWPAIR" ]
+  local (+ 1) (showExpr e1)
+  local (+ 1) (showExpr e2)
+  return ()
+
   
 showIR :: [IR] -> [String]
 showIR = map show
