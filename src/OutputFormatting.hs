@@ -36,7 +36,7 @@ showTokens = (:[]) . show . map snd
 type PrintAST = RWS Int [String] ()
 
 tabs :: Int -> String
-tabs x = concat $ take x (repeat "\t")
+tabs x = concat $ take (2 * x) (repeat " ")
 
 showTypedAST :: (Annotated Program TypeA) -> [String]
 showTypedAST program
