@@ -229,10 +229,15 @@ genARMInstruction (IPrint { iValue = Var value, iType = t, iNewline = newline })
 -- Read
 genARMInstruction (IRead { iDest = Var dest, iType = t})
   = case t of
-      TyInt  -> emit [ "BL p_read_int"
+      TyInt  -> do
+                  emit [ "BL p_read_int"
                      , "MOV r" ++ show dest ++ ", r0"]
-      TyChar -> emit [ "BL p_read_char"
+                  emitFeature ReadInt
+      TyChar -> do
+                  emit [ "BL p_read_char"
                      , "MOV r" ++ show dest ++ ", r0"]
+                  emitFeature ReadChar
+
 -- Free
 genARMInstruction (IFree { iValue = Var value, iType = t})
   = emit [ "MOV r0, r" ++ show value
