@@ -57,10 +57,11 @@ data IR
 
 data CodeGenState = CodeGenState {
   variables :: [Var],
-  labels :: [Label]
+  labels :: [Label],
+  frame :: Frame
 }
 
-type CodeGen = RWS Frame [IR] CodeGenState
+type CodeGen = RWS () [IR] CodeGenState
 
 allocateVar :: CodeGen Var
 allocateVar = do
@@ -109,7 +110,9 @@ setVariables variables initialOffset original
         in ((n,off):vs', off')
 
 variableOffset :: String -> CodeGen Int
-variableOffset s = asks (getOffset s)
+variableOffset s = do
+  frame <- gets frame
+  return (getOffset s frame)
 
 getOffset :: String -> Frame -> Int
 getOffset var Frame{..} =
