@@ -296,7 +296,7 @@ genFeature CheckArrayBounds =  (["msg_p_check_array_bounds_1:",
 
 genFeature PrintInt =  (["msg_p_print_int:", 
                          ".word 3",
-                         ".ascii \"%.d\\0\""] 
+                         ".ascii \"%d\\0\""] 
                        ,["p_print_int:",
                          "PUSH {lr}",
                          "MOV r1, r0",
