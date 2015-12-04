@@ -134,6 +134,13 @@ showStmt (_, StmtScope b) = do
   local (+ 1) (showBlock b)
   return ()
  
+showBlock :: (Annotated Block TypeA) -> PrintAST ()
+showBlock ((b, xs), Block stmts) = do
+  indent <- ask
+  tell [ (tabs indent) ++ "Bool: " ++ show b ++ ", types: " 
+        ++ (concatMap show xs)] 
+  mapM_ showStmt stmts 
+  return ()
   
 showIR :: [IR] -> [String]
 showIR = map show
