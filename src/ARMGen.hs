@@ -205,8 +205,8 @@ genARMInstruction (INullCheck { iValue = Var value })
          , "BL p_check_null_pointer" ]
        emitFeature CheckNullPointer
 genARMInstruction (IBoundsCheck { iArray = Var array, iIndex = Var index })
-  = do emit [ "MOV r0, r" ++ show array
-         , "MOV r1, r" ++ show index
+  = do emit [ "MOV r0, r" ++ show index
+         , "MOV r1, r" ++ show array
          , "BL p_check_array_bounds" ]
        emitFeature CheckArrayBounds
 
