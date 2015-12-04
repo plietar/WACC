@@ -141,6 +141,28 @@ showBlock ((b, xs), Block stmts) = do
         ++ (concatMap show xs)] 
   mapM_ showStmt stmts 
   return ()
+showExpr :: (Annotated Expr TypeA) -> PrintAST ()
+showExpr (_, ExprLit l) = do
+  indent <- ask
+  tell [ (tabs indent) ++ "- LITERAL " ++ show l ]
+
+showExpr (_, ExprVar v) = do
+  indent <- ask
+  tell [ (tabs indent) ++ "- VAR " ++ show v ]
+
+showExpr (_, ExprArrayElem elem) = showArrayElem elem 
+
+showExpr (_, ExprUnOp op e) = do
+  indent <- ask
+  tell [ (tabs indent) ++ "- UNOP " ++ show op]
+  local (+ 1) (showExpr e)
+
+showExpr (_, ExprBinOp op e1 e2) = do
+  indent <- ask
+  tell [ (tabs indent) ++ "- BINOP " ++ show op ]
+  local (+ 1) (showExpr e1)
+  local (+ 1) (showExpr e2)
+
   
 showIR :: [IR] -> [String]
 showIR = map show
