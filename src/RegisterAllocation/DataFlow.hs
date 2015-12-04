@@ -97,12 +97,17 @@ bbUse bb = bbUse' (reverse bb) Set.empty
     bbUse' (ir:irs) use = bbUse' irs (Set.union (Set.difference use (irDef ir)) (irUse ir))
 
 irDef :: IR -> Set Var
+irDef IFunctionBegin{..} = Set.fromList (iArgs ++ calleeSaveRegs)
+
 irDef ILiteral{..}       = Set.singleton iDest
 irDef IBinOp{..}         = Set.singleton iDest
 irDef IUnOp{..}          = Set.singleton iDest
 irDef IMove{..}          = Set.singleton iDest
-irDef ICall{..}          = Set.singleton iDest
+
+irDef ICall{..}          = Set.fromList callerSaveRegs
+
 irDef IFrameRead{..}     = Set.singleton iDest
+
 irDef IArrayAllocate{..} = Set.singleton iDest
 irDef IHeapRead{..}      = Set.singleton iDest
 irDef IPairAllocate{..}  = Set.singleton iDest
@@ -110,10 +115,11 @@ irDef IRead{..}          = Set.singleton iDest
 irDef _                  = Set.empty
 
 irUse :: IR -> Set Var
+irUse IReturn            = Set.fromList (Reg 0 : calleeSaveRegs)
 irUse IBinOp{..}         = Set.fromList [ iRight, iLeft ]
 irUse IUnOp{..}          = Set.singleton iValue
 irUse IMove{..}          = Set.singleton iValue
-irUse ICall{..}          = Set.fromList  (map snd iArgs)
+irUse ICall{..}          = Set.fromList  iArgs
 irUse ICondJump{..}      = Set.singleton iValue
 irUse IFrameWrite{..}    = Set.singleton iValue
 irUse IHeapWrite{..}
@@ -129,6 +135,5 @@ irUse IBoundsCheck{..}   = Set.fromList [ iArray, iIndex ]
 irUse IPrint{..}         = Set.singleton iValue
 irUse IFree{..}          = Set.singleton iValue
 irUse IExit{..}          = Set.singleton iValue
-irUse IReturn{..}        = Set.singleton iValue
 irUse _                  = Set.empty
 

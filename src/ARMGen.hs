@@ -80,104 +80,101 @@ genARMInstruction IInitialise {} = do
        ]
   emitFeature ThrowDoubleFreeError
 
-genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitNull })
-  = emit ["MOV r" ++ (show dest) ++ ", #0"]
-genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitInt n })
-  = emit ["LDR r" ++ (show dest) ++ ", =" ++ (show n)]
-genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitBool True } )
-  = emit ["MOV r" ++ (show dest) ++ ", #1"]
-genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitBool False } )
-  = emit ["MOV r" ++ (show dest) ++ ", #0"]
-genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitChar chr } ) 
-  = emit ["MOV r" ++ (show dest) ++ ", #" ++ (show (ord chr))]
-genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitString str  } ) = do
+genARMInstruction (ILiteral { iDest = dest, iLiteral = LitNull })
+  = emit ["MOV " ++ show dest ++ ", #0"]
+genARMInstruction (ILiteral { iDest = dest, iLiteral = LitInt n })
+  = emit ["LDR " ++ show dest ++ ", =" ++ (show n)]
+genARMInstruction (ILiteral { iDest = dest, iLiteral = LitBool True } )
+  = emit ["MOV " ++ show dest ++ ", #1"]
+genARMInstruction (ILiteral { iDest = dest, iLiteral = LitBool False } )
+  = emit ["MOV " ++ show dest ++ ", #0"]
+genARMInstruction (ILiteral { iDest = dest, iLiteral = LitChar chr } ) 
+  = emit ["MOV " ++ show dest ++ ", #" ++ (show (ord chr))]
+genARMInstruction (ILiteral { iDest = dest, iLiteral = LitString str  } ) = do
   message <- emitLiteral str
-  emit ["LDR r" ++ (show dest) ++ ", =" ++ message]
+  emit ["LDR " ++ show dest ++ ", =" ++ message]
 
 --BinOp
-genARMInstruction (IBinOp { iBinOp = op, iDest = Var dest,
-        iLeft  = Var left, iRight = Var right } )
+genARMInstruction (IBinOp { iBinOp = op, iDest = dest,
+        iLeft  = left, iRight = right } )
   = case op of  
       BinOpAdd -> do
-                  emit ["ADDS r" ++ (show dest) ++ ", r" ++ 
-                        (show left) ++ ", r" ++ (show right)
+                  emit [ "ADDS " ++ show dest ++
+                         ", " ++ show left ++
+                         ", " ++ show right
                        , "BLVS p_throw_overflow_error"]
                   emitFeature ThrowOverflowError 
       BinOpSub -> do
-                  emit ["SUBS r" ++ (show dest) ++ ", r" ++ 
-                        (show left) ++ ", r" ++ (show right)
+                  emit [ "SUBS " ++ show dest ++
+                         ", " ++ show left ++
+                         ", " ++ show right
                        , "BLVS p_throw_overflow_error"]
                   emitFeature ThrowOverflowError 
       BinOpMul -> do
-                  emit ["SMULL r" ++ (show dest) ++ ", r0"
-                        ++ ", r" ++ (show left) ++ ", r" ++ (show right) 
-                       , "CMP r0, r" ++ (show dest) ++ ", ASR #31"
+                  emit [ "SMULL " ++ show dest ++
+                         ", r0" ++
+                         ", " ++ show left ++ ", " ++ show right 
+                       , "CMP r0, " ++ show dest ++ ", ASR #31"
                        , "BLNE p_throw_overflow_error" ]
                   emitFeature ThrowOverflowError
-      BinOpDiv -> do emit ["MOV r0, r" ++ (show left),
-                        "MOV r1, r" ++ (show right),
+      BinOpDiv -> do emit ["MOV r0, " ++ show left,
+                        "MOV r1, " ++ show right,
                         "BL p_check_divide_by_zero",
                         "BL __aeabi_idivmod",
-                        "MOV r" ++ show dest ++ ", r0"]
+                        "MOV " ++ show dest ++ ", r0"]
                      emitFeature CheckDivideByZero
-      BinOpRem -> do emit ["MOV r0, r" ++ (show left),
-                        "MOV r1, r" ++ (show right),
+      BinOpRem -> do emit ["MOV r0, " ++ (show left),
+                        "MOV r1, " ++ (show right),
                         "BL p_check_divide_by_zero",
                         "BL __aeabi_idivmod",
-                        "MOV r" ++ show dest ++ ", r1"]
+                        "MOV " ++ show dest ++ ", r1"]
                      emitFeature CheckDivideByZero
-      BinOpGT  -> emit ["CMP r" ++ (show left) ++ ", r" ++ (show right),
-                        "MOVGT r" ++ (show dest) ++ ", #1",
-                        "MOVLE r" ++ (show dest) ++ ", #0"]
-      BinOpGE  -> emit ["CMP r" ++ (show left) ++ ", r" ++ (show right),
-                       "MOVGE r" ++ (show dest) ++ ", #1",
-                       "MOVLT r" ++ (show dest) ++ ", #0"]
-      BinOpLT  -> emit ["CMP r" ++ (show left) ++ ", r" ++ (show right),
-                        "MOVLT r" ++ (show dest) ++ ", #1",
-                        "MOVGE r" ++ (show dest) ++ ", #0"]
-      BinOpLE  -> emit ["CMP r" ++ (show left) ++ ", r" ++ (show right),
-                        "MOVLE r" ++ (show dest) ++ ", #1",
-                        "MOVGT r" ++ (show dest) ++ ", #0"]
-      BinOpEQ  -> emit ["CMP r" ++ (show left) ++ ", r" ++ (show right),
-                        "MOVEQ r" ++ (show dest) ++ ", #1",
-                        "MOVNE r" ++ (show dest) ++ ", #0"]
-      BinOpNE  -> emit ["CMP r" ++ (show left) ++ ", r" ++ (show right),
-                        "MOVNE r" ++ (show dest) ++ ", #1",
-                        "MOVEQ r" ++ (show dest) ++ ", #0"]
-      BinOpAnd -> emit ["AND r" ++ (show dest) ++ ", r" ++
-                        (show left) ++ ", r" ++ (show right) ]
-      BinOpOr  -> emit ["ORR r" ++ (show dest) ++ ", r" ++
-                        (show left) ++ ", r" ++ (show right) ]
+      BinOpGT  -> emit ["CMP " ++ show left ++ ", " ++ (show right),
+                        "MOVGT " ++ show dest ++ ", #1",
+                        "MOVLE " ++ show dest ++ ", #0"]
+      BinOpGE  -> emit ["CMP " ++ show left ++ ", " ++ (show right),
+                       "MOVGE " ++ show dest ++ ", #1",
+                       "MOVLT " ++ show dest ++ ", #0"]
+      BinOpLT  -> emit ["CMP " ++ show left ++ ", " ++ (show right),
+                        "MOVLT " ++ show dest ++ ", #1",
+                        "MOVGE " ++ show dest ++ ", #0"]
+      BinOpLE  -> emit ["CMP " ++ show left ++ ", " ++ (show right),
+                        "MOVLE " ++ show dest ++ ", #1",
+                        "MOVGT " ++ show dest ++ ", #0"]
+      BinOpEQ  -> emit ["CMP " ++ show left ++ ", " ++ (show right),
+                        "MOVEQ " ++ show dest ++ ", #1",
+                        "MOVNE " ++ show dest ++ ", #0"]
+      BinOpNE  -> emit ["CMP " ++ show left ++ ", " ++ (show right),
+                        "MOVNE " ++ show dest ++ ", #1",
+                        "MOVEQ " ++ show dest ++ ", #0"]
+      BinOpAnd -> emit ["AND " ++ show dest ++ ", " ++
+                        (show left) ++ ", " ++ (show right) ]
+      BinOpOr  -> emit ["ORR " ++ show dest ++ ", " ++
+                        (show left) ++ ", " ++ (show right) ]
 
 --UnOp
-genARMInstruction IUnOp { iUnOp = op, iDest = Var dest,
-        iValue = Var value }
+genARMInstruction IUnOp { iUnOp = op, iDest = dest,
+        iValue = value }
   = case op of
-      UnOpNot -> emit ["EOR r" ++ (show dest) ++ ", r" ++ (show value) ++ ", #1"]
+      UnOpNot -> emit ["EOR " ++ show dest ++ ", " ++ show value ++ ", #1"]
       UnOpNeg -> do
-                  emit ["RSBS r" ++ (show dest) ++ ", r" ++ (show value) ++ ", #0"
-                      , "BLVS p_throw_overflow_error"]
-                  emitFeature ThrowOverflowError 
+        emit ["RSB " ++ show dest ++ ", " ++ show value ++ ", #0"]
+        emitFeature ThrowOverflowError 
+      UnOpLen -> emit ["LDR " ++ show dest ++ ", [" ++ show value ++ "]"]
 
-      UnOpLen -> emit ["LDR r" ++ (show dest) ++ ", [r" ++ show value ++ "]"]
-
-genARMInstruction IMove { iDest = Var dest, iValue = Var value }
-  = emit ["MOV r" ++ show dest ++ ", r" ++ show value]
+genARMInstruction IMove { iDest = dest, iValue = value }
+  = emit ["MOV " ++ show dest ++ ", " ++ show value]
 
 --Jumps
-genARMInstruction (ICondJump { iLabel = label, iValue = Var value})
-  = emit ["CMP r" ++ (show value) ++ ", #0",
+genARMInstruction (ICondJump { iLabel = label, iValue = value})
+  = emit ["CMP " ++ show value ++ ", #0",
           "BNE " ++ (show label)]
 genARMInstruction (IJump {iLabel = label} )
   = emit ["B " ++ (show label)]
 
 --Call
-genARMInstruction (ICall { iLabel = label, iArgs = args, iDest = Var dest }) = do
-  forM (reverse args) $ \(ty, Var arg) -> do
-    emit [strInstr ty ++ " r" ++ show arg ++ ", [sp, #-" ++ show (typeSize ty) ++ "]!"]
-  emit ["BL " ++ show label ]
-  unless (null args) (emit ["ADD sp, sp, #" ++ show (sum (map (typeSize . fst) args))])
-  emit [ "MOV r" ++ show dest ++ ", r0" ]
+genARMInstruction (ICall { iLabel = label })
+  = emit ["BL " ++ show label ]
 
 --Labels
 genARMInstruction (ILabel { iLabel = label} )
@@ -202,54 +199,54 @@ genARMInstruction (IFrameFree { iSize = size } ) = do
   else do
     emit ["ADD sp, sp, #" ++ show offsetLimitARM ]
     genARMInstruction (IFrameFree { iSize = size - offsetLimitARM })
-
-
-genARMInstruction (IFrameRead {iOffset = offset, iDest = Var dest, iType = ty} )
-  = emit [ldrInstr ty ++ " r" ++ (show dest) ++ ", [sp, #" ++ (show offset) ++ "]"]
-genARMInstruction (IFrameWrite {iOffset = offset, iValue = Var value, iType = ty} )
-  = emit [strInstr ty ++ " r" ++ (show value) ++ ", [sp, #" ++ (show offset) ++ "]"]
+genARMInstruction (IFrameFree { iSize = size } )
+  = emit ["ADD sp, sp, #" ++ show size]
+genARMInstruction (IFrameRead {iOffset = offset, iDest = dest, iType = ty} )
+  = emit [ldrInstr ty ++ " " ++ show dest ++ ", [sp, #" ++ show offset ++ "]"]
+genARMInstruction (IFrameWrite {iOffset = offset, iValue = value, iType = ty} )
+  = emit [strInstr ty ++ " " ++ show value ++ ", [sp, #" ++ show offset ++ "]"]
 
 -- Array
-genARMInstruction (IArrayAllocate { iDest = Var dest, iSize = size })
+genARMInstruction (IArrayAllocate { iDest = dest, iSize = size })
   = emit [ "LDR r0, =" ++ show size
          , "BL malloc"
-         , "MOV r" ++ show dest ++ ", r0"]
+         , "MOV " ++ show dest ++ ", r0"]
 
 -- Heap Read (i.e Pairs and Arrays)
-genARMInstruction (IHeapRead { iHeapVar = Var heapVar, iDest = Var dest, iOperand = OperandVar (Var offset) shift, iType = ty })
-  = emit [ldrInstr ty ++ " r" ++ show dest ++ ", [r" ++ show heapVar ++ ", r" ++ show offset ++ scaling ++ "]"]
+genARMInstruction (IHeapRead { iHeapVar = heapVar, iDest = dest, iOperand = OperandVar offset shift, iType = ty })
+  = emit [ldrInstr ty ++ " " ++ show dest ++ ", [" ++ show heapVar ++ ", " ++ show offset ++ scaling ++ "]"]
     where scaling = if shift /= 0 then ", lsl #" ++ show shift else ""
-genARMInstruction (IHeapRead { iHeapVar = Var heapVar, iDest = Var dest, iOperand = OperandLit offset, iType = ty })
-  = emit [ldrInstr ty ++ " r" ++ show dest ++ ", [r" ++ show heapVar ++ ", #" ++ show offset ++ "]"]
+genARMInstruction (IHeapRead { iHeapVar = heapVar, iDest = dest, iOperand = OperandLit offset, iType = ty })
+  = emit [ldrInstr ty ++ " " ++ show dest ++ ", [" ++ show heapVar ++ ", #" ++ show offset ++ "]"]
 
 
 -- Heap Write (i.e Pairs and Arrays)
-genARMInstruction (IHeapWrite { iHeapVar = Var heapVar, iValue = Var value, iOperand = OperandVar (Var offset) shift, iType = ty })
-  = emit [strInstr ty ++ " r" ++ show value ++ ", [r" ++ show heapVar ++ ", r" ++ show offset ++ scaling ++ "]"] 
+genARMInstruction (IHeapWrite { iHeapVar = heapVar, iValue = value, iOperand = OperandVar offset shift, iType = ty })
+  = emit [strInstr ty ++ " " ++ show value ++ ", [" ++ show heapVar ++ ", " ++ show offset ++ scaling ++ "]"] 
     where scaling = if shift /= 0 then ", lsl #" ++ show shift else ""
-genARMInstruction (IHeapWrite { iHeapVar = Var heapVar, iValue = Var value, iOperand = OperandLit offset, iType = ty })
-  = emit [strInstr ty ++ " r" ++ show value ++ ", [r" ++ show heapVar ++ ", #" ++ show offset ++ "]"] 
+genARMInstruction (IHeapWrite { iHeapVar = heapVar, iValue = value, iOperand = OperandLit offset, iType = ty })
+  = emit [strInstr ty ++ " " ++ show value ++ ", [" ++ show heapVar ++ ", #" ++ show offset ++ "]"] 
  
 
 --Pair
-genARMInstruction (IPairAllocate { iDest = Var dest })
+genARMInstruction (IPairAllocate { iDest = dest })
   = emit [ "MOV r0, #8"
          , "BL malloc"
-         , "MOV r" ++ show dest ++ ", r0"]
+         , "MOV " ++ show dest ++ ", r0"]
 
-genARMInstruction (INullCheck { iValue = Var value })
-  = do emit [ "MOV r0, r" ++ show value
+genARMInstruction (INullCheck { iValue = value })
+  = do emit [ "MOV r0, " ++ show value
          , "BL p_check_null_pointer" ]
        emitFeature CheckNullPointer
-genARMInstruction (IBoundsCheck { iArray = Var array, iIndex = Var index })
-  = do emit [ "MOV r0, r" ++ show index
-         , "MOV r1, r" ++ show array
+genARMInstruction (IBoundsCheck { iArray = array, iIndex = index })
+  = do emit [ "MOV r0, " ++ show index
+         , "MOV r1, " ++ show array
          , "BL p_check_array_bounds" ]
        emitFeature CheckArrayBounds
 
 -- Print
-genARMInstruction (IPrint { iValue = Var value, iType = t, iNewline = newline }) = do
-  emit [ "MOV r0, r" ++ show value]
+genARMInstruction (IPrint { iValue = value, iType = t, iNewline = newline }) = do
+  emit [ "MOV r0, " ++ show value]
   case t of
     TyInt -> do emit ["BL p_print_int"]
                 emitFeature PrintInt
@@ -264,41 +261,34 @@ genARMInstruction (IPrint { iValue = Var value, iType = t, iNewline = newline })
                    emitFeature PrintLine)
  
 -- Read
-genARMInstruction (IRead { iDest = Var dest, iType = t})
+genARMInstruction (IRead { iDest = dest, iType = t})
   = case t of
       TyInt  -> do
-                  emit [ "BL p_read_int"
-                     , "MOV r" ++ show dest ++ ", r0"]
-                  emitFeature ReadInt
+        emit [ "BL p_read_int"
+             , "MOV " ++ show dest ++ ", r0" ]
+        emitFeature ReadInt
       TyChar -> do
-                  emit [ "BL p_read_char"
-                     , "MOV r" ++ show dest ++ ", r0"]
-                  emitFeature ReadChar
+        emit [ "BL p_read_char"
+             , "MOV " ++ show dest ++ ", r0" ]
+        emitFeature ReadChar
 
 -- Free
-genARMInstruction (IFree { iValue = Var value, iType = t}) = do
+genARMInstruction (IFree { iValue = value, iType = t}) = do
   case t of
-    TyArray _ -> do
-       emit [ "MOV r0, r" ++ show value
-            , "BL free" ]
-    TyPair _ _ -> do
-       genARMInstruction ( INullCheck { iValue = Var value } )
-       emit [ "MOV r0, r" ++ show value
-            , "BL free" ]
-
-  
+    TyPair _ _ -> genARMInstruction ( INullCheck { iValue = value } )
+    TyArray _  -> return ()
 
 -- Exit
-genARMInstruction (IExit { iValue = Var value })
-  = emit [ "MOV r0, r" ++ show value
+genARMInstruction (IExit { iValue = value })
+  = emit [ "MOV r0, " ++ show value
          , "BL exit" ]
 
 -- Function
 genARMInstruction (IFunctionBegin { })
   = emit [ "PUSH {lr}" ]
-genARMInstruction (IReturn { iValue = Var value })
-  = emit [ "MOV r0, r" ++ show value
-         , "POP {pc}"
+
+genARMInstruction (IReturn)
+  = emit [ "POP {pc}"
          , ".ltorg"]
 
 mergeFeatures :: Set Feature -> ([String], [String])

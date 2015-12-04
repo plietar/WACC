@@ -12,6 +12,7 @@ import Control.Applicative
 
 import Data.Tuple(swap)
 import qualified Data.Set as Set
+import qualified Data.Map as Map
 import Data.Maybe
 
 genProgram :: Annotated Program TypeA -> [[IR]]
@@ -23,34 +24,64 @@ genProgram (_, Program fs)
 genFunction :: Annotated FuncDef TypeA -> State [Label] [IR]
 genFunction (_, FuncDef _ fname params body) = do
     labs <- get
-    let frame = setVariables (map swap params) 4 rootFrame
-        topFrame = addDefinedVariables params frame
-        initialState = CodeGenState {
-          variables = Prelude.map Var [0..],
+
+    let initialState = CodeGenState {
+          localNames = map Local [0..],
+          tempNames = map Temp [0..],
           labels = labs,
-          frame = topFrame
+          frame = emptyFrame
         }
+
+        argZip = zip params argPassingRegs
+
+        generation = do
+          tell [ ILabel { iLabel = NamedLabel (show fname) }
+               , IFunctionBegin { iArgs = map snd argZip } ]
+        
+          savedRegs <- forM calleeSaveRegs $ \r -> do
+            v <- allocateTemp
+            tell [ IMove { iDest = v, iValue = r } ]
+            return (r, v)
+
+          args <- forM argZip $ \((_, name), r) -> do
+            v <- allocateTemp
+            tell [ IMove { iDest = v, iValue = r } ]
+            return (name, v)
+
+          case fname of
+            MainFunc -> tell [ IInitialise {} ]
+            _ -> return ()
+
+          setupFrame (Map.fromList args) savedRegs
+
+          genBlock body
+
+          retVal <- allocateTemp
+          tell [ ILiteral { iDest = retVal, iLiteral = LitInt 0 } ]
+          genReturn retVal
+
         (endState, irs) = (execRWS generation () initialState)
+
     put (labels endState)
     return irs
-    where
-      generation = do
-        tell [ ILabel { iLabel = NamedLabel (show fname) }
-             , IFunctionBegin ]
 
-        case fname of
-          MainFunc -> tell [ IInitialise {} ]
-          _ -> return ()
+genReturn :: Var -> CodeGen ()
+genReturn retVal = do
+  savedRegs <- gets (frameSavedRegs . frame)
+  tell (map (\(r,v) -> IMove { iDest = r, iValue = v }) (reverse savedRegs))
 
-        genBlock body
-        retVal <- allocateVar
-        tell [ ILiteral { iDest = retVal, iLiteral = LitInt 0 }
-             , IReturn { iValue = retVal } ]
+  tell [ IMove { iDest = Reg 0, iValue = retVal }
+       , IReturn ]
 
-addDefinedVariables :: [(Type, Identifier)] -> Frame -> Frame
-addDefinedVariables args f
-  = foldl (\f (_, id) -> f { definedVariables  = Set.insert id (definedVariables f) }) f args
+genCall :: Label -> [Var] -> CodeGen Var
+genCall label vars = do
+  outVal <- allocateTemp
+  let args = zip argPassingRegs vars
 
+  tell (map (\(a,v) -> IMove { iDest = a, iValue = v }) args)
+  tell [ ICall { iLabel = label, iArgs = map fst args }
+       , IMove { iDest = outVal, iValue = Reg 0 } ]
+  return outVal
 
 -- This does not attempt to be 100% accurate
 -- The register allocator affects a lot how many register are used
@@ -72,7 +103,7 @@ exprWeight (_, ExprArrayElem (_, ArrayElem _ exprs))
 -- Literals
 genExpr :: Annotated Expr TypeA -> CodeGen Var
 genExpr (_ , ExprLit literal) = do
-  litVar <- allocateVar
+  litVar <- allocateTemp
   tell [ ILiteral { iDest = litVar, iLiteral = literal} ]
   return litVar
 
@@ -82,14 +113,14 @@ genExpr (_, ExprUnOp UnOpChr expr) =
 genExpr (_, ExprUnOp UnOpOrd expr) =
   genExpr expr
 genExpr (_ , ExprUnOp operator expr) = do
-  unOpVar <- allocateVar
+  unOpVar <- allocateTemp
   valueVar <- genExpr expr
   tell [ IUnOp { iUnOp = operator, iDest = unOpVar, iValue = valueVar} ]
   return unOpVar
 
 -- BinOp
 genExpr (_ , ExprBinOp operator expr1 expr2) = do
-  binOpVar <- allocateVar
+  binOpVar <- allocateTemp
   (value1Var, value2Var) <- vars
   tell [ IBinOp { iBinOp = operator, iDest = binOpVar, iLeft = value1Var, iRight = value2Var } ]
   return binOpVar
@@ -117,20 +148,14 @@ genExpr (elemTy, ExprArrayElem (_, ArrayElem ident exprs)) = do
 
 -- Read from Frame
 genFrameRead :: Type -> String -> CodeGen Var
-genFrameRead ty ident = do
-  outVar <- allocateVar
-  offset <- variableOffset ident
-  tell [ IFrameRead { iOffset = offset
-                    , iDest   = outVar
-                    , iType   = ty} ]
-  return outVar
+genFrameRead ty ident = gets (getFrameLocal ident . frame)
 
 -- Read from Array
 genArrayRead :: Type -> Var -> Annotated Expr TypeA -> CodeGen Var
 genArrayRead elemTy arrayVar indexExpr = do
-  outVar <- allocateVar
-  arrayOffsetVar <- allocateVar 
-  offsetedArray <- allocateVar
+  outVar <- allocateTemp
+  arrayOffsetVar <- allocateTemp 
+  offsetedArray <- allocateTemp
   indexVar <- genExpr indexExpr
   tell [ IBoundsCheck { iArray = arrayVar
                       , iIndex = indexVar }
@@ -149,8 +174,8 @@ genArrayRead elemTy arrayVar indexExpr = do
 -- LHS Assign
 genAssign :: Annotated AssignLHS TypeA -> Var -> CodeGen ()
 genAssign (ty, LHSVar ident) valueVar = do
-  offset <- variableOffset ident
-  tell [ IFrameWrite { iOffset = offset, iValue = valueVar, iType = ty } ]
+  localVar <- gets (getFrameLocal ident . frame)
+  tell [ IMove { iDest = localVar, iValue = valueVar } ]
 
 -- LHS Pair 
 genAssign (_, LHSPairElem ((elemTy, pairTy), PairElem side pairExpr)) valueVar = do
@@ -167,10 +192,10 @@ genAssign (elemTy, LHSArrayElem (_, ArrayElem ident exprs)) valueVar = do
   -- The type is only used to determine the type of instruction (LDR vs LDRB)
   arrayVar <- genFrameRead (TyArray TyAny) ident
   subArrayVar <- foldM (genArrayRead (TyArray TyAny)) arrayVar readIndexExprs
-  offsetedBase <- allocateVar
+  offsetedBase <- allocateTemp
 
   writeIndexVar <- genExpr writeIndexExpr
-  arrayOffsetVar <- allocateVar
+  arrayOffsetVar <- allocateTemp
   tell [ IBoundsCheck { iArray = subArrayVar
                       , iIndex = writeIndexVar }
        , ILiteral { iDest = arrayOffsetVar, iLiteral = LitInt 4 }
@@ -197,8 +222,8 @@ pairOffset PairSnd (TyPair t _)  = typeSize t
 genRHS :: Annotated AssignRHS TypeA -> CodeGen Var
 genRHS (_, RHSExpr expr) = genExpr expr
 genRHS (TyArray elemTy, RHSArrayLit exprs) = do
-  arrayVar <- allocateVar
-  arrayLen <- allocateVar
+  arrayVar <- allocateTemp
+  arrayLen <- allocateTemp
   tell [ IArrayAllocate { iDest = arrayVar, iSize = size }
        , ILiteral { iDest = arrayLen, iLiteral = LitInt (toInteger (length exprs)) }
        , IHeapWrite { iHeapVar = arrayVar
@@ -221,7 +246,7 @@ genRHS (TyArray elemTy, RHSArrayLit exprs) = do
       elemSize = typeSize elemTy
 
 genRHS (t@(TyPair t1 t2), RHSNewPair fstExpr sndExpr) = do
-  pairVar <- allocateVar
+  pairVar <- allocateTemp
   fstVar <- genExpr fstExpr
   sndVar <- genExpr sndExpr
   tell [ IPairAllocate { iDest = pairVar }
@@ -230,27 +255,24 @@ genRHS (t@(TyPair t1 t2), RHSNewPair fstExpr sndExpr) = do
   return pairVar
 
 genRHS (_, RHSPairElem ((elemTy, pairTy), PairElem side pairExpr)) = do
-  outVar <- allocateVar
+  outVar <- allocateTemp
   pairVar <- genExpr pairExpr
   tell [ INullCheck { iValue = pairVar }
        , IHeapRead { iHeapVar = pairVar, iDest = outVar, iOperand = OperandLit (pairOffset side pairTy), iType = elemTy } ]
   return outVar
 
 genRHS (_, RHSCall name exprs) = do
-  outVar <- allocateVar
-  argVars <- forM exprs (\e@(ty,_) -> (ty,) <$> genExpr e)
-  tell [ ICall { iLabel = NamedLabel ("f_" ++ name)
-               , iArgs = argVars
-               , iDest = outVar } ]
-  return outVar
+  argVars <- mapM genExpr exprs
+  genCall (NamedLabel ("f_" ++ name)) argVars
 
 genStmt :: Annotated Stmt TypeA -> CodeGen ()
 genStmt (_, StmtSkip) = return ()
+
 genStmt (st, StmtVar ty ident rhs) = do
   initFrame <- gets frame
-  let definedVars = definedVariables initFrame
-  let newFrame = initFrame { definedVariables = Set.insert ident definedVars }
+  let newFrame = initFrame { definedLocals = Set.insert ident (definedLocals initFrame) }
   modify (\s -> s { frame = newFrame }) 
+
   genStmt (st, StmtAssign (ty, LHSVar ident) rhs)
 
 genStmt (_, StmtAssign lhs rhs) = do
@@ -258,7 +280,7 @@ genStmt (_, StmtAssign lhs rhs) = do
   genAssign lhs v
 
 genStmt (_, StmtRead lhs@(ty, _)) = do
-  v <- allocateVar
+  v <- allocateTemp
   tell [ IRead { iDest = v, iType = ty }]
   genAssign lhs v
 
@@ -268,9 +290,8 @@ genStmt (_, StmtFree expr@(ty, _)) = do
 
 genStmt (_, StmtReturn expr) = do
   v <- genExpr expr
-  initFrame <- gets frame
-  tell [ IFrameFree { iSize = totalAllocatedFrameSize initFrame }
-       , IReturn { iValue = v }]
+  tell [ IMove { iDest = Reg 0, iValue = v }
+       , IReturn ]
 
 genStmt (_, StmtExit expr) = do
   v <- genExpr expr
@@ -307,19 +328,8 @@ genStmt (_, StmtWhile condition block ) = do
 
 genStmt (_, StmtScope block) = genBlock block
 
-
-
 -- Block code generation
 genBlock :: Annotated Block TypeA -> CodeGen ()
-genBlock ((_, locals), Block stmts) = do
-  initialFrame <- gets frame
-  modify (\s -> s { frame = setVariables locals 0 $ childFrame initialFrame } )
-  updatedFrame <- gets frame
-  tell [ IFrameAllocate { iSize = frameSize updatedFrame } ]
-  forM_ stmts genStmt
-  tell [ IFrameFree { iSize = frameSize updatedFrame } ]
-  child <- gets frame
-  modify (\s -> s { frame = fromJust (parent child) })
-
-
+genBlock ((_, locals), Block stmts)
+  = withChildFrame (map fst locals) (forM_ stmts genStmt)
 

@@ -60,7 +60,7 @@ compile filename contents output
     flow      = map blockDataFlow <$> cfg
     live      = zipWith liveVariables <$> cfg <*> flow
     rig       = map interferenceGraph <$> live :: WACCResult [Gr Var ()]
-    colouring = sequence <$> map (\g -> colourGraph g (fmap Var [4..12])) <$> rig >>= \case
+    colouring = sequence <$> map (\g -> colourGraph g (fmap Reg [0..12])) <$> rig >>= \case
                 Just c  -> OK c
                 Nothing -> codegenError "Graph Colouring failed"
     cfgFinal  = zipWith (\c g -> Graph.nmap (applyColouring c) g)
@@ -75,7 +75,6 @@ compile filename contents output
                        <$> armWriter, snd <$> feat] :: WACCResult [String]
     asm       = map tabbedInstruction <$> asmSimple
    
-
 main :: IO ()
 main = do
   args <- waccArguments

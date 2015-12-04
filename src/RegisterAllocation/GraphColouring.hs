@@ -2,7 +2,8 @@
 
 module RegisterAllocation.GraphColouring
   (colourGraph, applyColouring) where
-import Data.Graph.Inductive
+import Data.Graph.Inductive (Graph, Node)
+import qualified Data.Graph.Inductive as Graph
 import Data.List
 import qualified Data.Map as Map
 import CodeGenTypes
@@ -12,56 +13,61 @@ import Control.Applicative
 
 -- Colour a graph such that no to vertices in the same edge share
 -- the same colour
-colourGraph :: (Graph gr, Ord a, Eq c) => gr a () -> [c] -> Maybe (Map a c)
-colourGraph rig colours
-  = case stack of
-    Just s -> Map.mapKeys (fromJust . lab rig) <$> findColouring s rig colours
-    Nothing -> Nothing
-  where
-    stack = buildStack rig [] (length colours)
+colourGraph :: (Graph gr) => gr Var () -> [Var] -> Maybe (Map Var Var)
+colourGraph rig colours = do
+  (stack, precolouring) <- buildStack rig [] (length colours)
+  colouring <- augmentColouring rig colours precolouring stack
+  return (Map.mapKeys (fromJust . Graph.lab rig) colouring)
     
 -- Build a stack of all nodes in the graph by always pushing a node
 -- that is valid (i.e has less than maxR number of neighbors) and update
 -- the graph at each step
-buildStack :: Graph gr => gr a () -> [Node] -> Int -> Maybe [Node]
+buildStack :: Graph gr => gr Var () -> [Node] -> Int -> Maybe ([Node], Map Node Var)
 buildStack rig stack maxR
-  | isEmpty rig = Just stack
-  | otherwise = case findValidNode rig (nodes rig) maxR of 
-        Just n  -> buildStack (delNode n rig) (n : stack) maxR
+  | isSimplifiedGraph rig = Just (stack, Map.fromList (Graph.labNodes rig))
+  | otherwise = case findValidNode rig (Graph.nodes rig) maxR of 
+        Just n  -> buildStack (Graph.delNode n rig) (n : stack) maxR
         Nothing -> Nothing
-     
+
+isSimplifiedGraph :: Graph gr => gr Var () -> Bool
+isSimplifiedGraph rig = all (isPrecoloured . snd) (Graph.labNodes rig)
+
+isPrecoloured :: Var -> Bool
+isPrecoloured (Reg x) = True
+isPrecoloured _       = False
+
+canSimplifyNode :: Graph gr => gr Var () -> Int -> Node -> Bool
+canSimplifyNode rig maxR node = (not . isPrecoloured . fromJust . Graph.lab rig $ node) && length (Graph.suc rig node) < maxR
+
 -- Get a node from the graph which has less than maxR neighbors,
 -- where maxR is the number of available colours to colour the graph
-findValidNode :: Graph gr => gr a () -> [Node] -> Int -> Maybe Node
+findValidNode :: Graph gr => gr Var () -> [Node] -> Int -> Maybe Node
 findValidNode rig (x:xs) maxR
-  | length (suc rig x) < maxR = Just x
-  | otherwise                 = findValidNode rig xs maxR
-findValidNode _ [] _ = Nothing
+  | canSimplifyNode rig maxR x = Just x
+  | otherwise                  = findValidNode rig xs maxR
+findValidNode _ [] _           = Nothing
 
 -- Find a valid colouring for a graph and (Maybe) return
 -- the mapping that is found 
-findColouring :: Eq c => Graph gr => [Node] -> gr a () -> [c] -> Maybe (Map Node c)
-findColouring nodes rig allCol
-  = foldl maybeColour (Just Map.empty) nodes
-  where
-    maybeColour Nothing _ = Nothing
-    maybeColour (Just colouring) node = 
-      case getNewColour (suc rig node) allCol colouring of
-        Just col -> Just $ Map.insert node col colouring
-        Nothing  -> Nothing
+augmentColouring :: Graph gr => gr Var () -> [Var] -> Map Node Var -> [Node] -> Maybe (Map Node Var)
+augmentColouring _ _ colouring [] = Just colouring
+augmentColouring rig colours colouring (node:xs) = do
+  col <- colourNode (Graph.suc rig node) colours colouring
+  let colouring' = Map.insert node col colouring
+  augmentColouring rig colours colouring' xs
 
 -- Find available colour that does not clash with any of 
 -- its neihbors.
 -- Nothing if there isnt an available colour
-getNewColour :: Eq c => [Node] -> [c] -> Map Node c -> Maybe c
-getNewColour (_:_) [] _
-  = Nothing
-getNewColour (n : rest) cols coloured
+colourNode :: Eq c => [Node] -> [c] -> Map Node c -> Maybe c
+colourNode _ [] _       = Nothing
+colourNode [] (col:_) _ = Just col
+colourNode (n : rest) cols coloured
   = case Map.lookup n coloured of
-      Nothing -> getNewColour rest cols coloured
-      Just c -> getNewColour rest (cols \\ [c]) coloured
-getNewColour [] cols _
-  = Just (head cols)
+      Nothing -> colourNode rest cols coloured
+      Just c -> colourNode rest (cols \\ [c]) coloured
+
+
 
 -- Apply Graph Colouring to the Intermediate Representation
 applyColouring :: Map Var Var -> [IR] -> [IR]
@@ -95,11 +101,6 @@ colourIR IMove{..} colouring
 colourIR ICondJump{..} colouring
   = ICondJump { iLabel = iLabel
               , iValue = get iValue colouring }
-
-colourIR ICall{..} colouring
-  = ICall { iLabel = iLabel
-          , iArgs  = map (\(ty, v) -> (ty, get v colouring)) iArgs
-          , iDest  = get iDest colouring }
 
 colourIR IFrameRead{..} colouring
   = IFrameRead { iOffset = iOffset
@@ -161,8 +162,6 @@ colourIR IFree{..} colouring
 colourIR IExit{..} colouring
   = IExit { iValue = get iValue colouring }
 
-colourIR IReturn{..} colouring
-  = IReturn { iValue = get iValue colouring }
 -- Base Case
 colourIR x colouring  = x
 
