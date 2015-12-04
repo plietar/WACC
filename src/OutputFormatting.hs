@@ -34,6 +34,12 @@ showTokens :: [(Pos, Token)] -> [String]
 showTokens = (:[]) . show . map snd
 
 
+showProgram :: (Annotated Program TypeA) -> PrintAST ()
+showProgram (_, Program fs) = do
+  indent <- ask
+  tell [ (tabs indent) ++ "Program" ]
+  forM_ fs (\f -> local (+ 1) (showFuncDef f))
+  return ()
  
   
 showIR :: [IR] -> [String]
