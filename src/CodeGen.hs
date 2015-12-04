@@ -39,6 +39,22 @@ genFunction (_, FuncDef _ fname params body) = do
         tell [ ILiteral { iDest = retVal, iLiteral = LitInt 0 }
              , IReturn { iValue = retVal } ]
 
+-- This does not attempt to be 100% accurate
+-- The register allocator affects a lot how many register are used
+-- It only used as a rough metric for generating BinOps
+exprWeight :: Annotated Expr TypeA -> Int
+exprWeight (_, ExprLit _) = 1
+exprWeight (_, ExprUnOp UnOpChr e) = exprWeight e
+exprWeight (_, ExprUnOp UnOpOrd e) = exprWeight e
+exprWeight (_, ExprUnOp _ e) = 1 + exprWeight e
+exprWeight (_, ExprBinOp _ e1 e2)
+  = let w1 = exprWeight e1
+        w2 = exprWeight e2
+    in min (max w1 (w2 + 1))
+           (max (w1 + 1) w2)
+exprWeight (_, ExprVar _) = 1
+exprWeight (_, ExprArrayElem (_, ArrayElem _ exprs))
+  = 1 + maximum (map exprWeight exprs)
 
 -- Literals
 genExpr :: Annotated Expr TypeA -> CodeGen Var
@@ -61,10 +77,13 @@ genExpr (_ , ExprUnOp operator expr) = do
 -- BinOp
 genExpr (_ , ExprBinOp operator expr1 expr2) = do
   binOpVar <- allocateVar
-  value1Var <- genExpr expr1
-  value2Var <- genExpr expr2
+  (value1Var, value2Var) <- vars
   tell [ IBinOp { iBinOp = operator, iDest = binOpVar, iLeft = value1Var, iRight = value2Var } ]
   return binOpVar
+  where
+    vars = if exprWeight expr1 > exprWeight expr2
+           then liftM2 (,) (genExpr expr1) (genExpr expr2)
+           else swap <$> liftM2 (,) (genExpr expr2) (genExpr expr1)
 
 -- Variable
 genExpr (ty, ExprVar ident) = genFrameRead ty ident
