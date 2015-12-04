@@ -61,6 +61,78 @@ showArgs :: [(Type, Identifier)] -> String
 showArgs ((t, _) : args)
   = (show t) ++ ", " ++ showArgs args
 showArgs [] = ""
+
+showStmt :: (Annotated Stmt TypeA) -> PrintAST ()
+showStmt (_, StmtSkip) = return ()
+showStmt (_, StmtVar t id assignrhs) = do
+  indent <- ask
+  tell [ (tabs indent) ++ "- "  ++ " VAR " ++ (show t)  ++ " " ++ (show id) ]
+  local (+ 1) (showAssignRHS assignrhs)
+  return ()
+  
+showStmt (_, StmtAssign lhs rhs) = do
+  indent <- ask
+  tell [ (tabs indent) ++ "- ASSIGN "]
+  local (+ 1) (showAssignRHS rhs)
+  local (+ 1) (showAssignLHS lhs)
+  return ()
+ 
+showStmt (_, StmtRead lhs) = do
+  indent <- ask
+  tell [ (tabs indent) ++ "- READ " ]
+  local (+ 1) (showAssignLHS lhs)
+  return ()
+ 
+showStmt (_, StmtFree e) = do
+  indent <- ask
+  tell [ (tabs indent) ++ "- FREE " ]
+  local (+ 1) (showExpr e)
+  return ()
+ 
+showStmt (_, StmtReturn e) = do
+  indent <- ask
+  tell [ (tabs indent) ++ "- RETURN" ]
+  local (+ 1) (showExpr e)
+  return ()
+showStmt (_, StmtExit e) = do
+  indent <- ask
+  tell [ (tabs indent) ++ "- EXIT" ]
+  local (+ 1) (showExpr e)
+  return ()
+ 
+showStmt (_, StmtPrint e b) = do
+  indent <- ask
+  tell [ (tabs indent) ++ "- PRINT" ++ line ]
+  local (+ 1) (showExpr e)
+  return ()
+  where
+    line = if b then "LN" else ""
+ 
+showStmt (_, StmtIf cond b1 b2) = do
+  indent <- ask
+  tell [ (tabs indent) ++ "- IF" ]
+  tell [ (tabs (indent + 1)) ++ "- COND" ]
+  local (+ 2) (showExpr cond)
+  tell [ (tabs (indent + 1)) ++ "- THEN" ]
+  local (+ 2) (showBlock b1)
+  tell [ (tabs (indent + 1)) ++ "- ELSE" ]
+  local (+ 2) (showBlock b2)
+  return ()
+ 
+showStmt (_, StmtWhile cond b) = do
+  indent <- ask
+  tell [ (tabs indent) ++ "- WHILE" ]
+  tell [ (tabs (indent + 1)) ++ "- COND" ]
+  local (+ 2) (showExpr cond)
+  tell [ (tabs (indent + 1)) ++ "- BODY" ]
+  local (+ 2) (showBlock b)
+  return ()
+
+showStmt (_, StmtScope b) = do
+  indent <- ask
+  tell [ (tabs indent) ++ "- SCOPE "]
+  local (+ 1) (showBlock b)
+  return ()
  
   
 showIR :: [IR] -> [String]
