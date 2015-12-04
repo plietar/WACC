@@ -2,12 +2,9 @@
 {-# LANGUAGE CPP #-}
 
 module Main where
-import Common.AST
-import Common.Span
 import Common.WACCResult
 import Frontend.Parser
 import Frontend.Lexer
-import Frontend.Tokens
 import Frontend.SemCheck
 import CodeGenTypes
 import CodeGen
@@ -21,21 +18,13 @@ import RegisterAllocation.GraphColouring
 
 import System.Exit
 
-import Data.List
-import Data.Maybe
 import Control.Applicative
 import System.FilePath.Posix
 
-import Data.Map (Map,(!))
-import qualified Data.Map as Map
-import qualified Data.Set as Set
 
-import Data.Graph.Inductive.Graph (Graph)
 import Data.Graph.Inductive.PatriciaTree (Gr)
 import qualified Data.Graph.Inductive.Graph as Graph
 
-import Control.Monad.State
-import Control.Monad.Writer
 
 #if WITH_GRAPHVIZ
 import qualified Data.GraphViz as GraphViz
@@ -105,6 +94,7 @@ main = do
   let result = compile filename contents (outputType args)
   case result of
     OK output -> writeFile outputFile (unlines output)
+--    OK output -> putStr (unlines output)
     Error kind msg -> do
       putStrLn ("Error " ++ show kind)
       putStr (unlines (reverse msg))

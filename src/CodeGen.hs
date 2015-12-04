@@ -10,8 +10,8 @@ import Control.Monad.RWS
 import Control.Monad.State
 import Control.Applicative
 
-import qualified Data.Map as Map
 import Data.Tuple(swap)
+import qualified Data.Set as Set
 
 genProgram :: Annotated Program TypeA -> [[IR]]
 genProgram (_, Program fs)
@@ -234,8 +234,12 @@ genRHS (_, RHSCall name exprs) = do
 
 genStmt :: Annotated Stmt TypeA -> CodeGen ()
 genStmt (_, StmtSkip) = return ()
-genStmt (st, StmtVar ty ident rhs)
-  = genStmt (st, StmtAssign (ty, LHSVar ident) rhs)
+genStmt (st, StmtVar ty ident rhs) = do
+  genStmt (st, StmtAssign (ty, LHSVar ident) rhs)
+  initFrame <- gets frame
+  let definedVars = definedVariables initFrame
+  let newFrame = initFrame { definedVariables = Set.insert ident definedVars }
+  modify (\s -> s { frame = newFrame }) 
 
 genStmt (_, StmtAssign lhs rhs) = do
   v <- genRHS rhs
@@ -252,8 +256,8 @@ genStmt (_, StmtFree expr@(ty, _)) = do
 
 genStmt (_, StmtReturn expr) = do
   v <- genExpr expr
-  frame <- gets frame
-  tell [ IFrameFree { iSize = totalAllocatedFrameSize frame }
+  initFrame <- gets frame
+  tell [ IFrameFree { iSize = totalAllocatedFrameSize initFrame }
        , IReturn { iValue = v }]
 
 genStmt (_, StmtExit expr) = do
