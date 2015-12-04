@@ -196,12 +196,16 @@ genRHS (TyArray elemTy, RHSArrayLit exprs) = do
     elemVar <- genExpr expr
     tell [ IHeapWrite  { iHeapVar = arrayVar
                        , iValue = elemVar
-                       , iOperand = OperandLit (4 + index * tSize)
+                       , iOperand = OperandLit (4 + index * elemSize)
                        , iType = elemTy } ]
   return arrayVar
     where
-      size = 4 + tSize * (length exprs)
-      tSize = typeSize elemTy
+      -- For empty arrays, the element type is TyAny, so we can't get the size
+      -- However, we don't need it since we know there are no elements to allocate
+      size = 4 + if length exprs > 0
+                 then (length exprs) * elemSize
+                 else 0
+      elemSize = typeSize elemTy
 
 genRHS (t@(TyPair t1 t2), RHSNewPair fstExpr sndExpr) = do
   pairVar <- allocateVar
