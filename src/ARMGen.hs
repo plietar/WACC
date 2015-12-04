@@ -97,14 +97,14 @@ genARMInstruction (IBinOp { iBinOp = op, iDest = Var dest,
       BinOpDiv -> do emit ["MOV r0, r" ++ (show left),
                         "MOV r1, r" ++ (show right),
                         "BL p_check_divide_by_zero",
-                        "BL __aeabi_idiv",
+                        "BL __aeabi_idivmod",
                         "MOV r" ++ show dest ++ ", r0"]
                      emitFeature CheckDivideByZero
       BinOpRem -> do emit ["MOV r0, r" ++ (show left),
                         "MOV r1, r" ++ (show right),
                         "BL p_check_divide_by_zero",
                         "BL __aeabi_idivmod",
-                        "MOV r" ++ show dest ++ ", r0"]
+                        "MOV r" ++ show dest ++ ", r1"]
                      emitFeature CheckDivideByZero
       BinOpGT  -> emit ["CMP r" ++ (show left) ++ ", r" ++ (show right),
                         "MOVGT r" ++ (show dest) ++ ", #1",
