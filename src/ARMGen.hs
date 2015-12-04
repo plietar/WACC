@@ -149,8 +149,8 @@ genARMInstruction (IJump {iLabel = label} )
 
 --Call
 genARMInstruction (ICall { iLabel = label, iArgs = args, iDest = Var dest }) = do
-  forM args $ \(ty, Var arg) -> do
-    emit [strInstr ty ++ " r" ++ show arg ++ ", [sp, #" ++ show (typeSize ty) ++ "]!"]
+  forM (reverse args) $ \(ty, Var arg) -> do
+    emit [strInstr ty ++ " r" ++ show arg ++ ", [sp, #-" ++ show (typeSize ty) ++ "]!"]
   emit ["BL " ++ show label ]
   unless (null args) (emit ["ADD sp, sp, #" ++ show (sum (map (typeSize . fst) args))])
   emit [ "MOV r" ++ show dest ++ ", r0" ]
