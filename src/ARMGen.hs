@@ -247,11 +247,7 @@ genARMInstruction (IReturn { iValue = Var value })
 
 mergeFeatures :: Set Feature -> ([String], [String])
 mergeFeatures features
-  = foldl f ([],[]) (Set.elems (mergeDependencies features)) 
-  where
-    f (a, b) feature = (a ++ (fst res), b ++ (snd res))
-      where
-        res = genFeature feature
+  = foldl mappend ([],[]) (map genFeature $ Set.elems $ mergeDependencies features)
 
 mergeDependencies:: Set Feature -> Set Feature
 mergeDependencies features = Set.unions $ Set.elems (Set.map dependantOn features)
