@@ -43,6 +43,9 @@ instance Monoid ARMWriter where
   mempty = ARMWriter [] [] Set.empty
   mappend (ARMWriter a b c) (ARMWriter a' b' c') = ARMWriter (a ++ a') (b ++ b') (Set.union c c')
 
+offsetLimitARM :: Int
+offsetLimitARM = 1024
+
 emit :: [String] -> ARMGen ()
 emit xs = tell (ARMWriter xs [] Set.empty)
 
@@ -161,12 +164,25 @@ genARMInstruction (ILabel { iLabel = label} )
 
 --Frame
 genARMInstruction (IFrameAllocate { iSize = 0 }) = return ()
-genARMInstruction (IFrameAllocate { iSize = size })
-  = emit ["SUB sp, sp, #" ++ show size]
+genARMInstruction (IFrameAllocate { iSize = size }) = do
+  if size <= offsetLimitARM 
+  then 
+    emit ["SUB sp, sp, #" ++ show size]
+  else do
+    emit ["SUB sp, sp, #" ++ show offsetLimitARM ]
+    genARMInstruction (IFrameAllocate { iSize = size - offsetLimitARM })
+
 
 genARMInstruction (IFrameFree { iSize = 0 }) = return ()
-genARMInstruction (IFrameFree { iSize = size } )
-  = emit ["ADD sp, sp, #" ++ show size]
+genARMInstruction (IFrameFree { iSize = size } ) = do
+  if size <= offsetLimitARM 
+  then 
+    emit ["ADD sp, sp, #" ++ show size]
+  else do
+    emit ["ADD sp, sp, #" ++ show offsetLimitARM ]
+    genARMInstruction (IFrameFree { iSize = size - offsetLimitARM })
+
+
 genARMInstruction (IFrameRead {iOffset = offset, iDest = Var dest, iType = ty} )
   = emit [ldrInstr ty ++ " r" ++ (show dest) ++ ", [sp, #" ++ (show offset) ++ "]"]
 genARMInstruction (IFrameWrite {iOffset = offset, iValue = Var value, iType = ty} )
