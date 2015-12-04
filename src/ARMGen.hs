@@ -5,6 +5,7 @@ import CodeGenTypes
 import Data.Monoid
 import Control.Monad.RWS
 import Data.Set (Set)
+import Data.Char
 import qualified Data.Set as Set
 
 data Feature = CheckDivideByZero
@@ -78,7 +79,7 @@ genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitBool True } )
 genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitBool False } )
   = emit ["MOV r" ++ (show dest) ++ ", #0"]
 genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitChar chr } ) 
-  = emit ["MOV r" ++ (show dest) ++ ", #" ++ (show chr)]
+  = emit ["MOV r" ++ (show dest) ++ ", #" ++ (show (ord chr))]
 genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitString str  } ) = do
   message <- emitLiteral str
   emit ["LDR r" ++ (show dest) ++ ", =" ++ message]
@@ -96,12 +97,14 @@ genARMInstruction (IBinOp { iBinOp = op, iDest = Var dest,
       BinOpDiv -> do emit ["MOV r0, r" ++ (show left),
                         "MOV r1, r" ++ (show right),
                         "BL p_check_divide_by_zero",
-                        "BL __aeabi_idiv"]
+                        "BL __aeabi_idivmod",
+                        "MOV r" ++ show dest ++ ", r0"]
                      emitFeature CheckDivideByZero
       BinOpRem -> do emit ["MOV r0, r" ++ (show left),
                         "MOV r1, r" ++ (show right),
                         "BL p_check_divide_by_zero",
-                        "BL __aeabi_idivmod"]
+                        "BL __aeabi_idivmod",
+                        "MOV r" ++ show dest ++ ", r1"]
                      emitFeature CheckDivideByZero
       BinOpGT  -> emit ["CMP r" ++ (show left) ++ ", r" ++ (show right),
                         "MOVGT r" ++ (show dest) ++ ", #1",
@@ -123,7 +126,7 @@ genARMInstruction (IBinOp { iBinOp = op, iDest = Var dest,
                         "MOVEQ r" ++ (show dest) ++ ", #0"]
       BinOpAnd -> emit ["AND r" ++ (show dest) ++ ", r" ++
                         (show left) ++ ", r" ++ (show right) ]
-      BinOpOr  -> emit ["OR r" ++ (show dest) ++ ", r" ++
+      BinOpOr  -> emit ["ORR r" ++ (show dest) ++ ", r" ++
                         (show left) ++ ", r" ++ (show right) ]
 
 --UnOp
@@ -145,9 +148,9 @@ genARMInstruction (IJump {iLabel = label} )
   = emit ["B " ++ (show label)]
 
 --Call
-genARMInstruction (ICall { iLabel = label, iArgs = args, iDest = dest }) = do
-  forM args $ \(ty, Var arg) -> do
-    emit [strInstr ty ++ " r" ++ show arg ++ ", [sp, #" ++ show (typeSize ty) ++ "]!"]
+genARMInstruction (ICall { iLabel = label, iArgs = args, iDest = Var dest }) = do
+  forM (reverse args) $ \(ty, Var arg) -> do
+    emit [strInstr ty ++ " r" ++ show arg ++ ", [sp, #-" ++ show (typeSize ty) ++ "]!"]
   emit ["BL " ++ show label ]
   unless (null args) (emit ["ADD sp, sp, #" ++ show (sum (map (typeSize . fst) args))])
   emit [ "MOV r" ++ show dest ++ ", r0" ]
@@ -202,8 +205,8 @@ genARMInstruction (INullCheck { iValue = Var value })
          , "BL p_check_null_pointer" ]
        emitFeature CheckNullPointer
 genARMInstruction (IBoundsCheck { iArray = Var array, iIndex = Var index })
-  = do emit [ "MOV r0, r" ++ show array
-         , "MOV r1, r" ++ show index
+  = do emit [ "MOV r0, r" ++ show index
+         , "MOV r1, r" ++ show array
          , "BL p_check_array_bounds" ]
        emitFeature CheckArrayBounds
 
@@ -226,8 +229,10 @@ genARMInstruction (IPrint { iValue = Var value, iType = t, iNewline = newline })
 -- Read
 genARMInstruction (IRead { iDest = Var dest, iType = t})
   = case t of
-      TyInt -> emit ["BL p_read_int"]
-      TyChar -> emit ["BL p_read_char"]
+      TyInt  -> emit [ "BL p_read_int"
+                     , "MOV r" ++ show dest ++ ", r0"]
+      TyChar -> emit [ "BL p_read_char"
+                     , "MOV r" ++ show dest ++ ", r0"]
 -- Free
 genARMInstruction (IFree { iValue = Var value, iType = t})
   = emit [ "MOV r0, r" ++ show value
@@ -243,7 +248,8 @@ genARMInstruction (IFunctionBegin { })
   = emit [ "PUSH {lr}" ]
 genARMInstruction (IReturn { iValue = Var value })
   = emit [ "MOV r0, r" ++ show value
-         , "POP {pc}" ]
+         , "POP {pc}"
+         , ".ltorg"]
 
 mergeFeatures :: Set Feature -> ([String], [String])
 mergeFeatures features
@@ -268,7 +274,7 @@ genFeature CheckDivideByZero = (["msg_p_check_divide_by_zero:",
                                ,["p_check_divide_by_zero:",
                                  "PUSH {lr}",
                                  "CMP r1, #0",
-                                 "LDREQ r0, =msg_check_p_divide_by_zero",
+                                 "LDREQ r0, =msg_p_check_divide_by_zero",
                                  "BLEQ p_throw_runtime_error",
                                  "POP {pc}"])
 
@@ -302,7 +308,7 @@ genFeature CheckArrayBounds =  (["msg_p_check_array_bounds_1:",
 
 genFeature PrintInt =  (["msg_p_print_int:", 
                          ".word 3",
-                         ".ascii \"%.d\\0\""] 
+                         ".ascii \"%d\\0\""] 
                        ,["p_print_int:",
                          "PUSH {lr}",
                          "MOV r1, r0",
@@ -332,7 +338,7 @@ genFeature PrintBool = (["msg_p_print_bool_1:",
 
 genFeature PrintString = (["msg_p_print_string:", 
                            ".word 5",
-                           ".ascii \"%.*s\0"] 
+                           ".ascii \"%.*s\\0\""] 
                          ,["p_print_string:",
                            "PUSH {lr}",
                            "LDR r1, [r0]",
@@ -346,7 +352,7 @@ genFeature PrintString = (["msg_p_print_string:",
 
 genFeature PrintReference = (["msg_p_print_reference:", 
                               ".word 3",
-                              ".ascii \"%p\0\""] 
+                              ".ascii \"%p\\0\""] 
                             ,["p_print_reference:",
                               "PUSH {lr}",
                               "MOV r1, r0",
@@ -360,7 +366,7 @@ genFeature PrintReference = (["msg_p_print_reference:",
 genFeature PrintLine = (["msg_p_print_ln:", 
                          ".word 1",
                          ".ascii \"\\0\""] 
-                       ,["p_print_ln",
+                       ,["p_print_ln:",
                          "PUSH {lr}",
                          "LDR r0, =msg_p_print_ln",
                          "ADD r0, r0, #4",
@@ -374,23 +380,27 @@ genFeature ReadInt = (["msg_p_read_int:",
                          ".ascii \"%d\\0\""] 
                        ,["p_read_int:",
                          "PUSH {lr}",
-                         "MOV r1, r0",
+                         "SUB sp, sp, #4",
+                         "MOV r1, sp",
                          "LDR r0, =msg_p_read_int",
                          "ADD r0, r0, #4",
                          "BL scanf",
+                         "LDR r0, [sp]",
+                         "ADD sp, sp, #4",
                          "POP {pc}"])
-
 
 genFeature ReadChar = (["msg_p_read_char:", 
                          ".word 4",
                          ".ascii \" %c\\0\""] 
                        ,["p_read_char:",
                          "PUSH {lr}",
-                         "MOV r1, r0",
+                         "SUB sp, sp, #1",
+                         "MOV r1, sp",
                          "LDR r0, =msg_p_read_char",
-                         "BL puts",
-                         "MOV r0, #0",
-                         "BL fflush",
+                         "ADD r0, r0, #4",
+                         "BL scanf",
+                         "LDRSB r0, [sp]",
+                         "ADD sp, sp, #1",
                          "POP {pc}"])
 
 --Calls another feature: p_print_string.
@@ -403,7 +413,7 @@ genFeature ThrowRuntimeError = ([""]
 genFeature ThrowOverflowError =  (["msg_p_throw_overflow_error:",
                                    ".word 82",
                                    ".ascii \"OverflowError: the result is too small/large to store \
-                                    \in a 4-byte signed-integer. \\n\""] 
+                                     \in a 4-byte signed-integer. \\n\""] 
                                  ,["p_throw_overflow_error:",
                                    "LDR r0, =msg_p_throw_overflow_error",
                                    "BL p_throw_runtime_error"])

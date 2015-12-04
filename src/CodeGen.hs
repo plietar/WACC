@@ -7,22 +7,30 @@ import Common.AST
 import CodeGenTypes
 
 import Control.Monad.RWS
+import Control.Monad.State
 import Control.Applicative
 
 import qualified Data.Map as Map
 import Data.Tuple(swap)
 
--- Functions
-genFunction :: Annotated FuncDef TypeA -> [IR]
-genFunction (_, FuncDef _ fname params body)
-  = snd (execRWS generation topFrame initialState)
-    where
-      topFrame = setVariables (map swap params) 4 rootFrame
-      initialState = CodeGenState {
-        variables = Prelude.map Var [0..],
-        labels = Prelude.map UnnamedLabel [0..]
-      }
+genProgram :: Annotated Program TypeA -> [[IR]]
+genProgram (_, Program fs)
+  = let generate = sequence (map genFunction fs)
+    in evalState generate (map UnnamedLabel [0..])
 
+-- Functions
+genFunction :: Annotated FuncDef TypeA -> State [Label] [IR]
+genFunction (_, FuncDef _ fname params body) = do
+    labs <- get
+    let topFrame = setVariables (map swap params) 4 rootFrame
+        initialState = CodeGenState {
+          variables = Prelude.map Var [0..],
+          labels = labs
+        }
+        (endState, irs) = (execRWS generation topFrame initialState)
+    put (labels endState)
+    return irs
+    where
       generation = do
         tell [ ILabel { iLabel = NamedLabel (show fname) }
              , IFunctionBegin ]
@@ -31,6 +39,22 @@ genFunction (_, FuncDef _ fname params body)
         tell [ ILiteral { iDest = retVal, iLiteral = LitInt 0 }
              , IReturn { iValue = retVal } ]
 
+-- This does not attempt to be 100% accurate
+-- The register allocator affects a lot how many register are used
+-- It only used as a rough metric for generating BinOps
+exprWeight :: Annotated Expr TypeA -> Int
+exprWeight (_, ExprLit _) = 1
+exprWeight (_, ExprUnOp UnOpChr e) = exprWeight e
+exprWeight (_, ExprUnOp UnOpOrd e) = exprWeight e
+exprWeight (_, ExprUnOp _ e) = 1 + exprWeight e
+exprWeight (_, ExprBinOp _ e1 e2)
+  = let w1 = exprWeight e1
+        w2 = exprWeight e2
+    in min (max w1 (w2 + 1))
+           (max (w1 + 1) w2)
+exprWeight (_, ExprVar _) = 1
+exprWeight (_, ExprArrayElem (_, ArrayElem _ exprs))
+  = 1 + maximum (map exprWeight exprs)
 
 -- Literals
 genExpr :: Annotated Expr TypeA -> CodeGen Var
@@ -53,10 +77,13 @@ genExpr (_ , ExprUnOp operator expr) = do
 -- BinOp
 genExpr (_ , ExprBinOp operator expr1 expr2) = do
   binOpVar <- allocateVar
-  value1Var <- genExpr expr1
-  value2Var <- genExpr expr2
+  (value1Var, value2Var) <- vars
   tell [ IBinOp { iBinOp = operator, iDest = binOpVar, iLeft = value1Var, iRight = value2Var } ]
   return binOpVar
+  where
+    vars = if exprWeight expr1 > exprWeight expr2
+           then liftM2 (,) (genExpr expr1) (genExpr expr2)
+           else swap <$> liftM2 (,) (genExpr expr2) (genExpr expr1)
 
 -- Variable
 genExpr (ty, ExprVar ident) = genFrameRead ty ident
@@ -102,7 +129,7 @@ genArrayRead elemTy arrayVar indexExpr = do
                  , iRight = arrayVar }
         , IHeapRead { iHeapVar = offsetedArray
                     , iDest    = outVar
-                    , iOperand = OperandVar arrayOffsetVar (typeShift elemTy)
+                    , iOperand = OperandVar indexVar (typeShift elemTy)
                     , iType    = elemTy } ]
   return outVar
 
@@ -169,12 +196,16 @@ genRHS (TyArray elemTy, RHSArrayLit exprs) = do
     elemVar <- genExpr expr
     tell [ IHeapWrite  { iHeapVar = arrayVar
                        , iValue = elemVar
-                       , iOperand = OperandLit (4 + index * tSize)
+                       , iOperand = OperandLit (4 + index * elemSize)
                        , iType = elemTy } ]
   return arrayVar
     where
-      size = 4 + tSize * (length exprs)
-      tSize = typeSize elemTy
+      -- For empty arrays, the element type is TyAny, so we can't get the size
+      -- However, we don't need it since we know there are no elements to allocate
+      size = 4 + if length exprs > 0
+                 then (length exprs) * elemSize
+                 else 0
+      elemSize = typeSize elemTy
 
 genRHS (t@(TyPair t1 t2), RHSNewPair fstExpr sndExpr) = do
   pairVar <- allocateVar
