@@ -119,6 +119,6 @@ getOffset var Frame{..} =
 
 totalAllocatedFrameSize :: Frame -> Int
 totalAllocatedFrameSize Frame{..}
-  = if allocated then frameSize else 0 +
+  = (if allocated then frameSize else 0) +
     fromMaybe 0 (totalAllocatedFrameSize <$> parent)
 
