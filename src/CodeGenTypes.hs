@@ -124,10 +124,7 @@ getOffset var Frame{..} =
       Nothing -> frameSize + getOffset var (fromJust parent)
       Just offset -> offset
   else 
-    case parent of
-      Nothing -> (1000)
-      Just f -> frameSize + getOffset var f
---    (frameSize + getOffset var (fromJust parent))
+    (frameSize + getOffset var (fromJust parent))
     where
       defined = Set.member var definedVariables
 

@@ -235,11 +235,11 @@ genRHS (_, RHSCall name exprs) = do
 genStmt :: Annotated Stmt TypeA -> CodeGen ()
 genStmt (_, StmtSkip) = return ()
 genStmt (st, StmtVar ty ident rhs) = do
-  genStmt (st, StmtAssign (ty, LHSVar ident) rhs)
   initFrame <- gets frame
   let definedVars = definedVariables initFrame
   let newFrame = initFrame { definedVariables = Set.insert ident definedVars }
   modify (\s -> s { frame = newFrame }) 
+  genStmt (st, StmtAssign (ty, LHSVar ident) rhs)
 
 genStmt (_, StmtAssign lhs rhs) = do
   v <- genRHS rhs
