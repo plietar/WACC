@@ -91,7 +91,7 @@ isOrderedType _      = False
 
 isReadableType :: Type -> Bool
 isReadableType TyInt  = True
-isReadableType TyBool = True
+isReadableType TyBool = False
 isReadableType TyChar = True
 isReadableType TyAny  = True
 isReadableType _      = False
