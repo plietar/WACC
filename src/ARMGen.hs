@@ -91,12 +91,22 @@ genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitString str  } ) = 
 genARMInstruction (IBinOp { iBinOp = op, iDest = Var dest,
         iLeft  = Var left, iRight = Var right } )
   = case op of  
-      BinOpAdd -> emit ["ADD r" ++ (show dest) ++ ", r" ++ 
-                        (show left) ++ ", r" ++ (show right)] 
-      BinOpSub -> emit ["SUB r" ++ (show dest) ++ ", r" ++ 
-                        (show left) ++ ", r" ++ (show right)]
-      BinOpMul -> emit ["MUL r" ++ (show dest) ++ ", r" ++ 
-                        (show left) ++ ", r" ++ (show right) ]
+      BinOpAdd -> do
+                  emit ["ADDS r" ++ (show dest) ++ ", r" ++ 
+                        (show left) ++ ", r" ++ (show right)
+                       , "BLVS p_throw_overflow_error"]
+                  emitFeature ThrowOverflowError 
+      BinOpSub -> do
+                  emit ["SUBS r" ++ (show dest) ++ ", r" ++ 
+                        (show left) ++ ", r" ++ (show right)
+                       , "BLVS p_throw_overflow_error"]
+                  emitFeature ThrowOverflowError 
+      BinOpMul -> do
+                  emit ["SMULL r" ++ (show dest) ++ ", r" ++ (show right)
+                        ++ ", r" ++ (show left) ++ ", r" ++ (show right) 
+                       , "CMP r" ++ (show right) ++ ", r" ++ (show dest) ++ ", ASR #31"
+                       , "BLNE p_throw_overflow_error" ]
+                  emitFeature ThrowOverflowError
       BinOpDiv -> do emit ["MOV r0, r" ++ (show left),
                         "MOV r1, r" ++ (show right),
                         "BL p_check_divide_by_zero",
@@ -137,7 +147,11 @@ genARMInstruction IUnOp { iUnOp = op, iDest = Var dest,
         iValue = Var value }
   = case op of
       UnOpNot -> emit ["EOR r" ++ (show dest) ++ ", r" ++ (show value) ++ ", #1"]
-      UnOpNeg -> emit ["RSB r" ++ (show dest) ++ ", r" ++ (show value) ++ ", #0"]
+      UnOpNeg -> do
+                  emit ["RSBS r" ++ (show dest) ++ ", r" ++ (show value) ++ ", #0"
+                      , "BLVS p_throw_overflow_error"]
+                  emitFeature ThrowOverflowError 
+
       UnOpLen -> emit ["LDR r" ++ (show dest) ++ ", [r" ++ show value ++ "]"]
 
 genARMInstruction IMove { iDest = Var dest, iValue = Var value }
@@ -262,7 +276,8 @@ genARMInstruction (IFree { iValue = Var value, iType = t}) = do
             , "BL free" ]
     TyPair _ _ -> do
        genARMInstruction ( INullCheck { iValue = Var value } )
-       emit [ "BL free" ]
+       emit [ "MOV r0, r" ++ show value
+            , "BL free" ]
 
   
 
