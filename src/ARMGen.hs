@@ -255,10 +255,17 @@ genARMInstruction (IRead { iDest = Var dest, iType = t})
                   emitFeature ReadChar
 
 -- Free
-genARMInstruction (IFree { iValue = Var value, iType = t})
-  = emit [ "MOV r0, r" ++ show value
-         , "BL free" ]
+genARMInstruction (IFree { iValue = Var value, iType = t}) = do
+  case t of
+    TyArray _ -> do
+       emit [ "MOV r0, r" ++ show value
+            , "BL free" ]
+    TyPair _ _ -> do
+       genARMInstruction ( INullCheck { iValue = Var value } )
+       emit [ "BL free" ]
+
   
+
 -- Exit
 genARMInstruction (IExit { iValue = Var value })
   = emit [ "MOV r0, r" ++ show value
