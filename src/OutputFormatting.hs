@@ -68,48 +68,43 @@ showArgs ((t, _) : args)
 showArgs [] = ""
 
 showStmt :: (Annotated Stmt TypeA) -> PrintAST ()
-showStmt (_, StmtSkip) = return ()
+showStmt (_, StmtSkip) 
+  = return ()
 showStmt (_, StmtVar t id assignrhs) = do
   indent <- ask
   tell [ (tabs indent) ++ "- "  ++ " StmtVar " ++ (show t)  ++ " " ++ (show id) ]
   local (+ 1) (showAssignRHS assignrhs)
-  return ()
 
 showStmt (_, StmtAssign lhs rhs) = do
   indent <- ask
   tell [ (tabs indent) ++ "- StmtAssign "]
   local (+ 1) (showAssignRHS rhs)
   local (+ 1) (showAssignLHS lhs)
-  return ()
 
 showStmt (_, StmtRead lhs) = do
   indent <- ask
   tell [ (tabs indent) ++ "- StmtRead " ]
   local (+ 1) (showAssignLHS lhs)
-  return ()
 
 showStmt (_, StmtFree e) = do
   indent <- ask
   tell [ (tabs indent) ++ "- StmtFree " ]
   local (+ 1) (showExpr e)
-  return ()
 
 showStmt (_, StmtReturn e) = do
   indent <- ask
   tell [ (tabs indent) ++ "- StmtReturn" ]
   local (+ 1) (showExpr e)
-  return ()
+
 showStmt (_, StmtExit e) = do
   indent <- ask
   tell [ (tabs indent) ++ "- StmtExti" ]
   local (+ 1) (showExpr e)
-  return ()
 
 showStmt (_, StmtPrint e b) = do
   indent <- ask
   tell [ (tabs indent) ++ "- StmtPrint" ++ line ]
   local (+ 1) (showExpr e)
-  return ()
   where
     line = if b then "ln" else ""
 
@@ -122,7 +117,6 @@ showStmt (_, StmtIf cond b1 b2) = do
   local (+ 2) (showBlock b1)
   tell [ (tabs (indent + 1)) ++ "- ELSE" ]
   local (+ 2) (showBlock b2)
-  return ()
 
 showStmt (_, StmtWhile cond b) = do
   indent <- ask
@@ -131,13 +125,11 @@ showStmt (_, StmtWhile cond b) = do
   local (+ 2) (showExpr cond)
   tell [ (tabs (indent + 1)) ++ "- BODY" ]
   local (+ 2) (showBlock b)
-  return ()
 
 showStmt (_, StmtScope b) = do
   indent <- ask
   tell [ (tabs indent) ++ "- StmtScope"]
   local (+ 1) (showBlock b)
-  return ()
 
 showBlock :: (Annotated Block TypeA) -> PrintAST ()
 showBlock ((b, xs), Block stmts) = do
@@ -145,7 +137,6 @@ showBlock ((b, xs), Block stmts) = do
   tell [ (tabs indent) ++ "Block -- Bool: " ++ show b ++ ", types: "
         ++ (concatMap show xs)]
   mapM_ showStmt stmts
-  return ()
 
 showExpr :: (Annotated Expr TypeA) -> PrintAST ()
 showExpr (_, ExprLit l) = do
@@ -190,7 +181,10 @@ showAssignLHS (_, LHSArrayElem elem) = do
 
 
 showAssignRHS :: (Annotated AssignRHS TypeA) -> PrintAST ()
-showAssignRHS (_, RHSExpr e) = showExpr e
+showAssignRHS (_, RHSExpr e) = do
+  indent <- ask
+  tell [ (tabs indent) ++ "- AssignRhsExpr" ]
+  local (+ 1) (showExpr e)
 showAssignRHS (_, RHSArrayLit es) = do
   indent <- ask  
   tell [ (tabs indent) ++ "- AssignRhsArrayLit" ]
@@ -200,14 +194,12 @@ showAssignRHS (_, RHSNewPair e1 e2) = do
   tell [ (tabs indent) ++ "- AssignRhsNewPair" ]
   local (+ 1) (showExpr e1)
   local (+ 1) (showExpr e2)
-  return ()
 
 showAssignRHS (_, RHSPairElem e) = showPairElem e
 showAssignRHS (_, RHSCall id es) = do
   indent <- ask
   tell [ (tabs indent) ++ "- AssignRhsCall" ++ show id]
   mapM_ (\e -> local (+ 1) (showExpr e)) es
-  return ()
 
 showArrayElem :: (Annotated ArrayElem TypeA) -> PrintAST ()
 showArrayElem (_, ArrayElem id es) = do
