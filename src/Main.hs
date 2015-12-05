@@ -1,4 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE CPP #-}
 
 module Main where
@@ -14,6 +13,7 @@ import OutputFormatting
 import Data.Maybe (fromMaybe)
 
 import Control.Applicative
+import Control.Monad
 
 import RegisterAllocation.ControlFlow
 import RegisterAllocation.DataFlow
@@ -58,13 +58,12 @@ compile filename contents output
     ir        = genProgram <$> typedAst
     cfg       = map (deadCodeElimination . basicBlocks) <$> ir :: WACCResult [Gr [IR] ()]
     flow      = map blockDataFlow <$> cfg
+    allVars   = map allVariables <$> cfg
     live      = zipWith liveVariables <$> cfg <*> flow
-    rig       = map interferenceGraph <$> live :: WACCResult [Gr Var ()]
-    colouring = sequence <$> map (\g -> colourGraph g (fmap Reg [0..12])) <$> rig >>= \case
-                Just c  -> OK c
-                Nothing -> codegenError "Graph Colouring failed"
-    cfgFinal  = zipWith (\c g -> Graph.nmap (applyColouring c) g)
-                    <$> colouring <*> cfg
+    rig       = zipWith interferenceGraph <$> allVars <*> live :: WACCResult [Gr Var ()]
+    moves     = zipWith movesGraph <$> allVars <*> cfg
+    colouring = join (zipWithM assignRegisters <$> rig <*> moves)
+    cfgFinal  = zipWith (\c g -> Graph.nmap (applyColouring c) g) <$> colouring <*> cfg
 
     irFinal   = concatMap (concatMap snd . Graph.labNodes) <$> cfgFinal
 
@@ -74,7 +73,7 @@ compile filename contents output
                        <$> armWriter, fst <$> feat, textSegment 
                        <$> armWriter, snd <$> feat] :: WACCResult [String]
     asm       = map tabbedInstruction <$> asmSimple
-   
+
 main :: IO ()
 main = do
   args <- waccArguments

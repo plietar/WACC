@@ -264,7 +264,7 @@ dotRIGParams = GraphViz.nonClusteredParams
   where
     ga = [ GraphViz.GraphAttrs [ GraphViz.RankDir GraphViz.FromLeft
                                , GraphViz.bgColor GraphViz.White
-                               , GraphViz.Layout GraphViz.Fdp ]
+                               , GraphViz.Layout GraphViz.Circo ]
 
          , GraphViz.NodeAttrs [ GraphViz.shape GraphViz.Ellipse
                               , GraphViz.fillColor GraphViz.White
@@ -272,15 +272,14 @@ dotRIGParams = GraphViz.nonClusteredParams
 
     fn (_, l) = [(GraphViz.toLabel . show) l]
 
-showDotColouring :: (Graph gr, Eq a, Ord a) => gr Var () -> Map Var a -> [String]
+showDotColouring :: (Graph gr, Eq a, Ord a, Show a) => gr Var () -> Map Var a -> [String]
 showDotColouring cfg colouring
   = (:[]) . unpack . GraphViz.printDotGraph . GraphViz.setDirectedness GraphViz.graphToDot (dotColouringParams colouring) $ cfg
 
-
-dotColouringParams :: (Eq a, Ord a) => Map Var a -> GraphViz.GraphvizParams Int Var () () Var
+dotColouringParams :: (Eq a, Ord a, Show a) => Map Var a -> GraphViz.GraphvizParams Int Var () () Var
 dotColouringParams colouring = dotRIGParams { GraphViz.fmtNode = fn }
   where
-    fn (_, l) = [(GraphViz.toLabel . show) (l, colourCount)
+    fn (_, l) = [(GraphViz.toLabel . show) (l, colouring ! l)
                 , GraphViz.FillColor (GraphViz.toColorList [colourMap ! l])]
 
     colours = Map.fromList (zip (nub (Map.elems colouring)) (map colour [0..]))

@@ -1,33 +1,66 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
 
 module RegisterAllocation.GraphColouring
-  (colourGraph, applyColouring) where
-import Data.Graph.Inductive (Graph, Node)
+  (assignRegisters, applyColouring) where
+import Common.WACCResult
+
+import Data.Graph.Inductive (Graph, DynGraph, Node)
 import qualified Data.Graph.Inductive as Graph
 import Data.List
 import qualified Data.Map as Map
 import CodeGenTypes
-import Data.Map (Map,(!))
+import Data.Map (Map, (!))
 import Data.Maybe
 import Control.Applicative
+import Control.Monad (when)
+import Debug.Trace
+
+assignRegisters :: DynGraph gr => gr Var () -> gr Var () -> WACCResult (Map Var Var)
+assignRegisters rig moves
+  = case colourGraph allRegs rig moves of
+    Just c  -> OK c
+    Nothing -> codegenError "Graph Colouring failed"
+
+-- Merge nodes X and Y, using X's label
+mergeNodes :: DynGraph gr =>  Node -> Node -> gr Var () -> gr Var ()
+mergeNodes x y g = Graph.insEdges (fwd ++ rev) g'
+  where
+    g'  = Graph.delNode y g
+    fwd = (x,,()) <$> Graph.suc g' y 
+    rev = (,x,()) <$> Graph.pre g' y
+
 
 -- Colour a graph such that no to vertices in the same edge share
 -- the same colour
-colourGraph :: (Graph gr) => gr Var () -> [Var] -> Maybe (Map Var Var)
-colourGraph rig colours = do
-  (stack, precolouring) <- buildStack rig [] (length colours)
-  colouring <- augmentColouring rig colours precolouring stack
-  return (Map.mapKeys (fromJust . Graph.lab rig) colouring)
-    
+colourGraph :: DynGraph gr => [Var] -> gr Var () -> gr Var () -> Maybe (Map Var Var)
+colourGraph colours rig moves = do
+  (stack, precolouring, coalescings) <- buildStack rig moves [] [] (length colours)
+
+  -- Augment the precolouring with the coalesced nodes
+  let precolouring' = Map.union precolouring (Map.mapMaybe (\n -> Map.lookup n precolouring) coalescings)
+
+  colouring <- augmentColouring rig colours precolouring' stack
+
+  let remap i = fromMaybe (remap (coalescings ! i)) (Map.lookup i colouring)
+      coalescings' = Map.map remap coalescings
+      colouring' = Map.union colouring coalescings'
+
+  return (Map.mapKeys (fromJust . Graph.lab rig) colouring')
+
 -- Build a stack of all nodes in the graph by always pushing a node
 -- that is valid (i.e has less than maxR number of neighbors) and update
 -- the graph at each step
-buildStack :: Graph gr => gr Var () -> [Node] -> Int -> Maybe ([Node], Map Node Var)
-buildStack rig stack maxR
-  | isSimplifiedGraph rig = Just (stack, Map.fromList (Graph.labNodes rig))
-  | otherwise = case findValidNode rig (Graph.nodes rig) maxR of 
-        Just n  -> buildStack (Graph.delNode n rig) (n : stack) maxR
-        Nothing -> Nothing
+buildStack :: DynGraph gr => gr Var () -> gr Var () -> [Node] -> [(Node, Node)] -> Int -> Maybe ([Node], Map Node Var, Map Node Node)
+buildStack rig moves stack coalescings maxR
+  | isSimplifiedGraph rig = Just (stack, Map.fromList (Graph.labNodes rig), Map.fromList coalescings)
+  | Just n <- findValidNode rig moves (Graph.nodes rig) maxR 
+    = buildStack (Graph.delNode n rig) moves (n : stack) coalescings maxR
+  | Just (rig', moves', c) <- tryMerge maxR rig moves
+    = buildStack rig' moves' stack (c:coalescings) maxR
+  | Just moves' <- tryFreeze maxR rig moves
+    = buildStack rig moves' stack coalescings maxR
+  | otherwise = Nothing
 
 isSimplifiedGraph :: Graph gr => gr Var () -> Bool
 isSimplifiedGraph rig = all (isPrecoloured . snd) (Graph.labNodes rig)
@@ -36,16 +69,63 @@ isPrecoloured :: Var -> Bool
 isPrecoloured (Reg x) = True
 isPrecoloured _       = False
 
-canSimplifyNode :: Graph gr => gr Var () -> Int -> Node -> Bool
-canSimplifyNode rig maxR node = (not . isPrecoloured . fromJust . Graph.lab rig $ node) && length (Graph.suc rig node) < maxR
+isMoveRelated :: Graph gr => gr Var () -> Node -> Bool
+isMoveRelated moves node = Graph.outdeg moves node > 0
+
+canSimplifyNode :: Graph gr => gr Var () -> gr Var () -> Int -> Node -> Bool
+canSimplifyNode rig moves maxR node
+  = (not . isPrecoloured . fromJust . Graph.lab rig $ node)
+    && not (isMoveRelated moves node)
+    && (Graph.outdeg rig node) < maxR
 
 -- Get a node from the graph which has less than maxR neighbors,
 -- where maxR is the number of available colours to colour the graph
-findValidNode :: Graph gr => gr Var () -> [Node] -> Int -> Maybe Node
-findValidNode rig (x:xs) maxR
-  | canSimplifyNode rig maxR x = Just x
-  | otherwise                  = findValidNode rig xs maxR
-findValidNode _ [] _           = Nothing
+findValidNode :: Graph gr => gr Var () -> gr Var () -> [Node] -> Int -> Maybe Node
+findValidNode rig moves (x:xs) maxR
+  | canSimplifyNode rig moves maxR x = Just x
+  | otherwise                        = findValidNode rig moves xs maxR
+findValidNode _ _ [] _               = Nothing
+
+tryMerge :: DynGraph gr => Int -> gr Var () -> gr Var () -> Maybe (gr Var (), gr Var (), (Node, Node))
+tryMerge maxR rig moves = tryMerge' (Graph.edges moves)
+  where
+    tryMerge' [] = Nothing
+    tryMerge' ((x,y):es) = tryMergeNodes maxR rig moves x y
+                          <|> tryMerge' es 
+
+tryMergeNodes :: DynGraph gr => Int -> gr Var () -> gr Var () -> Node -> Node -> Maybe (gr Var (), gr Var (), (Node, Node))
+tryMergeNodes maxR rig moves x y = do
+  when (Graph.hasNeighbor rig x y) Nothing
+
+  let lx = fromJust (Graph.lab rig x)
+      ly = fromJust (Graph.lab rig y)
+
+  (x',y') <- case (lx, ly) of
+    (Reg _, Reg _) -> Nothing
+    (Reg _, _    ) -> Just (x, y)
+    (_    , Reg _) -> Just (y, x)
+    (_    , _    ) -> Just (x, y)
+
+  let rig'   = mergeNodes x' y' rig
+      moves' = mergeNodes x' y' moves
+      ok = ((< maxR) . length . filter (>= maxR) . map (Graph.outdeg rig') . Graph.suc rig') x'
+
+  if ok
+  then return (rig', moves', (y', x'))
+  else Nothing
+
+tryFreeze :: DynGraph gr => Int -> gr Var () -> gr Var () -> Maybe (gr Var ())
+tryFreeze maxR rig moves = tryFreeze' (Graph.edges moves)
+  where
+    tryFreeze' [] = Nothing
+    tryFreeze' ((x,y):es) = tryFreezeNodes maxR rig moves x y
+                          <|> tryFreeze' es 
+
+tryFreezeNodes :: DynGraph gr => Int -> gr Var () -> gr Var () -> Node -> Node -> Maybe (gr Var ())
+tryFreezeNodes maxR rig moves x y
+  = if (Graph.outdeg rig x < maxR) && (Graph.outdeg rig y < maxR)
+    then Just (Graph.delEdges [(x,y),(y,x)] moves)
+    else Nothing
 
 -- Find a valid colouring for a graph and (Maybe) return
 -- the mapping that is found 
@@ -53,6 +133,7 @@ augmentColouring :: Graph gr => gr Var () -> [Var] -> Map Node Var -> [Node] -> 
 augmentColouring _ _ colouring [] = Just colouring
 augmentColouring rig colours colouring (node:xs) = do
   col <- colourNode (Graph.suc rig node) colours colouring
+  trace (show (col, (fromJust . Graph.lab rig) node, map (fromJust . Graph.lab rig) (Graph.suc rig node), map (\n -> Map.lookup n colouring) (Graph.suc rig node))) (return ())
   let colouring' = Map.insert node col colouring
   augmentColouring rig colours colouring' xs
 
@@ -76,6 +157,7 @@ applyColouring colouring
 
 -- Helper method
 get :: Var -> Map Var Var -> Var
+--get (Reg x) _ = Reg x
 get v colouring = (colouring ! v)
 
 colourIR :: IR -> Map Var Var -> IR

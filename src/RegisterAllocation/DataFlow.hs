@@ -18,6 +18,9 @@ import qualified Data.Set as Set
 import Data.Graph.Inductive.Graph (Graph)
 import qualified Data.Graph.Inductive.Graph as Graph
 
+import Data.Foldable (foldrM)
+import Control.Monad.Writer
+
 data FlowInfo = FlowInfo
                 { vUsed :: Set Var
                 , vDef  :: Set Var
@@ -25,17 +28,39 @@ data FlowInfo = FlowInfo
                 , vOut  :: Set Var }
   deriving Show
 
-interferenceGraph :: Graph gr => [Set Var] -> gr Var ()
-interferenceGraph liveSets = Graph.mkGraph nodes (map (\e -> Graph.toLEdge e ()) (nub edges))
+allVariables :: Graph gr => gr [IR] () -> Map Var Int
+allVariables cfg = Map.fromList (zip (Set.elems vars) [0..])
   where
-    nodes :: [Graph.LNode Var]
-    nodes = zip [0..] (Set.elems (Set.unions liveSets))
+    vars = Set.union (Set.unions (map irUse irs)) (Set.unions (map irDef irs))
+    irs = concatMap snd (Graph.labNodes cfg)
 
-    varMap :: Map Var Int
-    varMap = Map.fromList (map swap nodes)
+movesGraph :: Graph gr => Map Var Int -> gr [IR] () -> gr Var ()
+movesGraph vars cfg = Graph.mkGraph nodes (map (\e -> Graph.toLEdge e ()) (nub edges))
+  where
+    irs :: [IR]
+    irs = concatMap snd (Graph.labNodes cfg)
+
+    nodes :: [Graph.LNode Var]
+    nodes = map swap (Map.assocs vars)
 
     edges :: [Graph.Edge]
-    edges = map (\(v1,v2) -> (varMap ! v1, varMap ! v2)) (concatMap livePairs liveSets)
+    edges = irMove irs
+
+    irMove :: [IR] -> [Graph.Edge]
+    irMove [] = []
+    irMove (IMove {..} : is) = (vars ! iDest, vars ! iValue) :
+                               (vars ! iValue, vars ! iDest) :
+                               (irMove is)
+    irMove (_ : is) = irMove is
+
+interferenceGraph :: Graph gr => Map Var Int -> [Set Var] -> gr Var ()
+interferenceGraph vars liveSets = Graph.mkGraph nodes (map (\e -> Graph.toLEdge e ()) (nub edges))
+  where
+    nodes :: [Graph.LNode Var]
+    nodes = map swap (Map.assocs vars)
+
+    edges :: [Graph.Edge]
+    edges = map (\(v1,v2) -> (vars ! v1, vars ! v2)) (concatMap livePairs liveSets)
 
     livePairs :: Set Var -> [(Var, Var)]
     livePairs live = [(v1,v2) | v1 <- vs, v2 <- vs, v1 /= v2]
@@ -51,10 +76,12 @@ liveVariables cfg flowInfo = concatMap bbFlow nodes
     bbFlow idx
       = let irs = fromJust (Graph.lab cfg idx)
             blockInfo = flowInfo ! idx
-        in  scanr irFlow (vOut blockInfo) irs
+        in  execWriter (foldrM irFlow (vOut blockInfo) irs)
 
-    irFlow :: IR -> Set Var -> Set Var
-    irFlow ir out = Set.union (Set.difference out (irDef ir)) (irUse ir)
+    irFlow :: IR -> Set Var -> Writer [Set Var] (Set Var)
+    irFlow ir out = do
+      tell [Set.union out (irDef ir)]
+      return (Set.union (Set.difference out (irDef ir)) (irUse ir))
 
 blockDataFlow :: Graph gr => gr [IR] () -> Map Int FlowInfo
 blockDataFlow cfg = blockDataFlow' initial (Graph.nodes cfg)

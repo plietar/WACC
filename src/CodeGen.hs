@@ -299,7 +299,9 @@ genStmt (_, StmtExit expr) = do
 
 genStmt (_, StmtPrint expr@(ty, _) newline) = do
   v <- genExpr expr
-  tell [IPrint { iValue = v, iType = ty, iNewline = newline }]
+  tell [ IMove { iDest = Reg 0, iValue = v }
+       , ICall { iLabel = NamedLabel "p_print_int", iArgs = [ Reg 0 ] } ]
+--  IPrint { iValue = v, iType = ty, iNewline = newline }]
 
 genStmt (_, StmtIf condition thenBlock elseBlock) = do
   thenLabel <- allocateLabel
