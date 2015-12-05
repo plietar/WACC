@@ -12,6 +12,7 @@ import Control.Applicative
 
 import Data.Tuple(swap)
 import qualified Data.Set as Set
+import Data.Maybe
 
 genProgram :: Annotated Program TypeA -> [[IR]]
 genProgram (_, Program fs)
@@ -312,4 +313,8 @@ genBlock ((_, locals), Block stmts) = do
   tell [ IFrameAllocate { iSize = frameSize updatedFrame } ]
   forM_ stmts genStmt
   tell [ IFrameFree { iSize = frameSize updatedFrame } ]
+  childFrame <- gets frame
+  modify (\s -> s { frame = fromJust (parent childFrame) })
+
+
 
