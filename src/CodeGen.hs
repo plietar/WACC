@@ -10,8 +10,8 @@ import Control.Monad.RWS
 import Control.Monad.State
 import Control.Applicative
 
-import qualified Data.Map as Map
 import Data.Tuple(swap)
+import qualified Data.Set as Set
 
 genProgram :: Annotated Program TypeA -> [[IR]]
 genProgram (_, Program fs)
@@ -25,9 +25,10 @@ genFunction (_, FuncDef _ fname params body) = do
     let topFrame = setVariables (map swap params) 4 rootFrame
         initialState = CodeGenState {
           variables = Prelude.map Var [0..],
-          labels = labs
+          labels = labs,
+          frame = topFrame
         }
-        (endState, irs) = (execRWS generation topFrame initialState)
+        (endState, irs) = (execRWS generation () initialState)
     put (labels endState)
     return irs
     where
@@ -233,8 +234,12 @@ genRHS (_, RHSCall name exprs) = do
 
 genStmt :: Annotated Stmt TypeA -> CodeGen ()
 genStmt (_, StmtSkip) = return ()
-genStmt (st, StmtVar ty ident rhs)
-  = genStmt (st, StmtAssign (ty, LHSVar ident) rhs)
+genStmt (st, StmtVar ty ident rhs) = do
+  initFrame <- gets frame
+  let definedVars = definedVariables initFrame
+  let newFrame = initFrame { definedVariables = Set.insert ident definedVars }
+  modify (\s -> s { frame = newFrame }) 
+  genStmt (st, StmtAssign (ty, LHSVar ident) rhs)
 
 genStmt (_, StmtAssign lhs rhs) = do
   v <- genRHS rhs
@@ -251,8 +256,8 @@ genStmt (_, StmtFree expr@(ty, _)) = do
 
 genStmt (_, StmtReturn expr) = do
   v <- genExpr expr
-  s <- asks totalAllocatedFrameSize
-  tell [ IFrameFree { iSize = s }
+  initFrame <- gets frame
+  tell [ IFrameFree { iSize = totalAllocatedFrameSize initFrame }
        , IReturn { iValue = v }]
 
 genStmt (_, StmtExit expr) = do
@@ -295,12 +300,10 @@ genStmt (_, StmtScope block) = genBlock block
 -- Block code generation
 genBlock :: Annotated Block TypeA -> CodeGen ()
 genBlock ((_, locals), Block stmts) = do
-  local createFrame generation
-  where
-      createFrame = setVariables locals 0 . childFrame
-      generation = do
-        s <- asks frameSize
-        tell [ IFrameAllocate { iSize = s } ]
-        forM_ stmts genStmt
-        tell [ IFrameFree { iSize = s } ]
+  initialFrame <- gets frame
+  modify (\s -> s { frame = setVariables locals 0 $ childFrame initialFrame } )
+  updatedFrame <- gets frame
+  tell [ IFrameAllocate { iSize = frameSize updatedFrame } ]
+  forM_ stmts genStmt
+  tell [ IFrameFree { iSize = frameSize updatedFrame } ]
 

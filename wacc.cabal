@@ -26,7 +26,7 @@ executable wacc
   build-tools:         alex
 
   -- Code is quite ready for this
-  -- GHC-Options:         -Wall -fno-warn-unused-do-bind
+  GHC-Options:         -Wall -fno-warn-unused-do-bind
 
   If flag(graphviz)
     build-depends:     graphviz, text

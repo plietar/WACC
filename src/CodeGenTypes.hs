@@ -8,6 +8,8 @@ import Control.Applicative
 import Control.Monad.RWS
 import Data.Map as Map
 import Data.Maybe
+import Data.Set(Set)
+import qualified Data.Set as Set
 
 
 data Var = Var Int
@@ -57,10 +59,11 @@ data IR
 
 data CodeGenState = CodeGenState {
   variables :: [Var],
-  labels :: [Label]
+  labels :: [Label],
+  frame :: Frame
 }
 
-type CodeGen = RWS Frame [IR] CodeGenState
+type CodeGen = RWS () [IR] CodeGenState
 
 allocateVar :: CodeGen Var
 allocateVar = do
@@ -80,6 +83,7 @@ data Frame = Frame
   , parent    :: Maybe Frame
   , allocated :: Bool
   , frameSize :: Int
+  , definedVariables :: Set String 
   }
 
 
@@ -89,13 +93,13 @@ typeSize TyBool = 1
 typeSize TyChar = 1
 -- Size of a reference to a pair (e.g. in an array)
 typeSize (TyPair _ _) = 4 
-typeSize (TyArray t) = 4
+typeSize (TyArray _) = 4
 typeSize t = error (show t)
 
 rootFrame :: Frame
-rootFrame = Frame Map.empty Nothing False 0
+rootFrame = Frame Map.empty Nothing False 0 Set.empty
 childFrame :: Frame -> Frame
-childFrame parent = Frame Map.empty (Just parent) True 0
+childFrame parent = Frame Map.empty (Just parent) True 0 Set.empty
  
 setVariables :: [(String, Type)] -> Int -> Frame -> Frame
 setVariables variables initialOffset original
@@ -109,13 +113,20 @@ setVariables variables initialOffset original
         in ((n,off):vs', off')
 
 variableOffset :: String -> CodeGen Int
-variableOffset s = asks (getOffset s)
+variableOffset s = do
+  frame <- gets frame
+  return (getOffset s frame)
 
 getOffset :: String -> Frame -> Int
 getOffset var Frame{..} =
-  case Map.lookup var offsets of
-    Nothing -> frameSize + getOffset var (fromJust parent)
-    Just offset -> offset
+  if defined then 
+    case Map.lookup var offsets of
+      Nothing -> frameSize + getOffset var (fromJust parent)
+      Just offset -> offset
+  else 
+    (frameSize + getOffset var (fromJust parent))
+    where
+      defined = Set.member var definedVariables
 
 totalAllocatedFrameSize :: Frame -> Int
 totalAllocatedFrameSize Frame{..}
