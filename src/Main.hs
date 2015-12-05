@@ -12,6 +12,8 @@ import Arguments
 import ARMGen
 import OutputFormatting
 
+import Control.Applicative
+
 import RegisterAllocation.ControlFlow
 import RegisterAllocation.DataFlow
 import RegisterAllocation.GraphColouring
