@@ -22,7 +22,8 @@ genProgram (_, Program fs)
 genFunction :: Annotated FuncDef TypeA -> State [Label] [IR]
 genFunction (_, FuncDef _ fname params body) = do
     labs <- get
-    let topFrame = setVariables (map swap params) 4 rootFrame
+    let frame = setVariables (map swap params) 4 rootFrame
+        topFrame = addDefinedVariables params frame
         initialState = CodeGenState {
           variables = Prelude.map Var [0..],
           labels = labs,
@@ -39,6 +40,11 @@ genFunction (_, FuncDef _ fname params body) = do
         retVal <- allocateVar
         tell [ ILiteral { iDest = retVal, iLiteral = LitInt 0 }
              , IReturn { iValue = retVal } ]
+
+addDefinedVariables :: [(Type, Identifier)] -> Frame -> Frame
+addDefinedVariables args f
+  = foldl (\f (_, id) -> f { definedVariables  = Set.insert id (definedVariables f) }) f args
+
 
 -- This does not attempt to be 100% accurate
 -- The register allocator affects a lot how many register are used
