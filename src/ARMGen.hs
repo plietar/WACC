@@ -18,6 +18,7 @@ data Feature = CheckDivideByZero
               | PrintLine
               | ReadInt
               | ReadChar
+              | Initialise
               | ThrowDoubleFreeError
               | ThrowRuntimeError
               | ThrowOverflowError
@@ -70,16 +71,6 @@ genARM :: [IR] -> ARMWriter
 genARM irs = snd $ execRWS (mapM genARMInstruction irs) () (ARMState (map (("msg_" ++) . show) [0..]))
 
 genARMInstruction :: IR -> ARMGen ()
-genARMInstruction IInitialise {} = do
-  emit [ "MOV r0, #-5"
-       , "MOV r1, #2"
-       , "BL mallopt"
-       , "MOV r0, #6"
-       , "LDR r1, =p_throw_double_free"
-       , "BL signal"
-       ]
-  emitFeature ThrowDoubleFreeError
-
 genARMInstruction (ILiteral { iDest = dest, iLiteral = LitNull })
   = emit ["MOV " ++ show dest ++ ", #0"]
 genARMInstruction (ILiteral { iDest = dest, iLiteral = LitInt n })
@@ -191,27 +182,6 @@ genARMInstruction (IFrameAllocate { iSize = size }) = do
     genARMInstruction (IFrameAllocate { iSize = size - offsetLimitARM })
 
 
-genARMInstruction (IFrameFree { iSize = 0 }) = return ()
-genARMInstruction (IFrameFree { iSize = size } ) = do
-  if size <= offsetLimitARM 
-  then 
-    emit ["ADD sp, sp, #" ++ show size]
-  else do
-    emit ["ADD sp, sp, #" ++ show offsetLimitARM ]
-    genARMInstruction (IFrameFree { iSize = size - offsetLimitARM })
-genARMInstruction (IFrameFree { iSize = size } )
-  = emit ["ADD sp, sp, #" ++ show size]
-genARMInstruction (IFrameRead {iOffset = offset, iDest = dest, iType = ty} )
-  = emit [ldrInstr ty ++ " " ++ show dest ++ ", [sp, #" ++ show offset ++ "]"]
-genARMInstruction (IFrameWrite {iOffset = offset, iValue = value, iType = ty} )
-  = emit [strInstr ty ++ " " ++ show value ++ ", [sp, #" ++ show offset ++ "]"]
-
--- Array
-genARMInstruction (IArrayAllocate { iDest = dest, iSize = size })
-  = emit [ "LDR r0, =" ++ show size
-         , "BL malloc"
-         , "MOV " ++ show dest ++ ", r0"]
-
 -- Heap Read (i.e Pairs and Arrays)
 genARMInstruction (IHeapRead { iHeapVar = heapVar, iDest = dest, iOperand = OperandVar offset shift, iType = ty })
   = emit [ldrInstr ty ++ " " ++ show dest ++ ", [" ++ show heapVar ++ ", " ++ show offset ++ scaling ++ "]"]
@@ -227,69 +197,13 @@ genARMInstruction (IHeapWrite { iHeapVar = heapVar, iValue = value, iOperand = O
 genARMInstruction (IHeapWrite { iHeapVar = heapVar, iValue = value, iOperand = OperandLit offset, iType = ty })
   = emit [strInstr ty ++ " " ++ show value ++ ", [" ++ show heapVar ++ ", #" ++ show offset ++ "]"] 
  
-
---Pair
-genARMInstruction (IPairAllocate { iDest = dest })
-  = emit [ "MOV r0, #8"
-         , "BL malloc"
-         , "MOV " ++ show dest ++ ", r0"]
-
-genARMInstruction (INullCheck { iValue = value })
-  = do emit [ "MOV r0, " ++ show value
-         , "BL p_check_null_pointer" ]
-       emitFeature CheckNullPointer
-genARMInstruction (IBoundsCheck { iArray = array, iIndex = index })
-  = do emit [ "MOV r0, " ++ show index
-         , "MOV r1, " ++ show array
-         , "BL p_check_array_bounds" ]
-       emitFeature CheckArrayBounds
-
--- Print
-genARMInstruction (IPrint { iValue = value, iType = t, iNewline = newline }) = do
-  emit [ "MOV r0, " ++ show value]
-  case t of
-    TyInt -> do emit ["BL p_print_int"]
-                emitFeature PrintInt
-    TyBool -> do emit ["BL p_print_bool"]
-                 emitFeature PrintBool
-    TyChar -> do emit ["BL putchar"]
-    TyArray TyChar -> do emit ["BL p_print_string"]
-                         emitFeature PrintString
-    _ -> do emit ["BL p_print_reference"]
-            emitFeature PrintReference
-  when newline (do emit ["BL p_print_ln"]
-                   emitFeature PrintLine)
- 
--- Read
-genARMInstruction (IRead { iDest = dest, iType = t})
-  = case t of
-      TyInt  -> do
-        emit [ "BL p_read_int"
-             , "MOV " ++ show dest ++ ", r0" ]
-        emitFeature ReadInt
-      TyChar -> do
-        emit [ "BL p_read_char"
-             , "MOV " ++ show dest ++ ", r0" ]
-        emitFeature ReadChar
-
--- Free
-genARMInstruction (IFree { iValue = value, iType = t}) = do
-  case t of
-    TyPair _ _ -> genARMInstruction ( INullCheck { iValue = value } )
-    TyArray _  -> return ()
-
--- Exit
-genARMInstruction (IExit { iValue = value })
-  = emit [ "MOV r0, " ++ show value
-         , "BL exit" ]
-
 -- Function
 genARMInstruction (IFunctionBegin { })
   = emit [ "PUSH {lr}" ]
 
 genARMInstruction (IReturn)
   = emit [ "POP {pc}"
-         , ".ltorg"]
+         , ".ltorg" ]
 
 mergeFeatures :: Set Feature -> ([String], [String])
 mergeFeatures features
@@ -305,6 +219,7 @@ dependantOn CheckNullPointer   = Set.fromList [CheckNullPointer,  ThrowRuntimeEr
 dependantOn ThrowOverflowError = Set.fromList [ThrowOverflowError,ThrowRuntimeError, PrintString]
 dependantOn ThrowRuntimeError  = Set.fromList [ThrowRuntimeError, PrintString]
 dependantOn ThrowDoubleFreeError = Set.fromList [ThrowDoubleFreeError, PrintString]
+dependantOn Initialise         = Set.fromList [Initialise, ThrowDoubleFreeError]
 dependantOn feature            = Set.fromList [feature]
 
 genFeature :: Feature -> ([String], [String])
@@ -466,6 +381,16 @@ genFeature ThrowDoubleFreeError = (["msg_p_throw_double_free:",
                                     "LDR r0, =msg_p_throw_double_free",
                                     "BL p_print_string",
                                     "POP {pc}"])
+genFeature Initialise = ([],
+                         [ "PUSH {lr}"
+                         , "MOV r0, #-5"
+                         , "MOV r1, #2"
+                         , "BL mallopt"
+                         , "MOV r0, #6"
+                         , "LDR r1, =p_throw_double_free"
+                         , "BL signal"
+                         , "POP {pc}"])
+
 
 strInstr :: Type -> String
 strInstr TyBool = "STRB"

@@ -130,15 +130,9 @@ irDef ILiteral{..}       = Set.singleton iDest
 irDef IBinOp{..}         = Set.singleton iDest
 irDef IUnOp{..}          = Set.singleton iDest
 irDef IMove{..}          = Set.singleton iDest
-
 irDef ICall{..}          = Set.fromList callerSaveRegs
-
 irDef IFrameRead{..}     = Set.singleton iDest
-
-irDef IArrayAllocate{..} = Set.singleton iDest
 irDef IHeapRead{..}      = Set.singleton iDest
-irDef IPairAllocate{..}  = Set.singleton iDest
-irDef IRead{..}          = Set.singleton iDest
 irDef _                  = Set.empty
 
 irUse :: IR -> Set Var
@@ -157,10 +151,5 @@ irUse IHeapRead{..}
   = case iOperand of
     OperandVar v _ -> Set.fromList [ iHeapVar, v ]       
     OperandLit x -> Set.fromList [ iHeapVar ]
-irUse INullCheck{..}     = Set.singleton iValue
-irUse IBoundsCheck{..}   = Set.fromList [ iArray, iIndex ]
-irUse IPrint{..}         = Set.singleton iValue
-irUse IFree{..}          = Set.singleton iValue
-irUse IExit{..}          = Set.singleton iValue
 irUse _                  = Set.empty
 

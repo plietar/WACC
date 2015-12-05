@@ -65,25 +65,12 @@ data IR
   | ILabel { iLabel :: Label }
 
   | IFrameAllocate { iSize :: Int }
-  | IFrameFree { iSize :: Int }
   | IFrameRead { iOffset :: Int, iDest :: Var, iType :: Type }
   | IFrameWrite { iOffset :: Int, iValue :: Var, iType :: Type }
 
   | IHeapRead { iHeapVar :: Var, iDest :: Var, iOperand :: Operand, iType :: Type }
   | IHeapWrite { iHeapVar :: Var, iValue :: Var, iOperand :: Operand, iType :: Type }
 
-  | IArrayAllocate { iDest :: Var, iSize :: Int }
-  | IPairAllocate { iDest :: Var }
-
-  | INullCheck { iValue :: Var }
-  | IBoundsCheck { iArray :: Var, iIndex :: Var }
-
-  | IPrint { iValue :: Var, iType :: Type, iNewline :: Bool }
-  | IRead { iDest :: Var, iType :: Type }
-  | IFree { iValue :: Var, iType :: Type }
-  | IExit { iValue :: Var }
-
-  | IInitialise { }
   deriving Show
 
 data CodeGenState = CodeGenState {

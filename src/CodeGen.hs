@@ -49,7 +49,7 @@ genFunction (_, FuncDef _ fname params body) = do
             return (name, v)
 
           case fname of
-            MainFunc -> tell [ IInitialise {} ]
+            MainFunc -> (genCall "p_initialise" [] >> return ())
             _ -> return ()
 
           setupFrame (Map.fromList args) savedRegs
@@ -73,13 +73,13 @@ genReturn retVal = do
   tell [ IMove { iDest = Reg 0, iValue = retVal }
        , IReturn ]
 
-genCall :: Label -> [Var] -> CodeGen Var
+genCall :: Identifier -> [Var] -> CodeGen Var
 genCall label vars = do
   outVal <- allocateTemp
   let args = zip argPassingRegs vars
 
   tell (map (\(a,v) -> IMove { iDest = a, iValue = v }) args)
-  tell [ ICall { iLabel = label, iArgs = map fst args }
+  tell [ ICall { iLabel = NamedLabel label, iArgs = map fst args }
        , IMove { iDest = outVal, iValue = Reg 0 } ]
   return outVal
 
@@ -157,18 +157,18 @@ genArrayRead elemTy arrayVar indexExpr = do
   arrayOffsetVar <- allocateTemp 
   offsetedArray <- allocateTemp
   indexVar <- genExpr indexExpr
-  tell [ IBoundsCheck { iArray = arrayVar
-                      , iIndex = indexVar }
-        , ILiteral { iDest    = arrayOffsetVar
+
+  genCall "p_check_array_bounds" [arrayVar, indexVar]
+  tell [ ILiteral { iDest    = arrayOffsetVar
                    , iLiteral = LitInt 4 }
-        , IBinOp { iBinOp = BinOpAdd
-                 , iDest  = offsetedArray
-                 , iLeft  = arrayOffsetVar
-                 , iRight = arrayVar }
-        , IHeapRead { iHeapVar = offsetedArray
-                    , iDest    = outVar
-                    , iOperand = OperandVar indexVar (typeShift elemTy)
-                    , iType    = elemTy } ]
+       , IBinOp { iBinOp = BinOpAdd
+                , iDest  = offsetedArray
+                , iLeft  = arrayOffsetVar
+                , iRight = arrayVar }
+       , IHeapRead { iHeapVar = offsetedArray
+                   , iDest    = outVar
+                   , iOperand = OperandVar indexVar (typeShift elemTy)
+                   , iType    = elemTy } ]
   return outVar
 
 -- LHS Assign
@@ -180,8 +180,8 @@ genAssign (ty, LHSVar ident) valueVar = do
 -- LHS Pair 
 genAssign (_, LHSPairElem ((elemTy, pairTy), PairElem side pairExpr)) valueVar = do
   pairVar <- genExpr pairExpr
-  tell [ INullCheck { iValue = pairVar }
-       , IHeapWrite { iHeapVar = pairVar, iValue = valueVar, iOperand = OperandLit (pairOffset side pairTy), iType = elemTy } ]
+  genCall "p_check_null_pointer" [pairVar]
+  tell [ IHeapWrite { iHeapVar = pairVar, iValue = valueVar, iOperand = OperandLit (pairOffset side pairTy), iType = elemTy } ]
 
 -- LHS Array Indexing 
 genAssign (elemTy, LHSArrayElem (_, ArrayElem ident exprs)) valueVar = do
@@ -196,9 +196,8 @@ genAssign (elemTy, LHSArrayElem (_, ArrayElem ident exprs)) valueVar = do
 
   writeIndexVar <- genExpr writeIndexExpr
   arrayOffsetVar <- allocateTemp
-  tell [ IBoundsCheck { iArray = subArrayVar
-                      , iIndex = writeIndexVar }
-       , ILiteral { iDest = arrayOffsetVar, iLiteral = LitInt 4 }
+  genCall "p_check_array_bounds" [subArrayVar, writeIndexVar]
+  tell [ILiteral { iDest = arrayOffsetVar, iLiteral = LitInt 4 }
        , IBinOp { iBinOp = BinOpAdd, iDest = offsetedBase
                 , iLeft = arrayOffsetVar, iRight = subArrayVar } 
        , IHeapWrite { iHeapVar = offsetedBase 
@@ -222,10 +221,12 @@ pairOffset PairSnd (TyPair t _)  = typeSize t
 genRHS :: Annotated AssignRHS TypeA -> CodeGen Var
 genRHS (_, RHSExpr expr) = genExpr expr
 genRHS (TyArray elemTy, RHSArrayLit exprs) = do
-  arrayVar <- allocateTemp
+  sizeVar <- allocateTemp
+  tell [ ILiteral { iDest = sizeVar, iLiteral = LitInt (toInteger size) } ]
+  arrayVar <- genCall "malloc" [sizeVar]
+
   arrayLen <- allocateTemp
-  tell [ IArrayAllocate { iDest = arrayVar, iSize = size }
-       , ILiteral { iDest = arrayLen, iLiteral = LitInt (toInteger (length exprs)) }
+  tell [ ILiteral { iDest = arrayLen, iLiteral = LitInt (toInteger (length exprs)) }
        , IHeapWrite { iHeapVar = arrayVar
                     , iValue = arrayLen
                     , iOperand = OperandLit 0
@@ -246,24 +247,28 @@ genRHS (TyArray elemTy, RHSArrayLit exprs) = do
       elemSize = typeSize elemTy
 
 genRHS (t@(TyPair t1 t2), RHSNewPair fstExpr sndExpr) = do
-  pairVar <- allocateTemp
+  sizeVar <- allocateTemp
+  tell [ ILiteral { iDest = sizeVar, iLiteral = LitInt 8 }]
+  pairVar <- genCall "malloc" [sizeVar]
+
   fstVar <- genExpr fstExpr
+  tell [ IHeapWrite { iHeapVar = pairVar, iValue = fstVar, iOperand = OperandLit (pairOffset PairFst t), iType = t1 } ]
+
   sndVar <- genExpr sndExpr
-  tell [ IPairAllocate { iDest = pairVar }
-       , IHeapWrite { iHeapVar = pairVar, iValue = fstVar, iOperand = OperandLit (pairOffset PairFst t), iType = t1 }
-       , IHeapWrite { iHeapVar = pairVar, iValue = sndVar, iOperand = OperandLit (pairOffset PairSnd t), iType = t2 } ]
+  tell [ IHeapWrite { iHeapVar = pairVar, iValue = sndVar, iOperand = OperandLit (pairOffset PairSnd t), iType = t2 } ]
+
   return pairVar
 
 genRHS (_, RHSPairElem ((elemTy, pairTy), PairElem side pairExpr)) = do
   outVar <- allocateTemp
   pairVar <- genExpr pairExpr
-  tell [ INullCheck { iValue = pairVar }
-       , IHeapRead { iHeapVar = pairVar, iDest = outVar, iOperand = OperandLit (pairOffset side pairTy), iType = elemTy } ]
+  genCall "p_check_null_pointer" [pairVar]
+  tell [IHeapRead { iHeapVar = pairVar, iDest = outVar, iOperand = OperandLit (pairOffset side pairTy), iType = elemTy } ]
   return outVar
 
 genRHS (_, RHSCall name exprs) = do
   argVars <- mapM genExpr exprs
-  genCall (NamedLabel ("f_" ++ name)) argVars
+  genCall ("f_" ++ name) argVars
 
 genStmt :: Annotated Stmt TypeA -> CodeGen ()
 genStmt (_, StmtSkip) = return ()
@@ -279,14 +284,10 @@ genStmt (_, StmtAssign lhs rhs) = do
   v <- genRHS rhs
   genAssign lhs v
 
-genStmt (_, StmtRead lhs@(ty, _)) = do
-  v <- allocateTemp
-  tell [ IRead { iDest = v, iType = ty }]
-  genAssign lhs v
-
 genStmt (_, StmtFree expr@(ty, _)) = do
   v <- genExpr expr
-  tell [ IFree { iValue = v, iType = ty }]
+  genCall "free" [v]
+  return ()
 
 genStmt (_, StmtReturn expr) = do
   v <- genExpr expr
@@ -295,13 +296,28 @@ genStmt (_, StmtReturn expr) = do
 
 genStmt (_, StmtExit expr) = do
   v <- genExpr expr
-  tell [IExit { iValue = v }]
+  genCall "exit" [v]
+  return ()
 
 genStmt (_, StmtPrint expr@(ty, _) newline) = do
   v <- genExpr expr
-  tell [ IMove { iDest = Reg 0, iValue = v }
-       , ICall { iLabel = NamedLabel "p_print_int", iArgs = [ Reg 0 ] } ]
---  IPrint { iValue = v, iType = ty, iNewline = newline }]
+  let fname = case ty of
+              TyInt  -> "p_print_int"
+              TyBool -> "p_print_bool"
+              TyChar -> "putchar"
+              TyArray TyChar -> "p_print_string"
+              _      -> "p_print_reference"
+
+  genCall fname [v]
+  when newline (genCall "p_print_ln" [] >> return ())
+
+genStmt (_, StmtRead lhs@(ty, _)) = do
+  let fname = case ty of
+              TyInt  -> "p_read_int"
+              TyBool -> "p_read_bool"
+
+  v <- genCall fname []
+  genAssign lhs v
 
 genStmt (_, StmtIf condition thenBlock elseBlock) = do
   thenLabel <- allocateLabel

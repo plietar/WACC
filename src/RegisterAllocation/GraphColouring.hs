@@ -157,7 +157,6 @@ applyColouring colouring
 
 -- Helper method
 get :: Var -> Map Var Var -> Var
---get (Reg x) _ = Reg x
 get v colouring = (colouring ! v)
 
 colourIR :: IR -> Map Var Var -> IR
@@ -194,10 +193,6 @@ colourIR IFrameWrite{..} colouring
                 , iValue  = get iValue colouring
                 , iType   = iType }
 
-colourIR IArrayAllocate{..} colouring
-  = IArrayAllocate { iDest = get iDest colouring
-                   , iSize = iSize }
-
 colourIR IHeapRead{..} colouring
   = IHeapRead { iHeapVar = get iHeapVar colouring 
               , iDest    = get iDest colouring
@@ -218,34 +213,6 @@ colourIR IHeapWrite{..} colouring
         OperandLit x -> OperandLit x
         OperandVar v s -> OperandVar (get v colouring) s
 
-colourIR IPairAllocate{..} colouring
-  = IPairAllocate { iDest = get iDest colouring }
-
-colourIR INullCheck{..} colouring
-  = INullCheck { iValue = get iValue colouring }
-
-colourIR IBoundsCheck{..} colouring
-  = IBoundsCheck { iArray = get iArray colouring
-                 , iIndex = get iIndex colouring }
-
-colourIR IPrint{..} colouring
-  = IPrint { iValue = get iValue colouring
-          , iType = iType
-          , iNewline = iNewline }
-
-colourIR IRead{..} colouring
-  = IRead { iDest = get iDest colouring
-          , iType = iType }
-
-colourIR IFree{..} colouring
-  = IFree { iValue = get iValue colouring
-          , iType  = iType }
-
-colourIR IExit{..} colouring
-  = IExit { iValue = get iValue colouring }
-
 -- Base Case
 colourIR x colouring  = x
-
-
 
