@@ -19,7 +19,7 @@ data Var = Local Int | Temp Int | Reg Int
 argPassingRegs = Reg <$> [0..1]
 callerSaveRegs = Reg <$> [0..1]
 calleeSaveRegs = Reg <$> [2..3]
-allRegs = Reg <$> [0..4]
+allRegs = Reg <$> [0..3]
 
 {-
 argPassingRegs :: [Var]

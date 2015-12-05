@@ -63,7 +63,9 @@ compile filename contents output
     rig       = zipWith interferenceGraph <$> allVars <*> live :: WACCResult [Gr Var ()]
     moves     = zipWith movesGraph <$> allVars <*> cfg
     colouring = join (zipWithM assignRegisters <$> rig <*> moves)
-    cfgFinal  = zipWith (\c g -> Graph.nmap (applyColouring c) g) <$> colouring <*> cfg
+
+    cfgColoured = zipWith (\c g -> Graph.nmap (applyColouring c) g) <$> colouring <*> cfg
+    cfgFinal  = map (Graph.nmap removeUselessMoves) <$> cfgColoured
 
     irFinal   = concatMap (concatMap snd . Graph.labNodes) <$> cfgFinal
 

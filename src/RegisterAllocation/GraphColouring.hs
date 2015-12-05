@@ -2,7 +2,7 @@
 {-# LANGUAGE TupleSections #-}
 
 module RegisterAllocation.GraphColouring
-  (assignRegisters, applyColouring) where
+  (assignRegisters, applyColouring, removeUselessMoves) where
 import Common.WACCResult
 
 import Data.Graph.Inductive (Graph, DynGraph, Node)
@@ -133,7 +133,6 @@ augmentColouring :: Graph gr => gr Var () -> [Var] -> Map Node Var -> [Node] -> 
 augmentColouring _ _ colouring [] = Just colouring
 augmentColouring rig colours colouring (node:xs) = do
   col <- colourNode (Graph.suc rig node) colours colouring
-  trace (show (col, (fromJust . Graph.lab rig) node, map (fromJust . Graph.lab rig) (Graph.suc rig node), map (\n -> Map.lookup n colouring) (Graph.suc rig node))) (return ())
   let colouring' = Map.insert node col colouring
   augmentColouring rig colours colouring' xs
 
@@ -215,4 +214,10 @@ colourIR IHeapWrite{..} colouring
 
 -- Base Case
 colourIR x colouring  = x
+
+removeUselessMoves :: [IR] -> [IR]
+removeUselessMoves = filter (not . isUselessMove)
+  where
+    isUselessMove IMove{..} = iDest == iValue
+    isUselessMove _         = False
 
