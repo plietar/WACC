@@ -14,7 +14,6 @@ import Data.Map (Map, (!))
 import Data.Maybe
 import Control.Applicative
 import Control.Monad (when)
-import Debug.Trace
 
 assignRegisters :: DynGraph gr => gr Var () -> gr Var () -> WACCResult (Map Var Var)
 assignRegisters rig moves
@@ -24,36 +23,36 @@ assignRegisters rig moves
 
 -- Merge nodes X and Y, using X's label
 mergeNodes :: DynGraph gr =>  Node -> Node -> gr Var () -> gr Var ()
-mergeNodes x y g = Graph.insEdges (fwd ++ rev) g'
+mergeNodes x y g = Graph.insEdges edges (Graph.delNode y g)
   where
-    g'  = Graph.delNode y g
-    fwd = (x,,()) <$> Graph.suc g' y 
-    rev = (,x,()) <$> Graph.pre g' y
-
+    edges = filter (not . Graph.hasLEdge g) (fwd ++ rev)
+    fwd = (x,,()) <$> filter (/= x) (Graph.suc g y)
+    rev = (,x,()) <$> filter (/= x) (Graph.pre g y)
 
 -- Colour a graph such that no to vertices in the same edge share
 -- the same colour
 colourGraph :: DynGraph gr => [Var] -> gr Var () -> gr Var () -> Maybe (Map Var Var)
 colourGraph colours rig moves = do
   (stack, precolouring, coalescings) <- buildStack rig moves [] [] (length colours)
+  let coalescingMap = Map.fromList coalescings
 
-  -- Augment the precolouring with the coalesced nodes
-  let precolouring' = Map.union precolouring (Map.mapMaybe (\n -> Map.lookup n precolouring) coalescings)
+  -- Update the rig with the coalesced nodes
+  let rig' = Prelude.foldl (\g (x,y) -> mergeNodes y x g) rig (reverse coalescings)
 
-  colouring <- augmentColouring rig colours precolouring' stack
+  colouring <- augmentColouring rig' colours precolouring stack
 
-  let remap i = fromMaybe (remap (coalescings ! i)) (Map.lookup i colouring)
-      coalescings' = Map.map remap coalescings
-      colouring' = Map.union colouring coalescings'
+  let remap i = fromMaybe (remap (coalescingMap ! i)) (Map.lookup i colouring)
+      coalescingMap' = Map.map remap coalescingMap
+      colouring' = Map.union colouring coalescingMap'
 
   return (Map.mapKeys (fromJust . Graph.lab rig) colouring')
 
 -- Build a stack of all nodes in the graph by always pushing a node
 -- that is valid (i.e has less than maxR number of neighbors) and update
 -- the graph at each step
-buildStack :: DynGraph gr => gr Var () -> gr Var () -> [Node] -> [(Node, Node)] -> Int -> Maybe ([Node], Map Node Var, Map Node Node)
+buildStack :: DynGraph gr => gr Var () -> gr Var () -> [Node] -> [(Node, Node)] -> Int -> Maybe ([Node], Map Node Var, [(Node, Node)])
 buildStack rig moves stack coalescings maxR
-  | isSimplifiedGraph rig = Just (stack, Map.fromList (Graph.labNodes rig), Map.fromList coalescings)
+  | isSimplifiedGraph rig = Just (stack, Map.fromList (Graph.labNodes rig), coalescings)
   | Just n <- findValidNode rig moves (Graph.nodes rig) maxR 
     = buildStack (Graph.delNode n rig) moves (n : stack) coalescings maxR
   | Just (rig', moves', c) <- tryMerge maxR rig moves
