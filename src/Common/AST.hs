@@ -71,7 +71,7 @@ data PairElem a
 
 data PairSide = PairFst | PairSnd
 
-data Literal = LitInt Int
+data Literal = LitInt Integer
              | LitBool Bool
              | LitChar Char
              | LitString String

@@ -195,7 +195,7 @@ genRHS (TyArray elemTy, RHSArrayLit exprs) = do
   arrayVar <- allocateVar
   arrayLen <- allocateVar
   tell [ IArrayAllocate { iDest = arrayVar, iSize = size }
-       , ILiteral { iDest = arrayLen, iLiteral = LitInt (length exprs) }
+       , ILiteral { iDest = arrayLen, iLiteral = LitInt (toInteger (length exprs)) }
        , IHeapWrite { iHeapVar = arrayVar
                     , iValue = arrayLen
                     , iOperand = OperandLit 0
@@ -313,8 +313,8 @@ genBlock ((_, locals), Block stmts) = do
   tell [ IFrameAllocate { iSize = frameSize updatedFrame } ]
   forM_ stmts genStmt
   tell [ IFrameFree { iSize = frameSize updatedFrame } ]
-  childFrame <- gets frame
-  modify (\s -> s { frame = fromJust (parent childFrame) })
+  child <- gets frame
+  modify (\s -> s { frame = fromJust (parent child) })
 
 
 

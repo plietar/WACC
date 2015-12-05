@@ -14,7 +14,7 @@ data Token =
     TokBoolLit Bool   | 
     TokStrLit String  | 
     TokCharLit Char   | 
-    TokIntLit Int
+    TokIntLit Integer
     deriving (Eq)
 
 instance Show Token where
