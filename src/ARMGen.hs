@@ -92,9 +92,11 @@ genARMInstruction (IBinOp { iBinOp = op, iDest = Var dest,
         iLeft  = Var left, iRight = Var right } )
   = case op of  
       BinOpAdd -> emit ["ADD r" ++ (show dest) ++ ", r" ++ 
-                        (show left) ++ ", r" ++ (show right) ] 
+                        (show left) ++ ", r" ++ (show right),
+                        "BLVS p_throw_overflow_error"] 
       BinOpSub -> emit ["SUB r" ++ (show dest) ++ ", r" ++ 
-                        (show left) ++ ", r" ++ (show right) ]
+                        (show left) ++ ", r" ++ (show right),
+                        "BLVS p_throw_overflow_error" ]
       BinOpMul -> emit ["MUL r" ++ (show dest) ++ ", r" ++ 
                         (show left) ++ ", r" ++ (show right) ]
       BinOpDiv -> do emit ["MOV r0, r" ++ (show left),
