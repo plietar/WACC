@@ -17,20 +17,11 @@ import RegisterAllocation.DataFlow
 import RegisterAllocation.GraphColouring
 
 import System.Exit
-
-import Control.Applicative
 import System.FilePath.Posix
-
 
 import Data.Graph.Inductive.PatriciaTree (Gr)
 import qualified Data.Graph.Inductive.Graph as Graph
 
-
-#if WITH_GRAPHVIZ
-import qualified Data.GraphViz as GraphViz
-import qualified Data.GraphViz.Attributes.Complete as GraphViz
-import Data.Text.Lazy (unpack)
-#endif
 
 exitCodeForResult :: WACCResult a -> ExitCode
 exitCodeForResult (OK _)                  = ExitSuccess
