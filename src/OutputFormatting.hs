@@ -239,7 +239,7 @@ showRIG rig = execWriter $ do
 showColouring :: Map Var Var -> [String]
 showColouring colouring = execWriter $ do
   forM_ (Map.toList colouring) $ \(v,col) -> do
-    tell [show v ++ " -> " ++ ": " ++ show col]
+    tell [show v ++ " -> " ++ show col]
 
 #if WITH_GRAPHVIZ
 showDotCFG :: Graph gr => gr [IR] () -> [String]

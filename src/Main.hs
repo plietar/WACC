@@ -25,7 +25,6 @@ import System.FilePath.Posix
 import Data.Graph.Inductive.PatriciaTree (Gr)
 import qualified Data.Graph.Inductive.Graph as Graph
 
-
 exitCodeForResult :: WACCResult a -> ExitCode
 exitCodeForResult (OK _)                  = ExitSuccess
 exitCodeForResult (Error LexicalError  _) = ExitFailure 100
@@ -62,10 +61,10 @@ compile filename contents output
     live      = zipWith liveVariables <$> cfg <*> flow
     rig       = zipWith interferenceGraph <$> allVars <*> live :: WACCResult [Gr Var ()]
     moves     = zipWith movesGraph <$> allVars <*> cfg
-    colouring = join (zipWithM assignRegisters <$> rig <*> moves)
 
-    cfgColoured = zipWith (\c g -> Graph.nmap (applyColouring c) g) <$> colouring <*> cfg
-    cfgFinal  = map (Graph.nmap removeUselessMoves) <$> cfgColoured
+    cfgFinal' = join (sequence <$> (zipWith3 allocateRegisters <$> cfg <*> rig <*> moves))
+    cfgFinal  = map fst <$> cfgFinal'
+    colouring  = map snd <$> cfgFinal'
 
     irFinal   = concatMap (concatMap snd . Graph.labNodes) <$> cfgFinal
 

@@ -2,24 +2,76 @@
 {-# LANGUAGE TupleSections #-}
 
 module RegisterAllocation.GraphColouring
-  (assignRegisters, applyColouring, removeUselessMoves) where
+  (allocateRegisters) where
 import Common.WACCResult
+import Common.AST
+import RegisterAllocation.DataFlow
 
 import Data.Graph.Inductive (Graph, DynGraph, Node)
 import qualified Data.Graph.Inductive as Graph
 import Data.List
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 import CodeGenTypes
-import Data.Map (Map, (!))
+import Data.Map (Map)
 import Data.Maybe
 import Control.Applicative
 import Control.Monad (when)
+import Control.Monad.RWS
+import Debug.Trace
+import GHC.Exts
 
-assignRegisters :: DynGraph gr => gr Var () -> gr Var () -> WACCResult (Map Var Var)
-assignRegisters rig moves
-  = case colourGraph allRegs rig moves of
-    Just c  -> OK c
-    Nothing -> codegenError "Graph Colouring failed"
+(!) m e = fromMaybe (error ("Index:" ++ show e)) (Map.lookup e m)
+gLab x g n = fromMaybe (error ("Node:" ++ show x)) (Graph.lab g n)
+
+graphNMapM :: (Monad m, DynGraph gr) => (a -> m b) -> gr a c -> m (gr b c)
+graphNMapM f gr = do
+  nodes <- mapM (\(l, n) -> (l,) <$> f n) (Graph.labNodes gr)
+  return (Graph.mkGraph nodes (Graph.labEdges gr))
+
+spillNode :: DynGraph gr => gr [IR] () -> gr Var () -> gr Var () -> gr Var () -> [Var]
+             -> (gr [IR] (), gr Var (), gr Var (), gr Var (), [Var], [(Node, Var)])
+spillNode cfg oRig rig moves spill
+  = traceShow (spilledVar, spilledNode) (cfg', oRig', rig', moves', spill', newNodes)
+  where
+    (cfg', spill', newVars) = runRWS (graphNMapM findUses cfg) () spill
+
+    oRig' = Graph.insNodes newNodes (Graph.delNode spilledNode oRig)
+    rig' = Graph.insNodes newNodes (Graph.delNode spilledNode rig)
+    moves' = Graph.insNodes newNodes (Graph.delNode spilledNode moves)
+
+    newNodes = traceShowId $ zip (Graph.newNodes (length newVars) oRig) newVars
+
+    (spilledNode, spilledVar) = (head lnodes)
+    lnodes = sortWith (\(n, _) -> Down (Graph.deg rig n)) $ filter (\(_,l) -> not (isPrecoloured l)) (Graph.labNodes rig)
+
+    findUses :: [IR] -> RWS () [Var] [Var] [IR]
+    findUses [] = return []
+    findUses (ir:irs)
+      = if (Set.member spilledVar (irUse ir) || Set.member spilledVar (irDef ir))
+        then do
+          (s:ss) <- get
+          put ss
+          tell [s]
+
+          let ir' = mapIR (\x -> if x == spilledVar then s else x) ir
+
+          let addLoad = if Set.member spilledVar (irUse ir)
+                        then (IFrameRead { iDest = s, iOffset = 0, iType = TyInt } :)
+                        else id
+
+          let addStore = if Set.member spilledVar (irDef ir)
+                         then (IFrameWrite { iValue = s, iOffset = 0, iType = TyInt } :)
+                         else id
+
+          addLoad <$> (ir' :) <$> addStore <$> findUses irs
+        else ((ir:) <$> findUses irs)
+
+allocateRegisters :: DynGraph gr => gr [IR] () -> gr Var () -> gr Var () -> WACCResult (gr [IR] (), Map Var Var)
+allocateRegisters cfg rig moves = maybe (codegenError "Graph Colouring failed") OK $ do
+  (cfg', colouring) <- colourGraph allRegs cfg rig moves
+  return (Graph.nmap (simplifyMoves . applyColouring colouring) cfg', colouring)
+
 
 -- Merge nodes X and Y, using X's label
 mergeNodes :: DynGraph gr =>  Node -> Node -> gr Var () -> gr Var ()
@@ -31,35 +83,34 @@ mergeNodes x y g = Graph.insEdges edges (Graph.delNode y g)
 
 -- Colour a graph such that no to vertices in the same edge share
 -- the same colour
-colourGraph :: DynGraph gr => [Var] -> gr Var () -> gr Var () -> Maybe (Map Var Var)
-colourGraph colours rig moves = do
-  (stack, precolouring, coalescings) <- buildStack rig moves [] [] (length colours)
-  let coalescingMap = Map.fromList coalescings
+colourGraph :: DynGraph gr => [Var] -> gr [IR] () -> gr Var () -> gr Var () -> Maybe (gr [IR] (), Map Var Var)
+colourGraph colours cfg rig moves = do
+  let allNodes = Map.fromList (Graph.labNodes rig)
 
-  -- Update the rig with the coalesced nodes
-  let rig' = Prelude.foldl (\g (x,y) -> mergeNodes y x g) rig (reverse coalescings)
+  (cfg', rig', stack, precolouring, spillings)
+    <- buildStack cfg rig rig moves [] (Spilled <$> [0..]) [] (length colours)
 
   colouring <- augmentColouring rig' colours precolouring stack
 
-  let remap i = fromMaybe (remap (coalescingMap ! i)) (Map.lookup i colouring)
-      coalescingMap' = Map.map remap coalescingMap
-      colouring' = Map.union colouring coalescingMap'
+  let allNodes' = Map.union allNodes (Map.fromList spillings)
 
-  return (Map.mapKeys (fromJust . Graph.lab rig) colouring')
+  return (cfg', Map.mapKeys (allNodes' !) colouring)
 
 -- Build a stack of all nodes in the graph by always pushing a node
 -- that is valid (i.e has less than maxR number of neighbors) and update
 -- the graph at each step
-buildStack :: DynGraph gr => gr Var () -> gr Var () -> [Node] -> [(Node, Node)] -> Int -> Maybe ([Node], Map Node Var, [(Node, Node)])
-buildStack rig moves stack coalescings maxR
-  | isSimplifiedGraph rig = Just (stack, Map.fromList (Graph.labNodes rig), coalescings)
+buildStack :: DynGraph gr => gr [IR] () -> gr Var () -> gr Var () -> gr Var () -> [Node] -> [Var] -> [(Node, Var)] -> Int
+                          -> Maybe (gr [IR] (), gr Var (), [Node], Map Node Var, [(Node, Var)])
+buildStack cfg oRig rig moves stack spill spillings maxR 
+  | isSimplifiedGraph rig = Just (cfg, oRig, stack, Map.fromList (Graph.labNodes rig), spillings)
   | Just n <- findValidNode rig moves (Graph.nodes rig) maxR 
-    = buildStack (Graph.delNode n rig) moves (n : stack) coalescings maxR
-  | Just (rig', moves', c) <- tryMerge maxR rig moves
-    = buildStack rig' moves' stack (c:coalescings) maxR
+    = buildStack cfg oRig (Graph.delNode n rig) moves (n : stack) spill spillings maxR
+  | Just (cfg', oRig', rig', moves') <- tryMerge maxR cfg oRig rig moves
+    = buildStack cfg' oRig' rig' moves' stack spill spillings maxR
   | Just moves' <- tryFreeze maxR rig moves
-    = buildStack rig moves' stack coalescings maxR
-  | otherwise = Nothing
+    = buildStack cfg oRig rig moves' stack spill spillings maxR
+  | (cfg', oRig', rig', moves', spill', ss) <- spillNode cfg oRig rig moves spill
+    = buildStack cfg' oRig' rig' moves' stack spill' (ss ++ spillings) maxR
 
 isSimplifiedGraph :: Graph gr => gr Var () -> Bool
 isSimplifiedGraph rig = all (isPrecoloured . snd) (Graph.labNodes rig)
@@ -73,7 +124,7 @@ isMoveRelated moves node = Graph.outdeg moves node > 0
 
 canSimplifyNode :: Graph gr => gr Var () -> gr Var () -> Int -> Node -> Bool
 canSimplifyNode rig moves maxR node
-  = (not . isPrecoloured . fromJust . Graph.lab rig $ node)
+  = (not . isPrecoloured . gLab 1 rig $ node)
     && not (isMoveRelated moves node)
     && (Graph.outdeg rig node) < maxR
 
@@ -85,32 +136,36 @@ findValidNode rig moves (x:xs) maxR
   | otherwise                        = findValidNode rig moves xs maxR
 findValidNode _ _ [] _               = Nothing
 
-tryMerge :: DynGraph gr => Int -> gr Var () -> gr Var () -> Maybe (gr Var (), gr Var (), (Node, Node))
-tryMerge maxR rig moves = tryMerge' (Graph.edges moves)
+tryMerge :: DynGraph gr => Int -> gr [IR] () -> gr Var () -> gr Var () -> gr Var ()
+                        -> Maybe (gr [IR] (), gr Var (), gr Var (), gr Var ())
+tryMerge maxR cfg oRig rig moves = tryMerge' (Graph.edges moves)
   where
     tryMerge' [] = Nothing
-    tryMerge' ((x,y):es) = tryMergeNodes maxR rig moves x y
+    tryMerge' ((x,y):es) = tryMergeNodes maxR cfg oRig rig moves x y
                           <|> tryMerge' es 
 
-tryMergeNodes :: DynGraph gr => Int -> gr Var () -> gr Var () -> Node -> Node -> Maybe (gr Var (), gr Var (), (Node, Node))
-tryMergeNodes maxR rig moves x y = do
+tryMergeNodes :: DynGraph gr => Int -> gr [IR] () -> gr Var () -> gr Var () -> gr Var () -> Node -> Node
+                             -> Maybe (gr [IR] (), gr Var (), gr Var (), gr Var ())
+tryMergeNodes maxR cfg oRig rig moves x y = do
   when (Graph.hasNeighbor rig x y) Nothing
 
-  let lx = fromJust (Graph.lab rig x)
-      ly = fromJust (Graph.lab rig y)
+  let lx = (gLab 2) rig x
+      ly = (gLab 3) rig y
 
-  (x',y') <- case (lx, ly) of
+  (x', y', lx', ly') <- case (lx, ly) of
     (Reg _, Reg _) -> Nothing
-    (Reg _, _    ) -> Just (x, y)
-    (_    , Reg _) -> Just (y, x)
-    (_    , _    ) -> Just (x, y)
+    (Reg _, _    ) -> Just (x, y, lx, ly)
+    (_    , Reg _) -> Just (y, x, ly, lx)
+    (_    , _    ) -> Just (x, y, lx, ly)
 
-  let rig'   = mergeNodes x' y' rig
+  let cfg'   = Graph.nmap (map (mapIR (\v -> if v == ly' then lx' else v))) cfg
+      oRig'  = mergeNodes x' y' oRig
+      rig'   = mergeNodes x' y' rig
       moves' = mergeNodes x' y' moves
       ok = ((< maxR) . length . filter (>= maxR) . map (Graph.outdeg rig') . Graph.suc rig') x'
 
   if ok
-  then return (rig', moves', (y', x'))
+  then return (cfg', oRig', rig', moves')
   else Nothing
 
 tryFreeze :: DynGraph gr => Int -> gr Var () -> gr Var () -> Maybe (gr Var ())
@@ -151,71 +206,67 @@ colourNode (n : rest) cols coloured
 -- Apply Graph Colouring to the Intermediate Representation
 applyColouring :: Map Var Var -> [IR] -> [IR]
 applyColouring colouring
-  = map (\ir -> colourIR ir colouring)
+  = map (mapIR (colouring !))
 
--- Helper method
-get :: Var -> Map Var Var -> Var
-get v colouring = (colouring ! v)
-
-colourIR :: IR -> Map Var Var -> IR
-colourIR ILiteral{..} colouring
-  = ILiteral { iDest = get iDest colouring
+mapIR :: (Var -> Var) -> IR -> IR
+mapIR colouring ILiteral{..}
+  = ILiteral { iDest = colouring iDest
              , iLiteral = iLiteral }
 
-colourIR IBinOp{..} colouring
+mapIR colouring IBinOp{..}
   = IBinOp { iBinOp = iBinOp
-           , iDest  = get iDest colouring
-           , iLeft  = get iLeft colouring
-           , iRight = get iRight colouring }
+           , iDest  = colouring iDest
+           , iLeft  = colouring iLeft
+           , iRight = colouring iRight }
 
-colourIR IUnOp{..} colouring
+mapIR colouring IUnOp{..}
   = IUnOp { iUnOp   = iUnOp
-           , iDest  = get iDest colouring
-           , iValue = get iValue colouring }
+           , iDest  = colouring iDest
+           , iValue = colouring iValue }
 
-colourIR IMove{..} colouring
-  = IMove { iValue = get iValue colouring
-           , iDest = get iDest colouring }
+mapIR colouring IMove{..}
+  = IMove { iValue = colouring iValue
+           , iDest = colouring iDest }
 
-colourIR ICondJump{..} colouring
+mapIR colouring ICondJump{..}
   = ICondJump { iLabel = iLabel
-              , iValue = get iValue colouring }
+              , iValue = colouring iValue }
 
-colourIR IFrameRead{..} colouring
+mapIR colouring IFrameRead{..}
   = IFrameRead { iOffset = iOffset
-               , iDest   = get iDest colouring
+               , iDest   = colouring iDest
                , iType   = iType }
 
-colourIR IFrameWrite{..} colouring
+mapIR colouring IFrameWrite{..}
   = IFrameWrite { iOffset = iOffset
-                , iValue  = get iValue colouring
+                , iValue  = colouring iValue
                 , iType   = iType }
 
-colourIR IHeapRead{..} colouring
-  = IHeapRead { iHeapVar = get iHeapVar colouring 
-              , iDest    = get iDest colouring
+mapIR colouring IHeapRead{..}
+  = IHeapRead { iHeapVar = colouring iHeapVar 
+              , iDest    = colouring iDest
               , iOperand = operand
               , iType    = iType }
   where
     operand = case iOperand of
       OperandLit x -> OperandLit x
-      OperandVar v s -> OperandVar (get v colouring) s
+      OperandVar v s -> OperandVar (colouring v) s
 
-colourIR IHeapWrite{..} colouring
-    = IHeapWrite { iHeapVar = get iHeapVar colouring 
-                 , iValue = get iValue colouring
+mapIR colouring IHeapWrite{..}
+    = IHeapWrite { iHeapVar = colouring iHeapVar 
+                 , iValue = colouring iValue
                  , iOperand = operand
                  , iType = iType}
     where
       operand = case iOperand of
         OperandLit x -> OperandLit x
-        OperandVar v s -> OperandVar (get v colouring) s
+        OperandVar v s -> OperandVar (colouring v) s
 
 -- Base Case
-colourIR x colouring  = x
+mapIR colouring x = x
 
-removeUselessMoves :: [IR] -> [IR]
-removeUselessMoves = filter (not . isUselessMove)
+simplifyMoves :: [IR] -> [IR]
+simplifyMoves = filter (not . isUselessMove)
   where
     isUselessMove IMove{..} = iDest == iValue
     isUselessMove _         = False

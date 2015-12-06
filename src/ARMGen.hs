@@ -182,6 +182,14 @@ genARMInstruction (IFrameAllocate { iSize = size }) = do
     genARMInstruction (IFrameAllocate { iSize = size - offsetLimitARM })
 
 
+genARMInstruction (IFrameFree { iSize = 0 }) = return ()
+genARMInstruction (IFrameFree { iSize = size } )
+  = emit ["ADD sp, sp, #" ++ show size]
+genARMInstruction (IFrameRead {iOffset = offset, iDest = dest, iType = ty} )
+  = emit [ldrInstr ty ++ " " ++ show dest ++ ", [sp, #" ++ show offset ++ "]"]
+genARMInstruction (IFrameWrite {iOffset = offset, iValue = value, iType = ty} )
+  = emit [strInstr ty ++ " " ++ show value ++ ", [sp, #" ++ show offset ++ "]"]
+
 -- Heap Read (i.e Pairs and Arrays)
 genARMInstruction (IHeapRead { iHeapVar = heapVar, iDest = dest, iOperand = OperandVar offset shift, iType = ty })
   = emit [ldrInstr ty ++ " " ++ show dest ++ ", [" ++ show heapVar ++ ", " ++ show offset ++ scaling ++ "]"]

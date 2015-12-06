@@ -13,7 +13,7 @@ import Data.Set(Set)
 import qualified Data.Set as Set
 
 
-data Var = Local Int | Temp Int | Reg Int
+data Var = Local Int | Temp Int | Reg Int | Spilled Int
   deriving (Ord, Eq)
 
 argPassingRegs = Reg <$> [0..1]
@@ -38,6 +38,7 @@ allRegs = Reg <$> [0..12]
 instance Show Var where
   show (Local n) = "local_" ++ show n
   show (Temp n) = "temp_" ++ show n
+  show (Spilled n) = "spill_" ++ show n
   show (Reg n) = "r" ++ show n
 
 data Label = NamedLabel String | UnnamedLabel Int
@@ -65,6 +66,7 @@ data IR
   | ILabel { iLabel :: Label }
 
   | IFrameAllocate { iSize :: Int }
+  | IFrameFree { iSize :: Int }
   | IFrameRead { iOffset :: Int, iDest :: Var, iType :: Type }
   | IFrameWrite { iOffset :: Int, iValue :: Var, iType :: Type }
 
