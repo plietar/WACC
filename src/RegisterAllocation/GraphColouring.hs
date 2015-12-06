@@ -13,15 +13,16 @@ import Data.List
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import CodeGenTypes
-import Data.Map (Map)
+import Data.Map (Map, (!))
+import Data.Set (Set)
 import Data.Maybe
 import Control.Applicative
 import Control.Monad (when)
 import Control.Monad.RWS
 import Debug.Trace
 import GHC.Exts
+import Control.Monad.Writer
 
-(!) m e = fromMaybe (error ("Index:" ++ show e)) (Map.lookup e m)
 gLab x g n = fromMaybe (error ("Node:" ++ show x)) (Graph.lab g n)
 
 graphNMapM :: (Monad m, DynGraph gr) => (a -> m b) -> gr a c -> m (gr b c)
@@ -29,49 +30,63 @@ graphNMapM f gr = do
   nodes <- mapM (\(l, n) -> (l,) <$> f n) (Graph.labNodes gr)
   return (Graph.mkGraph nodes (Graph.labEdges gr))
 
-spillNode :: DynGraph gr => gr [IR] () -> gr Var () -> gr Var () -> gr Var () -> [Var]
-             -> (gr [IR] (), gr Var (), gr Var (), gr Var (), [Var], [(Node, Var)])
-spillNode cfg oRig rig moves spill
-  = traceShow (spilledVar, spilledNode) (cfg', oRig', rig', moves', spill', newNodes)
+spillNode :: DynGraph gr => Map Var Int -> gr [IRL] () -> gr Var () -> gr Var () -> gr Var () -> [Var]
+             -> (Map Var Int, gr [IRL] (), gr Var (), gr Var (), gr Var (), [Var], [(Node, Var)])
+spillNode allVars cfg oRig rig moves spill
+  = (allVars', cfg'', oRig', rig', moves', spill', newNodes)
   where
     (cfg', spill', newVars) = runRWS (graphNMapM findUses cfg) () spill
 
-    oRig' = Graph.insNodes newNodes (Graph.delNode spilledNode oRig)
-    rig' = Graph.insNodes newNodes (Graph.delNode spilledNode rig)
+    cfg'' = Graph.nmap (map (\(ir, (lI, lO)) -> (ir, (Set.delete spilledVar lI, Set.delete spilledVar lO)))) cfg'
+
+    allVars' = foldr (\(n,v) -> Map.insert v n) (Map.delete spilledVar allVars) newNodes
+
+    oRig' = Graph.insEdges newEdges (Graph.insNodes newNodes (Graph.delNode spilledNode oRig))
+    rig' = Graph.insEdges newEdges' (Graph.insNodes newNodes (Graph.delNode spilledNode rig))
     moves' = Graph.insNodes newNodes (Graph.delNode spilledNode moves)
 
-    newNodes = traceShowId $ zip (Graph.newNodes (length newVars) oRig) newVars
+    newNodes = map (\(n, (v, _)) -> (n,v)) newNodesL
+    newEdges = nub $ concatMap (\(n, (_, o)) -> concatMap ((\x -> [(n,x,()), (x,n,())]) . (allVars !)) (Set.elems o)) newNodesL
+    newEdges' = nub $ concatMap (\(n, (_, o)) -> concatMap ((\x -> [(n,x,()), (x,n,())])) (filter (isJust . Graph.lab rig) (map (allVars !) (Set.elems o)))) newNodesL
+    newNodesL = zip (Graph.newNodes (length newVars) oRig) newVars
 
     (spilledNode, spilledVar) = (head lnodes)
     lnodes = sortWith (\(n, _) -> Down (Graph.deg rig n)) $ filter (\(_,l) -> not (isPrecoloured l)) (Graph.labNodes rig)
 
-    findUses :: [IR] -> RWS () [Var] [Var] [IR]
+    findUses :: [IRL] -> RWS () [(Var, Set Var)] [Var] [IRL]
     findUses [] = return []
-    findUses (ir:irs)
+    findUses (irl@(ir, (lI, lO)) :irs)
       = if (Set.member spilledVar (irUse ir) || Set.member spilledVar (irDef ir))
         then do
           (s:ss) <- get
           put ss
-          tell [s]
 
-          let ir' = mapIR (\x -> if x == spilledVar then s else x) ir
+          let addLI = if Set.member spilledVar (irUse ir)
+                      then Set.union lI
+                      else id
+
+          let addLO = if Set.member spilledVar (irDef ir)
+                      then Set.union lO
+                      else id
+          tell [(s, Set.delete spilledVar (addLI (addLO (Set.empty))))]
+
+          let (ir', (lI', lO')) = mapIRL (\x -> if x == spilledVar then s else x) irl
 
           let addLoad = if Set.member spilledVar (irUse ir)
-                        then (IFrameRead { iDest = s, iOffset = 0, iType = TyInt } :)
+                        then ((IFrameRead { iDest = s, iOffset = 0, iType = TyInt }, (Set.delete s lI', lI')):)
                         else id
 
           let addStore = if Set.member spilledVar (irDef ir)
-                         then (IFrameWrite { iValue = s, iOffset = 0, iType = TyInt } :)
+                         then ((IFrameWrite { iValue = s, iOffset = 0, iType = TyInt }, (lO', Set.delete s lO')):)
                          else id
 
-          addLoad <$> (ir' :) <$> addStore <$> findUses irs
-        else ((ir:) <$> findUses irs)
+          addLoad <$> ((ir', (lI', lO')) :) <$> addStore <$> findUses irs
+        else ((irl:) <$> findUses irs)
 
-allocateRegisters :: DynGraph gr => gr [IR] () -> gr Var () -> gr Var () -> WACCResult (gr [IR] (), Map Var Var)
-allocateRegisters cfg rig moves = maybe (codegenError "Graph Colouring failed") OK $ do
-  (cfg', colouring) <- colourGraph allRegs cfg rig moves
-  return (Graph.nmap (simplifyMoves . applyColouring colouring) cfg', colouring)
-
+allocateRegisters :: DynGraph gr => Map Var Int -> gr [IRL] () -> gr Var () -> gr Var () -> WACCResult (gr [IR] (), Map Var Var)
+allocateRegisters allVars cfg rig moves = maybe (codegenError "Graph Colouring failed") OK $ do
+  (cfg', colouring) <- colourGraph allRegs allVars cfg rig moves
+  return (Graph.nmap (simplifyMoves . applyColouring colouring . map fst) cfg', colouring)
 
 -- Merge nodes X and Y, using X's label
 mergeNodes :: DynGraph gr =>  Node -> Node -> gr Var () -> gr Var ()
@@ -83,12 +98,12 @@ mergeNodes x y g = Graph.insEdges edges (Graph.delNode y g)
 
 -- Colour a graph such that no to vertices in the same edge share
 -- the same colour
-colourGraph :: DynGraph gr => [Var] -> gr [IR] () -> gr Var () -> gr Var () -> Maybe (gr [IR] (), Map Var Var)
-colourGraph colours cfg rig moves = do
+colourGraph :: DynGraph gr => [Var] -> Map Var Int -> gr [IRL] () -> gr Var () -> gr Var () -> Maybe (gr [IRL] (), Map Var Var)
+colourGraph colours allVars cfg rig moves = do
   let allNodes = Map.fromList (Graph.labNodes rig)
 
   (cfg', rig', stack, precolouring, spillings)
-    <- buildStack cfg rig rig moves [] (Spilled <$> [0..]) [] (length colours)
+    <- buildStack allVars cfg rig rig moves [] (Spilled <$> [0..]) [] (length colours)
 
   colouring <- augmentColouring rig' colours precolouring stack
 
@@ -96,21 +111,28 @@ colourGraph colours cfg rig moves = do
 
   return (cfg', Map.mapKeys (allNodes' !) colouring)
 
+showRIG :: Graph gr => gr Var () -> [String]
+showRIG rig = execWriter $ do
+  forM_ (Graph.nodes rig) $ \idx -> do
+    let ctx = Graph.context rig idx
+    tell [(show (Graph.lab' ctx) ++ " - " ++
+           show (map (fromJust . Graph.lab rig) (Graph.suc' ctx)))]
+
 -- Build a stack of all nodes in the graph by always pushing a node
 -- that is valid (i.e has less than maxR number of neighbors) and update
 -- the graph at each step
-buildStack :: DynGraph gr => gr [IR] () -> gr Var () -> gr Var () -> gr Var () -> [Node] -> [Var] -> [(Node, Var)] -> Int
-                          -> Maybe (gr [IR] (), gr Var (), [Node], Map Node Var, [(Node, Var)])
-buildStack cfg oRig rig moves stack spill spillings maxR 
+buildStack :: DynGraph gr => Map Var Int -> gr [IRL] () -> gr Var () -> gr Var () -> gr Var () -> [Node] -> [Var] -> [(Node, Var)] -> Int
+                          -> Maybe (gr [IRL] (), gr Var (), [Node], Map Node Var, [(Node, Var)])
+buildStack allVars cfg oRig rig moves stack spill spillings maxR 
   | isSimplifiedGraph rig = Just (cfg, oRig, stack, Map.fromList (Graph.labNodes rig), spillings)
   | Just n <- findValidNode rig moves (Graph.nodes rig) maxR 
-    = buildStack cfg oRig (Graph.delNode n rig) moves (n : stack) spill spillings maxR
-  | Just (cfg', oRig', rig', moves') <- tryMerge maxR cfg oRig rig moves
-    = buildStack cfg' oRig' rig' moves' stack spill spillings maxR
+    = buildStack allVars cfg oRig (Graph.delNode n rig) moves (n : stack) spill spillings maxR
+  | Just (allVars', cfg', oRig', rig', moves') <- tryMerge maxR allVars cfg oRig rig moves
+    = buildStack allVars' cfg' oRig' rig' moves' stack spill spillings maxR
   | Just moves' <- tryFreeze maxR rig moves
-    = buildStack cfg oRig rig moves' stack spill spillings maxR
-  | (cfg', oRig', rig', moves', spill', ss) <- spillNode cfg oRig rig moves spill
-    = buildStack cfg' oRig' rig' moves' stack spill' (ss ++ spillings) maxR
+    = buildStack allVars cfg oRig rig moves' stack spill spillings maxR
+  | (allVars', cfg', oRig', rig', moves', spill', ss) <- spillNode allVars cfg oRig rig moves spill
+    = buildStack allVars' cfg' oRig' rig' moves' stack spill' (ss ++ spillings) maxR
 
 isSimplifiedGraph :: Graph gr => gr Var () -> Bool
 isSimplifiedGraph rig = all (isPrecoloured . snd) (Graph.labNodes rig)
@@ -136,17 +158,17 @@ findValidNode rig moves (x:xs) maxR
   | otherwise                        = findValidNode rig moves xs maxR
 findValidNode _ _ [] _               = Nothing
 
-tryMerge :: DynGraph gr => Int -> gr [IR] () -> gr Var () -> gr Var () -> gr Var ()
-                        -> Maybe (gr [IR] (), gr Var (), gr Var (), gr Var ())
-tryMerge maxR cfg oRig rig moves = tryMerge' (Graph.edges moves)
+tryMerge :: DynGraph gr => Int -> Map Var Int -> gr [IRL] () -> gr Var () -> gr Var () -> gr Var ()
+                        -> Maybe (Map Var Int, gr [IRL] (), gr Var (), gr Var (), gr Var ())
+tryMerge maxR allVars cfg oRig rig moves = tryMerge' (Graph.edges moves)
   where
     tryMerge' [] = Nothing
-    tryMerge' ((x,y):es) = tryMergeNodes maxR cfg oRig rig moves x y
+    tryMerge' ((x,y):es) = tryMergeNodes maxR allVars cfg oRig rig moves x y
                           <|> tryMerge' es 
 
-tryMergeNodes :: DynGraph gr => Int -> gr [IR] () -> gr Var () -> gr Var () -> gr Var () -> Node -> Node
-                             -> Maybe (gr [IR] (), gr Var (), gr Var (), gr Var ())
-tryMergeNodes maxR cfg oRig rig moves x y = do
+tryMergeNodes :: DynGraph gr => Int -> Map Var Int -> gr [IRL] () -> gr Var () -> gr Var () -> gr Var () -> Node -> Node
+                             -> Maybe (Map Var Int, gr [IRL] (), gr Var (), gr Var (), gr Var ())
+tryMergeNodes maxR allVars cfg oRig rig moves x y = do
   when (Graph.hasNeighbor rig x y) Nothing
 
   let lx = (gLab 2) rig x
@@ -158,14 +180,15 @@ tryMergeNodes maxR cfg oRig rig moves x y = do
     (_    , Reg _) -> Just (y, x, ly, lx)
     (_    , _    ) -> Just (x, y, lx, ly)
 
-  let cfg'   = Graph.nmap (map (mapIR (\v -> if v == ly' then lx' else v))) cfg
+  let allVars' = Map.delete ly' allVars
+      cfg'   = Graph.nmap (map (mapIRL (\v -> if v == ly' then lx' else v))) cfg
       oRig'  = mergeNodes x' y' oRig
       rig'   = mergeNodes x' y' rig
       moves' = mergeNodes x' y' moves
       ok = ((< maxR) . length . filter (>= maxR) . map (Graph.outdeg rig') . Graph.suc rig') x'
 
   if ok
-  then return (cfg', oRig', rig', moves')
+  then return (allVars', cfg', oRig', rig', moves')
   else Nothing
 
 tryFreeze :: DynGraph gr => Int -> gr Var () -> gr Var () -> Maybe (gr Var ())
@@ -177,7 +200,8 @@ tryFreeze maxR rig moves = tryFreeze' (Graph.edges moves)
 
 tryFreezeNodes :: DynGraph gr => Int -> gr Var () -> gr Var () -> Node -> Node -> Maybe (gr Var ())
 tryFreezeNodes maxR rig moves x y
-  = if (Graph.outdeg rig x < maxR) && (Graph.outdeg rig y < maxR)
+  = if (Graph.outdeg rig x < maxR || (isPrecoloured . fromJust . Graph.lab rig) x) &&
+       (Graph.outdeg rig y < maxR || (isPrecoloured . fromJust . Graph.lab rig) y)
     then Just (Graph.delEdges [(x,y),(y,x)] moves)
     else Nothing
 
@@ -207,6 +231,9 @@ colourNode (n : rest) cols coloured
 applyColouring :: Map Var Var -> [IR] -> [IR]
 applyColouring colouring
   = map (mapIR (colouring !))
+
+mapIRL :: (Var -> Var) -> IRL -> IRL
+mapIRL f (ir, (lI, lO)) = (mapIR f ir, (Set.map f lI, Set.map f lO))
 
 mapIR :: (Var -> Var) -> IR -> IR
 mapIR colouring ILiteral{..}

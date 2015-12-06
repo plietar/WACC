@@ -10,6 +10,8 @@ import CodeGen
 import Arguments
 import ARMGen
 import OutputFormatting
+
+import Data.List (zipWith4)
 import Data.Maybe (fromMaybe)
 
 import Control.Applicative
@@ -58,13 +60,13 @@ compile filename contents output
     cfg       = map (deadCodeElimination . basicBlocks) <$> ir :: WACCResult [Gr [IR] ()]
     flow      = map blockDataFlow <$> cfg
     allVars   = map allVariables <$> cfg
-    live      = zipWith liveVariables <$> cfg <*> flow
+    live      = map liveVariables <$> flow
     rig       = zipWith interferenceGraph <$> allVars <*> live :: WACCResult [Gr Var ()]
     moves     = zipWith movesGraph <$> allVars <*> cfg
 
-    cfgFinal' = join (sequence <$> (zipWith3 allocateRegisters <$> cfg <*> rig <*> moves))
-    cfgFinal  = map fst <$> cfgFinal'
-    colouring  = map snd <$> cfgFinal'
+    allocation = join (sequence <$> (zipWith4 allocateRegisters <$> allVars <*> live <*> rig <*> moves))
+    cfgFinal  = map fst <$> allocation
+    colouring = map snd <$> allocation
 
     irFinal   = concatMap (concatMap snd . Graph.labNodes) <$> cfgFinal
 

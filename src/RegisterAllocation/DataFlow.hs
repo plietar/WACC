@@ -15,11 +15,13 @@ import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 
-import Data.Graph.Inductive.Graph (Graph)
+import Data.Graph.Inductive.Graph (DynGraph,Graph)
 import qualified Data.Graph.Inductive.Graph as Graph
 
 import Data.Foldable (foldrM)
 import Control.Monad.Writer
+
+type IRL = (IR, (Set Var, Set Var))
 
 data FlowInfo = FlowInfo
                 { vUsed :: Set Var
@@ -53,8 +55,8 @@ movesGraph vars cfg = Graph.mkGraph nodes (map (\e -> Graph.toLEdge e ()) (nub e
                                (irMove is)
     irMove (_ : is) = irMove is
 
-interferenceGraph :: Graph gr => Map Var Int -> [Set Var] -> gr Var ()
-interferenceGraph vars liveSets = Graph.mkGraph nodes (map (\e -> Graph.toLEdge e ()) (nub edges))
+interferenceGraph :: Graph gr => Map Var Int -> gr ([IRL]) () -> gr Var ()
+interferenceGraph vars cfg = Graph.mkGraph nodes (map (\e -> Graph.toLEdge e ()) (nub edges))
   where
     nodes :: [Graph.LNode Var]
     nodes = map swap (Map.assocs vars)
@@ -62,29 +64,28 @@ interferenceGraph vars liveSets = Graph.mkGraph nodes (map (\e -> Graph.toLEdge 
     edges :: [Graph.Edge]
     edges = map (\(v1,v2) -> (vars ! v1, vars ! v2)) (concatMap livePairs liveSets)
 
+    liveSets :: [Set Var]
+    liveSets = concatMap (concatMap (\(_, (lI, lO)) -> [lI, lO])) . map snd $ Graph.labNodes cfg
+
     livePairs :: Set Var -> [(Var, Var)]
     livePairs live = [(v1,v2) | v1 <- vs, v2 <- vs, v1 /= v2]
       where vs = Set.elems live
 
-liveVariables :: Graph gr => gr [IR] () -> Map Int FlowInfo -> [Set Var]
-liveVariables cfg flowInfo = concatMap bbFlow nodes
+liveVariables :: DynGraph gr => gr ([IR], FlowInfo) () -> gr [IRL] ()
+liveVariables = Graph.nmap bbFlow
   where
-    nodes :: [Int]
-    nodes = Graph.nodes cfg
+    bbFlow :: ([IR], FlowInfo) -> [IRL]
+    bbFlow (irs, blockInfo)
+      = reverse (execWriter (foldrM irFlow (vOut blockInfo) irs))
 
-    bbFlow :: Int -> [Set Var]
-    bbFlow idx
-      = let irs = fromJust (Graph.lab cfg idx)
-            blockInfo = flowInfo ! idx
-        in  execWriter (foldrM irFlow (vOut blockInfo) irs)
-
-    irFlow :: IR -> Set Var -> Writer [Set Var] (Set Var)
+    irFlow :: IR -> Set Var -> Writer [IRL] (Set Var)
     irFlow ir out = do
-      tell [Set.union out (irDef ir)]
-      return (Set.union (Set.difference out (irDef ir)) (irUse ir))
+      let lI = Set.union (Set.difference out (irDef ir)) (irUse ir)
+      tell [(ir, (lI, Set.union out (irDef ir)))]
+      return lI
 
-blockDataFlow :: Graph gr => gr [IR] () -> Map Int FlowInfo
-blockDataFlow cfg = blockDataFlow' initial (Graph.nodes cfg)
+blockDataFlow :: DynGraph gr => gr [IR] () -> gr ([IR], FlowInfo) ()
+blockDataFlow cfg = Graph.gmap (\(x, n, l, y) -> (x, n, (l, final ! n), y)) cfg
   where
     blocks :: Map Int [IR]
     blocks = Map.fromList $ Graph.labNodes cfg
@@ -94,6 +95,8 @@ blockDataFlow cfg = blockDataFlow' initial (Graph.nodes cfg)
                                        , vDef = bbDef bb
                                        , vIn = Set.empty
                                        , vOut = Set.empty}) blocks
+    final :: Map Int FlowInfo
+    final = blockDataFlow' initial (Graph.nodes cfg)
 
     blockDataFlow' :: Map Int FlowInfo -> [Int] -> Map Int FlowInfo
     blockDataFlow' blockInfoMap []       = blockInfoMap
