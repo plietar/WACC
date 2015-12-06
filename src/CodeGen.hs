@@ -36,7 +36,8 @@ genFunction (_, FuncDef _ fname params body) = do
 
         generation = do
           tell [ ILabel { iLabel = NamedLabel (show fname) }
-               , IFunctionBegin { iArgs = map snd argZip } ]
+               , IFunctionBegin { iArgs = map snd argZip }
+               , IFrameAllocate { iSize = 0 } ] -- Fixed later once colouring / spilling is done
         
           savedRegs <- forM calleeSaveRegs $ \r -> do
             v <- allocateTemp
@@ -71,6 +72,7 @@ genReturn retVal = do
   tell (map (\(r,v) -> IMove { iDest = r, iValue = v }) (reverse savedRegs))
 
   tell [ IMove { iDest = Reg 0, iValue = retVal }
+       , IFrameFree { iSize = 0 } -- Fixed later once colouring / spilling is done
        , IReturn ]
 
 genCall :: Identifier -> [Var] -> CodeGen Var

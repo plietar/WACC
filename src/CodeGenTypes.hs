@@ -16,12 +16,13 @@ import qualified Data.Set as Set
 data Var = Local Int | Temp Int | Reg Int | Spilled Int
   deriving (Ord, Eq)
 
+{-
 argPassingRegs = Reg <$> [0..1]
 callerSaveRegs = Reg <$> [0..1]
 calleeSaveRegs = Reg <$> [2..3]
 allRegs = Reg <$> [0..3]
+-}
 
-{-
 argPassingRegs :: [Var]
 argPassingRegs = Reg <$> [0..3]
 
@@ -33,7 +34,6 @@ calleeSaveRegs = Reg <$> [4..11]
 
 allRegs :: [Var]
 allRegs = Reg <$> [0..12]
--}
 
 instance Show Var where
   show (Local n) = "local_" ++ show n

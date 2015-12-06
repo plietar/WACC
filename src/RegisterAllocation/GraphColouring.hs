@@ -30,10 +30,10 @@ graphNMapM f gr = do
   nodes <- mapM (\(l, n) -> (l,) <$> f n) (Graph.labNodes gr)
   return (Graph.mkGraph nodes (Graph.labEdges gr))
 
-spillNode :: DynGraph gr => Map Var Int -> gr [IRL] () -> gr Var () -> gr Var () -> gr Var () -> [Var]
-             -> (Map Var Int, gr [IRL] (), gr Var (), gr Var (), gr Var (), [Var], [(Node, Var)])
-spillNode allVars cfg oRig rig moves spill
-  = (allVars', cfg'', oRig', rig', moves', spill', newNodes)
+spillNode :: DynGraph gr => Map Var Int -> gr [IRL] () -> gr Var () -> gr Var () -> gr Var () -> [Var] -> Int
+             -> (Map Var Int, gr [IRL] (), gr Var (), gr Var (), gr Var (), [Var], [(Node, Var)], Int)
+spillNode allVars cfg oRig rig moves spill frameOffset
+  = (allVars', cfg'', oRig', rig', moves', spill', newNodes, frameOffset + 4)
   where
     (cfg', spill', newVars) = runRWS (graphNMapM findUses cfg) () spill
 
@@ -73,11 +73,11 @@ spillNode allVars cfg oRig rig moves spill
           let (ir', (lI', lO')) = mapIRL (\x -> if x == spilledVar then s else x) irl
 
           let addLoad = if Set.member spilledVar (irUse ir)
-                        then ((IFrameRead { iDest = s, iOffset = 0, iType = TyInt }, (Set.delete s lI', lI')):)
+                        then ((IFrameRead { iDest = s, iOffset = frameOffset, iType = TyInt }, (Set.delete s lI', lI')):)
                         else id
 
           let addStore = if Set.member spilledVar (irDef ir)
-                         then ((IFrameWrite { iValue = s, iOffset = 0, iType = TyInt }, (lO', Set.delete s lO')):)
+                         then ((IFrameWrite { iValue = s, iOffset = frameOffset, iType = TyInt }, (lO', Set.delete s lO')):)
                          else id
 
           addLoad <$> ((ir', (lI', lO')) :) <$> addStore <$> findUses irs
@@ -85,8 +85,12 @@ spillNode allVars cfg oRig rig moves spill
 
 allocateRegisters :: DynGraph gr => Map Var Int -> gr [IRL] () -> gr Var () -> gr Var () -> WACCResult (gr [IR] (), Map Var Var)
 allocateRegisters allVars cfg rig moves = maybe (codegenError "Graph Colouring failed") OK $ do
-  (cfg', colouring) <- colourGraph allRegs allVars cfg rig moves
-  return (Graph.nmap (simplifyMoves . applyColouring colouring . map fst) cfg', colouring)
+  (cfg', colouring, frameSize) <- colourGraph allRegs allVars cfg rig moves
+  return (Graph.nmap (map (fixFrameSize frameSize) . simplifyMoves . applyColouring colouring . map fst) cfg', colouring)
+  where
+    fixFrameSize frameSize IFrameAllocate{} = IFrameAllocate { iSize = frameSize }
+    fixFrameSize frameSize IFrameFree{}     = IFrameFree     { iSize = frameSize }
+    fixFrameSize _ i = i
 
 -- Merge nodes X and Y, using X's label
 mergeNodes :: DynGraph gr =>  Node -> Node -> gr Var () -> gr Var ()
@@ -98,18 +102,18 @@ mergeNodes x y g = Graph.insEdges edges (Graph.delNode y g)
 
 -- Colour a graph such that no to vertices in the same edge share
 -- the same colour
-colourGraph :: DynGraph gr => [Var] -> Map Var Int -> gr [IRL] () -> gr Var () -> gr Var () -> Maybe (gr [IRL] (), Map Var Var)
+colourGraph :: DynGraph gr => [Var] -> Map Var Int -> gr [IRL] () -> gr Var () -> gr Var () -> Maybe (gr [IRL] (), Map Var Var, Int)
 colourGraph colours allVars cfg rig moves = do
   let allNodes = Map.fromList (Graph.labNodes rig)
 
-  (cfg', rig', stack, precolouring, spillings)
-    <- buildStack allVars cfg rig rig moves [] (Spilled <$> [0..]) [] (length colours)
+  (cfg', rig', stack, precolouring, spillings, frameSize)
+    <- buildStack allVars cfg rig rig moves [] (Spilled <$> [0..]) [] 0 (length colours)
 
   colouring <- augmentColouring rig' colours precolouring stack
 
   let allNodes' = Map.union allNodes (Map.fromList spillings)
 
-  return (cfg', Map.mapKeys (allNodes' !) colouring)
+  return (cfg', Map.mapKeys (allNodes' !) colouring, frameSize)
 
 showRIG :: Graph gr => gr Var () -> [String]
 showRIG rig = execWriter $ do
@@ -121,18 +125,18 @@ showRIG rig = execWriter $ do
 -- Build a stack of all nodes in the graph by always pushing a node
 -- that is valid (i.e has less than maxR number of neighbors) and update
 -- the graph at each step
-buildStack :: DynGraph gr => Map Var Int -> gr [IRL] () -> gr Var () -> gr Var () -> gr Var () -> [Node] -> [Var] -> [(Node, Var)] -> Int
-                          -> Maybe (gr [IRL] (), gr Var (), [Node], Map Node Var, [(Node, Var)])
-buildStack allVars cfg oRig rig moves stack spill spillings maxR 
-  | isSimplifiedGraph rig = Just (cfg, oRig, stack, Map.fromList (Graph.labNodes rig), spillings)
+buildStack :: DynGraph gr => Map Var Int -> gr [IRL] () -> gr Var () -> gr Var () -> gr Var () -> [Node] -> [Var] -> [(Node, Var)] -> Int -> Int
+                          -> Maybe (gr [IRL] (), gr Var (), [Node], Map Node Var, [(Node, Var)], Int)
+buildStack allVars cfg oRig rig moves stack spill spillings frameOffset maxR 
+  | isSimplifiedGraph rig = Just (cfg, oRig, stack, Map.fromList (Graph.labNodes rig), spillings, frameOffset)
   | Just n <- findValidNode rig moves (Graph.nodes rig) maxR 
-    = buildStack allVars cfg oRig (Graph.delNode n rig) moves (n : stack) spill spillings maxR
+    = buildStack allVars cfg oRig (Graph.delNode n rig) moves (n : stack) spill spillings frameOffset maxR
   | Just (allVars', cfg', oRig', rig', moves') <- tryMerge maxR allVars cfg oRig rig moves
-    = buildStack allVars' cfg' oRig' rig' moves' stack spill spillings maxR
+    = buildStack allVars' cfg' oRig' rig' moves' stack spill spillings frameOffset maxR
   | Just moves' <- tryFreeze maxR rig moves
-    = buildStack allVars cfg oRig rig moves' stack spill spillings maxR
-  | (allVars', cfg', oRig', rig', moves', spill', ss) <- spillNode allVars cfg oRig rig moves spill
-    = buildStack allVars' cfg' oRig' rig' moves' stack spill' (ss ++ spillings) maxR
+    = buildStack allVars cfg oRig rig moves' stack spill spillings frameOffset maxR
+  | (allVars', cfg', oRig', rig', moves', spill', ss, frameOffset') <- spillNode allVars cfg oRig rig moves spill frameOffset
+    = buildStack allVars' cfg' oRig' rig' moves' stack spill' (ss ++ spillings) frameOffset' maxR
 
 isSimplifiedGraph :: Graph gr => gr Var () -> Bool
 isSimplifiedGraph rig = all (isPrecoloured . snd) (Graph.labNodes rig)
