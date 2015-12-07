@@ -281,9 +281,20 @@ genStmt (_, StmtIfNoElse condition thenBlock) = do
 
   condVar <- genExpr condition
   tell [ICondJump { iLabel = thenLabel, iValue = condVar }]
-  tell [ILabel { iLabel = thenLabel }]
+  tell [IJump {iLabel = endLabel }
+       , ILabel { iLabel = thenLabel }]
   genBlock thenBlock
   tell [ILabel { iLabel = endLabel }]
+
+--genStmt (_, StmtSwitch condition switchBlock) = do
+--  thenLabel <- allocateLabel
+--  endLabel <- allocateLabel
+
+--  condVar <- genExpr condition
+--  tell [ICondJump { iLabel = thenLabel, iValue = condVar }]
+--  tell [ILabel { iLabel = thenLabel }]
+--  genBlock thenBlock
+--  tell [ILabel { iLabel = endLabel }]
 
 genStmt (_, StmtIf condition thenBlock elseBlock) = do
   thenLabel <- allocateLabel
