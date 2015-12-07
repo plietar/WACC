@@ -351,6 +351,14 @@ checkStmt (_, StmtIf predicate b1 b2) = do
   let al = al1 && al2
   return (al, StmtIf predicate' b1' b2')
 
+checkStmt (_, StmtIfNoElse predicate b) = do
+  context <- get
+  predicate'@(predicateType, _) <- lift $ checkExpr predicate context
+  when (not (compatibleType TyBool predicateType))
+       (lift (semanticError ("Condition cannot be of type " ++ show predicateType)))
+  b@((al,_),_) <- lift $ checkBlock b context
+  return (al, StmtIfNoElse predicate' b)
+
 checkStmt (_, StmtWhile predicate block) = do
   context <- get
   predicate'@(predicateType, _) <- lift $ checkExpr predicate context

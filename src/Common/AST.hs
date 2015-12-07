@@ -39,6 +39,7 @@ data Stmt a
   | StmtExit   (Annotated Expr a)
   | StmtPrint  (Annotated Expr a) Bool
   | StmtIf     (Annotated Expr a) (Annotated Block a) (Annotated Block a)
+  | StmtIfNoElse (Annotated Expr a) (Annotated Block a)
   | StmtWhile  (Annotated Expr a) (Annotated Block a)
   | StmtScope  (Annotated Block a)
 
