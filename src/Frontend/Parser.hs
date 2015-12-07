@@ -218,6 +218,14 @@ ifStmt = spanned $ do
   _ <- keyword "fi"
   return (StmtIf i t e)
 
+ifNoElseStmt :: Parser (Annotated Stmt SpanA)
+ifNoElseStmt = spanned $ do
+  _ <- keyword "if"
+  i <- expr
+  t <- block
+  _ <- keyword "fi"
+  return (StmtIfNoElse i t)
+
 scopeStmt :: Parser (Annotated Stmt SpanA)
 scopeStmt = spanned $ do
   _ <- keyword "begin"
@@ -271,6 +279,7 @@ returnStmt = spanned $ do
 stmt :: Parser (Annotated Stmt SpanA)
 stmt = skipStmt    <|>
        whileStmt   <|>
+       ifNoElseStmt <|>
        ifStmt      <|>
        scopeStmt   <|>
        printStmt   <|>

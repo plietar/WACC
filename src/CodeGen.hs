@@ -275,6 +275,16 @@ genStmt (_, StmtPrint expr@(ty, _) newline) = do
   v <- genExpr expr
   tell [IPrint { iValue = v, iType = ty, iNewline = newline }]
 
+genStmt (_, StmtIfNoElse condition thenBlock) = do
+  thenLabel <- allocateLabel
+  endLabel <- allocateLabel
+
+  condVar <- genExpr condition
+  tell [ICondJump { iLabel = thenLabel, iValue = condVar }]
+  tell [ILabel { iLabel = thenLabel }]
+  genBlock thenBlock
+  tell [ILabel { iLabel = endLabel }]
+
 genStmt (_, StmtIf condition thenBlock elseBlock) = do
   thenLabel <- allocateLabel
   endLabel <- allocateLabel
