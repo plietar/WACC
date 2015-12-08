@@ -33,7 +33,7 @@ calleeSaveRegs :: [Var]
 calleeSaveRegs = Reg <$> [4..11]
 
 allRegs :: [Var]
-allRegs = Reg <$> [0..12]
+allRegs = Reg <$> [0..11]
 
 instance Show Var where
   show (Local n) = "local_" ++ show n

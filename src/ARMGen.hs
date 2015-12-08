@@ -108,18 +108,6 @@ genARMInstruction (IBinOp { iBinOp = op, iDest = dest,
                        , "CMP r0, " ++ show dest ++ ", ASR #31"
                        , "BLNE p_throw_overflow_error" ]
                   emitFeature ThrowOverflowError
-      BinOpDiv -> do emit ["MOV r0, " ++ show left,
-                        "MOV r1, " ++ show right,
-                        "BL p_check_divide_by_zero",
-                        "BL __aeabi_idivmod",
-                        "MOV " ++ show dest ++ ", r0"]
-                     emitFeature CheckDivideByZero
-      BinOpRem -> do emit ["MOV r0, " ++ (show left),
-                        "MOV r1, " ++ (show right),
-                        "BL p_check_divide_by_zero",
-                        "BL __aeabi_idivmod",
-                        "MOV " ++ show dest ++ ", r1"]
-                     emitFeature CheckDivideByZero
       BinOpGT  -> emit ["CMP " ++ show left ++ ", " ++ (show right),
                         "MOVGT " ++ show dest ++ ", #1",
                         "MOVLE " ++ show dest ++ ", #0"]
@@ -142,6 +130,8 @@ genARMInstruction (IBinOp { iBinOp = op, iDest = dest,
                         (show left) ++ ", " ++ (show right) ]
       BinOpOr  -> emit ["ORR " ++ show dest ++ ", " ++
                         (show left) ++ ", " ++ (show right) ]
+
+      -- Division and remainder are handled by CodeGen
 
 --UnOp
 genARMInstruction IUnOp { iUnOp = op, iDest = dest,

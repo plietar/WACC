@@ -75,15 +75,28 @@ genReturn retVal = do
        , IFrameFree { iSize = 0 } -- Fixed later once colouring / spilling is done
        , IReturn ]
 
-genCall :: Identifier -> [Var] -> CodeGen Var
-genCall label vars = do
-  outVal <- allocateTemp
+genCall0 :: Identifier -> [Var] -> CodeGen ()
+genCall0 label vars = do
   let args = zip argPassingRegs vars
 
   tell (map (\(a,v) -> IMove { iDest = a, iValue = v }) args)
-  tell [ ICall { iLabel = NamedLabel label, iArgs = map fst args }
-       , IMove { iDest = outVal, iValue = Reg 0 } ]
+  tell [ ICall { iLabel = NamedLabel label, iArgs = map fst args } ]
+
+genCall1 :: Identifier -> [Var] -> CodeGen Var
+genCall1 label vars = do
+  outVal <- allocateTemp
+  genCall0 label vars
+  tell [ IMove { iDest = outVal, iValue = Reg 0 } ]
   return outVal
+
+genCall2 :: Identifier -> [Var] -> CodeGen (Var, Var)
+genCall2 label vars = do
+  outVal0 <- allocateTemp
+  outVal1 <- allocateTemp
+  genCall0 label vars
+  tell [ IMove { iDest = outVal0, iValue = Reg 0 }
+       , IMove { iDest = outVal1, iValue = Reg 1 } ]
+  return (outVal0, outVal1)
 
 -- This does not attempt to be 100% accurate
 -- The register allocator affects a lot how many register are used
@@ -101,6 +114,12 @@ exprWeight (_, ExprBinOp _ e1 e2)
 exprWeight (_, ExprVar _) = 1
 exprWeight (_, ExprArrayElem (_, ArrayElem _ exprs))
   = 1 + maximum (map exprWeight exprs)
+
+genExpr2 :: Annotated Expr TypeA -> Annotated Expr TypeA -> CodeGen (Var, Var)
+genExpr2 expr1 expr2
+  = if exprWeight expr1 > exprWeight expr2
+    then liftM2 (,) (genExpr expr1) (genExpr expr2)
+    else swap <$> liftM2 (,) (genExpr expr2) (genExpr expr1)
 
 -- Literals
 genExpr :: Annotated Expr TypeA -> CodeGen Var
@@ -121,15 +140,27 @@ genExpr (_ , ExprUnOp operator expr) = do
   return unOpVar
 
 -- BinOp
+-- Hardware division is not available
+genExpr (_, ExprBinOp BinOpDiv expr1 expr2) = do
+  (var1, var2) <- genExpr2 expr1 expr2
+  genCall0 "p_check_divide_by_zero" [var1, var2]
+  (q, _) <- genCall2 "__aeabi_idivmod" [var1, var2]
+  return q
+
+genExpr (_, ExprBinOp BinOpRem expr1 expr2) = do
+  (var1, var2) <- genExpr2 expr1 expr2
+  genCall0 "p_check_divide_by_zero" [var1, var2]
+  (_, r) <- genCall2 "__aeabi_idivmod" [var1, var2]
+  return r
+
 genExpr (_ , ExprBinOp operator expr1 expr2) = do
-  binOpVar <- allocateTemp
-  (value1Var, value2Var) <- vars
-  tell [ IBinOp { iBinOp = operator, iDest = binOpVar, iLeft = value1Var, iRight = value2Var } ]
-  return binOpVar
-  where
-    vars = if exprWeight expr1 > exprWeight expr2
-           then liftM2 (,) (genExpr expr1) (genExpr expr2)
-           else swap <$> liftM2 (,) (genExpr expr2) (genExpr expr1)
+  outVar <- allocateTemp
+  (var1, var2) <- genExpr2 expr1 expr2
+  tell [ IBinOp { iBinOp = operator
+                , iDest = outVar
+                , iLeft = var1
+                , iRight = var2 } ]
+  return outVar
 
 -- Variable
 genExpr (ty, ExprVar ident) = genFrameRead ty ident
@@ -160,7 +191,7 @@ genArrayRead elemTy arrayVar indexExpr = do
   offsetedArray <- allocateTemp
   indexVar <- genExpr indexExpr
 
-  genCall "p_check_array_bounds" [arrayVar, indexVar]
+  genCall0 "p_check_array_bounds" [arrayVar, indexVar]
   tell [ ILiteral { iDest    = arrayOffsetVar
                    , iLiteral = LitInt 4 }
        , IBinOp { iBinOp = BinOpAdd
@@ -182,7 +213,7 @@ genAssign (ty, LHSVar ident) valueVar = do
 -- LHS Pair 
 genAssign (_, LHSPairElem ((elemTy, pairTy), PairElem side pairExpr)) valueVar = do
   pairVar <- genExpr pairExpr
-  genCall "p_check_null_pointer" [pairVar]
+  genCall0 "p_check_null_pointer" [pairVar]
   tell [ IHeapWrite { iHeapVar = pairVar, iValue = valueVar, iOperand = OperandLit (pairOffset side pairTy), iType = elemTy } ]
 
 -- LHS Array Indexing 
@@ -198,7 +229,7 @@ genAssign (elemTy, LHSArrayElem (_, ArrayElem ident exprs)) valueVar = do
 
   writeIndexVar <- genExpr writeIndexExpr
   arrayOffsetVar <- allocateTemp
-  genCall "p_check_array_bounds" [subArrayVar, writeIndexVar]
+  genCall0 "p_check_array_bounds" [subArrayVar, writeIndexVar]
   tell [ILiteral { iDest = arrayOffsetVar, iLiteral = LitInt 4 }
        , IBinOp { iBinOp = BinOpAdd, iDest = offsetedBase
                 , iLeft = arrayOffsetVar, iRight = subArrayVar } 
@@ -225,7 +256,7 @@ genRHS (_, RHSExpr expr) = genExpr expr
 genRHS (TyArray elemTy, RHSArrayLit exprs) = do
   sizeVar <- allocateTemp
   tell [ ILiteral { iDest = sizeVar, iLiteral = LitInt (toInteger size) } ]
-  arrayVar <- genCall "malloc" [sizeVar]
+  arrayVar <- genCall1 "malloc" [sizeVar]
 
   arrayLen <- allocateTemp
   tell [ ILiteral { iDest = arrayLen, iLiteral = LitInt (toInteger (length exprs)) }
@@ -251,7 +282,7 @@ genRHS (TyArray elemTy, RHSArrayLit exprs) = do
 genRHS (t@(TyPair t1 t2), RHSNewPair fstExpr sndExpr) = do
   sizeVar <- allocateTemp
   tell [ ILiteral { iDest = sizeVar, iLiteral = LitInt 8 }]
-  pairVar <- genCall "malloc" [sizeVar]
+  pairVar <- genCall1 "malloc" [sizeVar]
 
   fstVar <- genExpr fstExpr
   tell [ IHeapWrite { iHeapVar = pairVar, iValue = fstVar, iOperand = OperandLit (pairOffset PairFst t), iType = t1 } ]
@@ -264,13 +295,13 @@ genRHS (t@(TyPair t1 t2), RHSNewPair fstExpr sndExpr) = do
 genRHS (_, RHSPairElem ((elemTy, pairTy), PairElem side pairExpr)) = do
   outVar <- allocateTemp
   pairVar <- genExpr pairExpr
-  genCall "p_check_null_pointer" [pairVar]
+  genCall1 "p_check_null_pointer" [pairVar]
   tell [IHeapRead { iHeapVar = pairVar, iDest = outVar, iOperand = OperandLit (pairOffset side pairTy), iType = elemTy } ]
   return outVar
 
 genRHS (_, RHSCall name exprs) = do
   argVars <- mapM genExpr exprs
-  genCall ("f_" ++ name) argVars
+  genCall1 ("f_" ++ name) argVars
 
 genStmt :: Annotated Stmt TypeA -> CodeGen ()
 genStmt (_, StmtSkip) = return ()
@@ -288,8 +319,7 @@ genStmt (_, StmtAssign lhs rhs) = do
 
 genStmt (_, StmtFree expr@(ty, _)) = do
   v <- genExpr expr
-  genCall "free" [v]
-  return ()
+  genCall0 "free" [v]
 
 genStmt (_, StmtReturn expr) = do
   v <- genExpr expr
@@ -298,8 +328,7 @@ genStmt (_, StmtReturn expr) = do
 
 genStmt (_, StmtExit expr) = do
   v <- genExpr expr
-  genCall "exit" [v]
-  return ()
+  genCall0 "exit" [v]
 
 genStmt (_, StmtPrint expr@(ty, _) newline) = do
   v <- genExpr expr
@@ -310,15 +339,15 @@ genStmt (_, StmtPrint expr@(ty, _) newline) = do
               TyArray TyChar -> "p_print_string"
               _      -> "p_print_reference"
 
-  genCall fname [v]
-  when newline (genCall "p_print_ln" [] >> return ())
+  genCall0 fname [v]
+  when newline (genCall0 "p_print_ln" [])
 
 genStmt (_, StmtRead lhs@(ty, _)) = do
   let fname = case ty of
               TyInt  -> "p_read_int"
               TyBool -> "p_read_bool"
 
-  v <- genCall fname []
+  v <- genCall1 fname []
   genAssign lhs v
 
 genStmt (_, StmtIf condition thenBlock elseBlock) = do
