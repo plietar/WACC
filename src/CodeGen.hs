@@ -286,15 +286,8 @@ genStmt (_, StmtIfNoElse condition thenBlock) = do
   genBlock thenBlock
   tell [ILabel { iLabel = endLabel }]
 
---genStmt (_, StmtSwitch condition switchBlock) = do
---  thenLabel <- allocateLabel
---  endLabel <- allocateLabel
-
---  condVar <- genExpr condition
---  tell [ICondJump { iLabel = thenLabel, iValue = condVar }]
---  tell [ILabel { iLabel = thenLabel }]
---  genBlock thenBlock
---  tell [ILabel { iLabel = endLabel }]
+--genStmt (_, StmtSwitch condition caseArm) = do
+  
 
 genStmt (_, StmtIf condition thenBlock elseBlock) = do
   thenLabel <- allocateLabel
