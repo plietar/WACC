@@ -109,9 +109,9 @@ genARMInstruction (IBinOp { iBinOp = op, iDest = Var dest,
                        , "BLVS p_throw_overflow_error"]
                   emitFeature ThrowOverflowError 
       BinOpMul -> do
-                  emit ["SMULL r" ++ (show dest) ++ ", r" ++ (show right)
+                  emit ["SMULL r" ++ (show dest) ++ ", r0"
                         ++ ", r" ++ (show left) ++ ", r" ++ (show right) 
-                       , "CMP r" ++ (show right) ++ ", r" ++ (show dest) ++ ", ASR #31"
+                       , "CMP r0, r" ++ (show dest) ++ ", ASR #31"
                        , "BLNE p_throw_overflow_error" ]
                   emitFeature ThrowOverflowError
       BinOpDiv -> do emit ["MOV r0, r" ++ (show left),
