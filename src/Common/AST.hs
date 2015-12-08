@@ -11,6 +11,7 @@ import Common.Span
 class ( Show (Ann a Program)
       , Show (Ann a FuncDef)
       , Show (Ann a Block)
+      , Show (Ann a CaseArm)
       , Show (Ann a Stmt)
       , Show (Ann a Expr)
       , Show (Ann a AssignLHS)
@@ -28,6 +29,7 @@ data FuncName = FuncName Identifier | MainFunc
 data Program a = Program [Annotated FuncDef a]
 data FuncDef a = FuncDef Type FuncName [(Type, Identifier)] (Annotated Block a)
 data Block a = Block [Annotated Stmt a]
+data CaseArm a = CaseArm Literal (Annotated Block a)
 
 data Stmt a
   = StmtSkip
@@ -42,6 +44,7 @@ data Stmt a
   | StmtIfNoElse (Annotated Expr a) (Annotated Block a)
   | StmtWhile  (Annotated Expr a) (Annotated Block a)
   | StmtScope  (Annotated Block a)
+  | StmtSwitch (Annotated Expr a) [Annotated CaseArm a]
 
 data AssignLHS a
   = LHSVar       Identifier
@@ -111,6 +114,7 @@ data Type = TyInt
 deriving instance Annotation a => Show (Program a)
 deriving instance Annotation a => Show (FuncDef a)
 deriving instance Annotation a => Show (Block a)
+deriving instance Annotation a => Show (CaseArm a)
 deriving instance Annotation a => Show (Stmt a)
 deriving instance Annotation a => Show (Expr a)
 deriving instance Annotation a => Show (AssignLHS a)
@@ -166,6 +170,7 @@ instance Annotation TypeA where
   type Ann TypeA Program = ()
   type Ann TypeA FuncDef = ()
   type Ann TypeA Block = (Bool, [(String, Type)])
+  type Ann TypeA CaseArm = Type
   type Ann TypeA Stmt = Bool
   type Ann TypeA Expr = Type
   type Ann TypeA AssignLHS = Type
