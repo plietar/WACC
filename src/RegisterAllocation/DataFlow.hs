@@ -131,6 +131,7 @@ irDef IFunctionBegin{..} = Set.fromList (iArgs ++ calleeSaveRegs)
 
 irDef ILiteral{..}       = Set.singleton iDest
 irDef IBinOp{..}         = Set.singleton iDest
+irDef IMul{..}           = Set.fromList [ iHigh, iLow ]
 irDef IUnOp{..}          = Set.singleton iDest
 irDef IMove{..}          = Set.singleton iDest
 irDef ICall{..}          = Set.fromList callerSaveRegs
@@ -141,6 +142,7 @@ irDef _                  = Set.empty
 irUse :: IR -> Set Var
 irUse IReturn            = Set.fromList (Reg 0 : calleeSaveRegs)
 irUse IBinOp{..}         = Set.fromList [ iRight, iLeft ]
+irUse IMul{..}           = Set.fromList [ iRight, iLeft ]
 irUse IUnOp{..}          = Set.singleton iValue
 irUse IMove{..}          = Set.singleton iValue
 irUse ICall{..}          = Set.fromList  iArgs

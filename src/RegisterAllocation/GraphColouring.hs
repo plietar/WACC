@@ -250,6 +250,12 @@ mapIR colouring IBinOp{..}
            , iLeft  = colouring iLeft
            , iRight = colouring iRight }
 
+mapIR colouring IMul{..}
+  = IMul { iHigh  = colouring iHigh
+         , iLow   = colouring iLow
+         , iLeft  = colouring iLeft
+         , iRight = colouring iRight }
+
 mapIR colouring IUnOp{..}
   = IUnOp { iUnOp   = iUnOp
            , iDest  = colouring iDest

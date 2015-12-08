@@ -56,6 +56,7 @@ data IR
   | IReturn
 
   | ILiteral { iDest :: Var, iLiteral :: Literal }
+  | IMul { iHigh :: Var, iLow :: Var, iLeft :: Var, iRight :: Var }
   | IBinOp { iDest :: Var, iBinOp :: BinOp, iLeft :: Var, iRight :: Var }
   | IUnOp { iDest :: Var, iUnOp :: UnOp, iValue :: Var }
   | IMove { iDest :: Var, iValue :: Var }

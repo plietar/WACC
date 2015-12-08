@@ -153,6 +153,15 @@ genExpr (_, ExprBinOp BinOpRem expr1 expr2) = do
   (_, r) <- genCall2 "__aeabi_idivmod" [var1, var2]
   return r
 
+-- Multiplication is special as it requires an extra register
+genExpr (_, ExprBinOp BinOpMul expr1 expr2) = do
+  (var1, var2) <- genExpr2 expr1 expr2
+  highVar <- allocateTemp
+  lowVar <- allocateTemp
+  tell [ IMul { iHigh = highVar, iLow = lowVar
+              , iLeft = var1, iRight = var2 } ]
+  return lowVar
+
 genExpr (_ , ExprBinOp operator expr1 expr2) = do
   outVar <- allocateTemp
   (var1, var2) <- genExpr2 expr1 expr2

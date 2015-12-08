@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 module ARMGen where
 
 import Common.AST
@@ -101,13 +102,6 @@ genARMInstruction (IBinOp { iBinOp = op, iDest = dest,
                          ", " ++ show right
                        , "BLVS p_throw_overflow_error"]
                   emitFeature ThrowOverflowError 
-      BinOpMul -> do
-                  emit [ "SMULL " ++ show dest ++
-                         ", r0" ++
-                         ", " ++ show left ++ ", " ++ show right 
-                       , "CMP r0, " ++ show dest ++ ", ASR #31"
-                       , "BLNE p_throw_overflow_error" ]
-                  emitFeature ThrowOverflowError
       BinOpGT  -> emit ["CMP " ++ show left ++ ", " ++ (show right),
                         "MOVGT " ++ show dest ++ ", #1",
                         "MOVLE " ++ show dest ++ ", #0"]
@@ -132,6 +126,15 @@ genARMInstruction (IBinOp { iBinOp = op, iDest = dest,
                         (show left) ++ ", " ++ (show right) ]
 
       -- Division and remainder are handled by CodeGen
+
+genARMInstruction IMul{..} = do
+  emit [ "SMULL " ++ show iLow ++
+         ", " ++ show iHigh ++
+         ", " ++ show iLeft ++
+         ", " ++ show iRight
+       , "CMP " ++ show iHigh ++ ", " ++ show iLow ++ ", ASR #31"
+       , "BLNE p_throw_overflow_error" ]
+  emitFeature ThrowOverflowError
 
 --UnOp
 genARMInstruction IUnOp { iUnOp = op, iDest = dest,
