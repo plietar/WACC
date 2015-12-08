@@ -314,6 +314,7 @@ dependantOn CheckDivideByZero  = Set.fromList [CheckDivideByZero, ThrowRuntimeEr
 dependantOn CheckNullPointer   = Set.fromList [CheckNullPointer,  ThrowRuntimeError, PrintString]
 dependantOn ThrowOverflowError = Set.fromList [ThrowOverflowError,ThrowRuntimeError, PrintString]
 dependantOn ThrowRuntimeError  = Set.fromList [ThrowRuntimeError, PrintString]
+dependantOn ThrowDoubleFreeError = Set.fromList [ThrowDoubleFreeError, PrintString]
 dependantOn feature            = Set.fromList [feature]
 
 genFeature :: Feature -> ([String], [String])
