@@ -277,6 +277,13 @@ checkBlock (_, Block stmts) parent = do
 
   return ((alwaysReturns, locals), Block stmts')
 
+checkCaseArm :: Type -> Annotated CaseArm SpanA -> Context -> WACCResult (Annotated CaseArm TypeA)
+checkCaseArm expectedType (_,  CaseArm l b) parent = do
+  b' <- checkBlock b parent
+  let litType = checkLiteral l
+  when (not (compatibleType expectedType litType))
+       ((semanticError ("Wrong type")))
+  return (litType, CaseArm l b')
 
 checkPosStmt :: Annotated Stmt SpanA -> ContextState (Annotated Stmt TypeA)
 checkPosStmt stmt@(((line,column,fname),_), _)
@@ -358,6 +365,12 @@ checkStmt (_, StmtIfNoElse predicate b) = do
        (lift (semanticError ("Condition cannot be of type " ++ show predicateType)))
   b@((al,_),_) <- lift $ checkBlock b context
   return (al, StmtIfNoElse predicate' b)
+
+checkStmt (_, StmtSwitch value cs) = do
+  context <- get
+  value'@(valueType, _) <- lift $ checkExpr value context
+  cs' <- lift $ mapM (\c -> checkCaseArm valueType c context) cs
+  return (False, StmtSwitch value' cs')
 
 checkStmt (_, StmtWhile predicate block) = do
   context <- get
