@@ -53,6 +53,7 @@ data IR
   | IFree { iValue :: Var, iType :: Type }
   | IExit { iValue :: Var }
 
+  | IInitialise { }
   | IFunctionBegin { }
   | IReturn { iValue :: Var }
   deriving Show

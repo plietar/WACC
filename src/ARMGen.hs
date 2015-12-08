@@ -18,14 +18,11 @@ data Feature = CheckDivideByZero
               | PrintLine
               | ReadInt
               | ReadChar
+              | ThrowDoubleFreeError
               | ThrowRuntimeError
               | ThrowOverflowError
-              | FreePair
               deriving (Show, Eq, Ord, Enum)
 
-allFeatures = [CheckDivideByZero .. FreePair]
-
-f = mconcat (map genFeature allFeatures)
 data ARMState = ARMState
   {
     stringLiteralLabels :: [String]
@@ -73,6 +70,16 @@ genARM :: [IR] -> ARMWriter
 genARM irs = snd $ execRWS (mapM genARMInstruction irs) () (ARMState (map (("msg_" ++) . show) [0..]))
 
 genARMInstruction :: IR -> ARMGen ()
+genARMInstruction IInitialise {} = do
+  emit [ "MOV r0, #-5"
+       , "MOV r1, #2"
+       , "BL mallopt"
+       , "MOV r0, #6"
+       , "LDR r1, =p_throw_double_free"
+       , "BL signal"
+       ]
+  emitFeature ThrowDoubleFreeError
+
 genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitNull })
   = emit ["MOV r" ++ (show dest) ++ ", #0"]
 genARMInstruction (ILiteral { iDest = Var dest, iLiteral = LitInt n })
@@ -306,7 +313,6 @@ dependantOn CheckArrayBounds   = Set.fromList [CheckArrayBounds,  ThrowRuntimeEr
 dependantOn CheckDivideByZero  = Set.fromList [CheckDivideByZero, ThrowRuntimeError, PrintString]
 dependantOn CheckNullPointer   = Set.fromList [CheckNullPointer,  ThrowRuntimeError, PrintString]
 dependantOn ThrowOverflowError = Set.fromList [ThrowOverflowError,ThrowRuntimeError, PrintString]
-dependantOn FreePair           = Set.fromList [FreePair, ThrowRuntimeError, PrintString]
 dependantOn ThrowRuntimeError  = Set.fromList [ThrowRuntimeError, PrintString]
 dependantOn feature            = Set.fromList [feature]
 
@@ -461,24 +467,14 @@ genFeature ThrowOverflowError =  (["msg_p_throw_overflow_error:",
                                    "LDR r0, =msg_p_throw_overflow_error",
                                    "BL p_throw_runtime_error"])
 
---Calls another feature: p_throw_runtime_error.
-genFeature FreePair = (["msg_p_free_pair:",
-                        ".word 50",
-                        ".ascii \"NullReferenceError: derefence a null reference\\n\\0\""]
-                      ,["p_free_pair:",
-                        "PUSH {lr}",
-                        "CMP r0, #0",
-                        "LDREQ r0, =msg_p_free_pair",
-                        "BEQ p_throw_runtime_error",
-                        "PUSH {r0}",
-                        "LDR r0, [r0]",
-                        "BL free",
-                        "LDR r0, [sp]",
-                        "LDR r0, [r0, #4]",
-                        "BL free",
-                        "POP {r0}",
-                        "BL free",
-                        "POP {pc}"])
+genFeature ThrowDoubleFreeError = (["msg_p_throw_double_free:",
+                                    ".word 34",
+                                    ".ascii \"DoubleFreeError: pair freed twice\n\""]
+                                  ,["p_throw_double_free:",
+                                    "PUSH {lr}",
+                                    "LDR r0, =msg_p_throw_double_free",
+                                    "BL p_print_string",
+                                    "POP {pc}"])
 
 strInstr :: Type -> String
 strInstr TyBool = "STRB"

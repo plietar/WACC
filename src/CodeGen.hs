@@ -37,6 +37,11 @@ genFunction (_, FuncDef _ fname params body) = do
       generation = do
         tell [ ILabel { iLabel = NamedLabel (show fname) }
              , IFunctionBegin ]
+
+        case fname of
+          MainFunc -> tell [ IInitialise {} ]
+          _ -> return ()
+
         genBlock body
         retVal <- allocateVar
         tell [ ILiteral { iDest = retVal, iLiteral = LitInt 0 }
