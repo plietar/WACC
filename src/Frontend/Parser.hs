@@ -73,7 +73,7 @@ literal = (lit >>= check) <?> "literal"
 
     check :: Literal -> Parser Literal
     check x@(LitInt l) = if l > toInteger( maxBound :: Int32 )
-                         then (fail "Integer litteral too large")
+                         then (fail "Integer literal too large")
                          else return x
     check x = return x
 
@@ -83,6 +83,9 @@ comma :: Parser Token
 comma = token TokComma
 equal :: Parser Token
 equal = token TokEqual
+colon :: Parser Token
+colon = token TokColon
+
 
 parens :: Parser p -> Parser p
 parens = between (token TokLParen) (token TokRParen)
@@ -226,6 +229,22 @@ ifNoElseStmt = spanned $ do
   _ <- keyword "fi"
   return (StmtIfNoElse i t)
 
+switchStmt :: Parser (Annotated Stmt SpanA)
+switchStmt = spanned $ do
+  _ <- keyword "switch"
+  e <- expr
+  cs <- many1 caseArm
+  _ <- keyword "end"
+  return (StmtSwitch e cs)
+
+caseArm :: Parser (Annotated CaseArm SpanA)
+caseArm = spanned $ do
+  _ <- keyword "case"
+  i <- literal
+  _ <- colon
+  b <- block 
+  return (CaseArm i b)
+
 scopeStmt :: Parser (Annotated Stmt SpanA)
 scopeStmt = spanned $ do
   _ <- keyword "begin"
@@ -281,6 +300,7 @@ stmt = skipStmt    <|>
        whileStmt   <|>
        ifNoElseStmt <|>
        ifStmt      <|>
+       switchStmt  <|>
        scopeStmt   <|>
        printStmt   <|>
        printlnStmt <|>
