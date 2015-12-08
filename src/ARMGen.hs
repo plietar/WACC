@@ -470,7 +470,7 @@ genFeature ThrowOverflowError =  (["msg_p_throw_overflow_error:",
 
 genFeature ThrowDoubleFreeError = (["msg_p_throw_double_free:",
                                     ".word 34",
-                                    ".ascii \"DoubleFreeError: pair freed twice\n\""]
+                                    ".ascii \"DoubleFreeError: pair freed twice\\n\""]
                                   ,["p_throw_double_free:",
                                     "PUSH {lr}",
                                     "LDR r0, =msg_p_throw_double_free",
