@@ -12,21 +12,23 @@ import Data.Maybe
 import Data.Set(Set)
 import qualified Data.Set as Set
 
-data Var = Local Int | Temp Int | Reg Int | Spilled Int
+data Var = Local Int | Temp Int | Reg Int | Spilled Int Var
   deriving (Ord, Eq)
 
-{-
-argPassingRegs = Reg <$> [0..1]
-callerSaveRegs = Reg <$> [0..1]
-calleeSaveRegs = Reg <$> [2..3]
-allRegs = Reg <$> [0..3]
--}
+argPassingRegs = Reg <$> [0,1]
+callerSaveRegs = Reg <$> [0,1,4]
+calleeSaveRegs = Reg <$> [2,3,4]
+allRegs = Reg <$> [0,1,2,3,4]
+spReg = Reg 6
+lrReg = Reg 4
+pcReg = Reg 5
 
+{-
 argPassingRegs :: [Var]
 argPassingRegs = Reg <$> [0..3]
 
 callerSaveRegs :: [Var]
-callerSaveRegs = Reg <$> [0..3]
+callerSaveRegs = Reg <$> ([0..3] ++ [14])
 
 calleeSaveRegs :: [Var]
 calleeSaveRegs = Reg <$> ([4..12] ++ [14])
@@ -34,14 +36,25 @@ calleeSaveRegs = Reg <$> ([4..12] ++ [14])
 allRegs :: [Var]
 allRegs = Reg <$> ([0..12] ++ [14])
 
+spReg :: Var
+spReg = Reg 13
+
+lrReg :: Var
+lrReg = Reg 14
+
+pcReg :: Var
+pcReg = Reg 15
+-}
+
 instance Show Var where
-  show (Local n) = "local_" ++ show n
-  show (Temp n) = "temp_" ++ show n
-  show (Spilled n) = "spill_" ++ show n
-  show (Reg 13) = "sp"
-  show (Reg 14) = "lr"
-  show (Reg 15) = "pc"
-  show (Reg n) = "r" ++ show n
+  show r | r == spReg = "sp"
+  show r | r == lrReg = "lr"
+  show r | r == pcReg = "pc"
+
+  show (Local n)     = "local_" ++ show n
+  show (Temp n)      = "temp_" ++ show n
+  show (Spilled n _) = "spill_" ++ show n
+  show (Reg n)       = "r" ++ show n
 
 data Label = NamedLabel String | UnnamedLabel Int
   deriving (Ord, Eq)

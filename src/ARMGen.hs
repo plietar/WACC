@@ -217,10 +217,10 @@ genARMInstruction IFunctionBegin {..}
            (emit [ "PUSH {" ++ intercalate "," (map show iSavedRegs) ++ "}" ])
 
 genARMInstruction IReturn{..} = do
-  let popRegs = map (\x -> if x == (Reg 14) then Reg 15 else x) iSavedRegs
+  let popRegs = map (\x -> if x == lrReg then pcReg else x) iSavedRegs
   unless (null popRegs)
          (emit [ "POP {" ++ intercalate "," (map show popRegs) ++ "}" ])
-  unless (elem (Reg 14) iSavedRegs)
+  unless (elem lrReg iSavedRegs)
          (emit ["BX lr"])
   emit [ ".ltorg" ]
 
