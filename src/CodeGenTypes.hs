@@ -29,15 +29,18 @@ callerSaveRegs :: [Var]
 callerSaveRegs = Reg <$> [0..3]
 
 calleeSaveRegs :: [Var]
-calleeSaveRegs = Reg <$> [4..11]
+calleeSaveRegs = Reg <$> ([4..12] ++ [14])
 
 allRegs :: [Var]
-allRegs = Reg <$> [0..11]
+allRegs = Reg <$> ([0..12] ++ [14])
 
 instance Show Var where
   show (Local n) = "local_" ++ show n
   show (Temp n) = "temp_" ++ show n
   show (Spilled n) = "spill_" ++ show n
+  show (Reg 13) = "sp"
+  show (Reg 14) = "lr"
+  show (Reg 15) = "pc"
   show (Reg n) = "r" ++ show n
 
 data Label = NamedLabel String | UnnamedLabel Int
@@ -51,8 +54,8 @@ instance Show Label where
   show (NamedLabel   n) = n
 
 data IR
-  = IFunctionBegin { iArgs :: [Var] }
-  | IReturn
+  = IFunctionBegin { iSavedRegs :: [Var], iArgs :: [Var] }
+  | IReturn { iSavedRegs :: [Var], iArgs :: [Var] }
 
   | ILiteral { iDest :: Var, iLiteral :: Literal }
   | IMul { iHigh :: Var, iLow :: Var, iLeft :: Var, iRight :: Var }
@@ -110,8 +113,7 @@ allocateLabel = do
 data Frame = Frame
   { parent    :: Maybe Frame
   , frameLocals :: Map String Var
-  , definedLocals :: Set String 
-  , frameSavedRegs :: [(Var, Var)] }
+  , definedLocals :: Set String }
 
 
 typeSize :: Type -> Int
@@ -124,11 +126,11 @@ typeSize (TyArray _) = 4
 typeSize t = error (show t)
 
 emptyFrame :: Frame
-emptyFrame = Frame Nothing Map.empty Set.empty []
+emptyFrame = Frame Nothing Map.empty Set.empty
 
-setupFrame :: Map String Var -> [(Var, Var)] -> CodeGen ()
-setupFrame args savedRegs
-  = let f = Frame Nothing args (Set.fromList (Map.keys args)) savedRegs
+setupFrame :: Map String Var -> CodeGen ()
+setupFrame args
+  = let f = Frame Nothing args (Set.fromList (Map.keys args))
     in modify (\s -> s { frame = f })
 
 withChildFrame :: [String] -> CodeGen a -> CodeGen a
@@ -136,7 +138,7 @@ withChildFrame names m = do
   newLocals <- Map.fromList <$> forM names (\n -> (n,) <$> allocateLocal)
 
   parentFrame <- gets frame
-  let childFrame = Frame (Just parentFrame) newLocals Set.empty (frameSavedRegs parentFrame)
+  let childFrame = Frame (Just parentFrame) newLocals Set.empty
 
   modify (\s -> s { frame = childFrame } )
   ret <- m

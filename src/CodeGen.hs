@@ -38,18 +38,13 @@ genFunction (_, FuncDef _ fname params body) = do
 
         generation = do
           tell [ ILabel { iLabel = NamedLabel (show fname) }
-               , IFunctionBegin { iArgs = map snd argZip }
+               , IFunctionBegin { iArgs = map snd argZip, iSavedRegs = calleeSaveRegs }
                , IFrameAllocate { iSize = 0 } ] -- Fixed later once colouring / spilling is done
 
           regArgsMap <- forM argZip $ \(name, r) -> do
             v <- allocateTemp
             tell [ IMove { iDest = v, iValue = r } ]
             return (name, v)
-
-          savedRegs <- forM calleeSaveRegs $ \r -> do
-            v <- allocateTemp
-            tell [ IMove { iDest = v, iValue = r } ]
-            return (r, v)
 
           stackArgsMap <- forM (zip stackNames [4,8..]) $ \(name, offset) -> do
             v <- allocateTemp
@@ -60,7 +55,7 @@ genFunction (_, FuncDef _ fname params body) = do
             MainFunc -> genCall0 "p_initialise" []
             _ -> return ()
 
-          setupFrame (Map.fromList (regArgsMap ++ stackArgsMap)) savedRegs
+          setupFrame (Map.fromList (regArgsMap ++ stackArgsMap))
 
           genBlock body
 
@@ -74,13 +69,10 @@ genFunction (_, FuncDef _ fname params body) = do
     return irs
 
 genReturn :: Var -> CodeGen ()
-genReturn retVal = do
-  savedRegs <- gets (frameSavedRegs . frame)
-  tell (map (\(r,v) -> IMove { iDest = r, iValue = v }) (reverse savedRegs))
-
-  tell [ IMove { iDest = Reg 0, iValue = retVal }
-       , IFrameFree { iSize = 0 } -- Fixed later once colouring / spilling is done
-       , IReturn ]
+genReturn retVal
+  = tell [ IMove { iDest = Reg 0, iValue = retVal }
+         , IFrameFree { iSize = 0 } -- Fixed later once colouring / spilling is done
+         , IReturn { iArgs = [ Reg 0 ], iSavedRegs = calleeSaveRegs } ]
 
 genCall0 :: Identifier -> [Var] -> CodeGen ()
 genCall0 label vars = do

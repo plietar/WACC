@@ -127,8 +127,7 @@ bbUse bb = bbUse' (reverse bb) Set.empty
     bbUse' (ir:irs) use = bbUse' irs (Set.union (Set.difference use (irDef ir)) (irUse ir))
 
 irDef :: IR -> Set Var
-irDef IFunctionBegin{..} = Set.fromList (iArgs ++ calleeSaveRegs)
-
+irDef IFunctionBegin{..} = Set.fromList iArgs
 irDef ILiteral{..}       = Set.singleton iDest
 irDef IBinOp{..}         = Set.singleton iDest
 irDef IMul{..}           = Set.fromList [ iHigh, iLow ]
@@ -140,7 +139,7 @@ irDef IHeapRead{..}      = Set.singleton iDest
 irDef _                  = Set.empty
 
 irUse :: IR -> Set Var
-irUse IReturn            = Set.fromList (Reg 0 : calleeSaveRegs)
+irUse IReturn{..}        = Set.fromList iArgs
 irUse IBinOp{..}         = Set.fromList [ iRight, iLeft ]
 irUse IMul{..}           = Set.fromList [ iRight, iLeft ]
 irUse IUnOp{..}          = Set.singleton iValue

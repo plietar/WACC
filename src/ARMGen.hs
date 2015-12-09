@@ -7,6 +7,7 @@ import Data.Monoid
 import Control.Monad.RWS
 import Data.Set (Set)
 import Data.Char
+import Data.List (intercalate)
 import qualified Data.Set as Set
 
 data Feature = CheckDivideByZero
@@ -211,12 +212,16 @@ genARMInstruction (IHeapWrite { iHeapVar = heapVar, iValue = value, iOperand = O
   = emit [strInstr ty ++ " " ++ show value ++ ", [" ++ show heapVar ++ ", #" ++ show offset ++ "]"] 
  
 -- Function
-genARMInstruction (IFunctionBegin { })
-  = emit [ "PUSH {lr}" ]
+genARMInstruction IFunctionBegin {..}
+  = emit [ "PUSH {" ++ intercalate "," (map show iSavedRegs) ++ "}" ]
 
-genARMInstruction (IReturn)
-  = emit [ "POP {pc}"
-         , ".ltorg" ]
+genARMInstruction IReturn{..} = do
+  let popRegs = map (\x -> if x == (Reg 14) then Reg 15 else x) iSavedRegs
+  emit [ "POP {" ++ intercalate "," (map show popRegs) ++ "}" ]
+
+  unless (elem (Reg 14) iSavedRegs)
+         (emit ["BX lr"])
+  emit [ ".ltorg" ]
 
 mergeFeatures :: Set Feature -> ([String], [String])
 mergeFeatures features
