@@ -213,12 +213,13 @@ genARMInstruction (IHeapWrite { iHeapVar = heapVar, iValue = value, iOperand = O
  
 -- Function
 genARMInstruction IFunctionBegin {..}
-  = emit [ "PUSH {" ++ intercalate "," (map show iSavedRegs) ++ "}" ]
+  = unless (null iSavedRegs)
+           (emit [ "PUSH {" ++ intercalate "," (map show iSavedRegs) ++ "}" ])
 
 genARMInstruction IReturn{..} = do
   let popRegs = map (\x -> if x == (Reg 14) then Reg 15 else x) iSavedRegs
-  emit [ "POP {" ++ intercalate "," (map show popRegs) ++ "}" ]
-
+  unless (null popRegs)
+         (emit [ "POP {" ++ intercalate "," (map show popRegs) ++ "}" ])
   unless (elem (Reg 14) iSavedRegs)
          (emit ["BX lr"])
   emit [ ".ltorg" ]

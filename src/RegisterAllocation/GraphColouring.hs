@@ -86,8 +86,18 @@ spillNode allVars cfg oRig rig moves spill frameOffset
 allocateRegisters :: DynGraph gr => Map Var Int -> gr [IRL] () -> gr Var () -> gr Var () -> WACCResult (gr [IR] (), Map Var Var)
 allocateRegisters allVars cfg rig moves = maybe (codegenError "Graph Colouring failed") OK $ do
   (cfg', colouring, frameSize) <- colourGraph allRegs allVars cfg rig moves
-  return (Graph.nmap (map (fixFrameSize frameSize) . simplifyMoves . applyColouring colouring . map fst) cfg', colouring)
+  let usedRegs = Set.fromList (Map.elems colouring)
+      savedRegs = filter (`Set.member` usedRegs) calleeSaveRegs
+  return (Graph.nmap (map (fixFrameSize frameSize) .
+                      map (fixSavedRegisters savedRegs) .
+                      simplifyMoves .
+                      applyColouring colouring .
+                      map fst) cfg', colouring)
   where
+    fixSavedRegisters savedRegs IFunctionBegin{..} = IFunctionBegin { iArgs = iArgs, iSavedRegs = savedRegs }
+    fixSavedRegisters savedRegs IReturn{..}        = IReturn { iArgs = iArgs, iSavedRegs = savedRegs }
+    fixSavedRegisters _ i = i
+
     fixFrameSize frameSize IFrameAllocate{} = IFrameAllocate { iSize = frameSize }
     fixFrameSize frameSize IFrameFree{}     = IFrameFree     { iSize = frameSize }
     fixFrameSize _ i = i
