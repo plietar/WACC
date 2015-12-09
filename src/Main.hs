@@ -10,6 +10,7 @@ import CodeGen
 import Arguments
 import ARMGen
 import OutputFormatting
+import Features
 
 import Data.List (zipWith4)
 import Data.Maybe (fromMaybe)
@@ -71,10 +72,12 @@ compile filename contents output
     irFinal   = concatMap (concatMap snd . Graph.labNodes) <$> cfgFinal
 
     armWriter = genARM <$> irFinal :: WACCResult ARMWriter
-    feat      = mergeFeatures <$> features <$> armWriter :: WACCResult ([String], [String])
-    asmSimple = concat <$> sequence [dataSegment 
-                       <$> armWriter, fst <$> feat, textSegment 
-                       <$> armWriter, snd <$> feat] :: WACCResult [String]
+    feat      = genFeatures <$> (features <$> armWriter) :: WACCResult ([String], [String])
+    asmSimple = concat <$> sequence
+                             [ dataSegment <$> armWriter
+                             , fst <$> feat
+                             , textSegment <$> armWriter
+                             , snd <$> feat] :: WACCResult [String]
     asm       = map tabbedInstruction <$> asmSimple
 
 main :: IO ()
