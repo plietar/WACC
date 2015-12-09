@@ -32,28 +32,35 @@ genFunction (_, FuncDef _ fname params body) = do
           frame = emptyFrame
         }
 
-        argZip = zip params argPassingRegs
+        argRegCount = length argPassingRegs
+        (regNames, stackNames) = splitAt argRegCount (map snd params)
+        argZip = (zip regNames argPassingRegs)
 
         generation = do
           tell [ ILabel { iLabel = NamedLabel (show fname) }
                , IFunctionBegin { iArgs = map snd argZip }
                , IFrameAllocate { iSize = 0 } ] -- Fixed later once colouring / spilling is done
-        
+
+          regArgsMap <- forM argZip $ \(name, r) -> do
+            v <- allocateTemp
+            tell [ IMove { iDest = v, iValue = r } ]
+            return (name, v)
+
           savedRegs <- forM calleeSaveRegs $ \r -> do
             v <- allocateTemp
             tell [ IMove { iDest = v, iValue = r } ]
             return (r, v)
 
-          args <- forM argZip $ \((_, name), r) -> do
+          stackArgsMap <- forM (zip stackNames [4,8..]) $ \(name, offset) -> do
             v <- allocateTemp
-            tell [ IMove { iDest = v, iValue = r } ]
+            tell [ IFrameRead { iDest = v, iOffset = offset, iType = TyInt } ]
             return (name, v)
 
           case fname of
-            MainFunc -> (genCall "p_initialise" [] >> return ())
+            MainFunc -> genCall0 "p_initialise" []
             _ -> return ()
 
-          setupFrame (Map.fromList args) savedRegs
+          setupFrame (Map.fromList (regArgsMap ++ stackArgsMap)) savedRegs
 
           genBlock body
 
@@ -77,10 +84,15 @@ genReturn retVal = do
 
 genCall0 :: Identifier -> [Var] -> CodeGen ()
 genCall0 label vars = do
-  let args = zip argPassingRegs vars
+  let regCount = length argPassingRegs
+      (regVars, stackVars) = splitAt regCount vars
 
-  tell (map (\(a,v) -> IMove { iDest = a, iValue = v }) args)
-  tell [ ICall { iLabel = NamedLabel label, iArgs = map fst args } ]
+  let regArgs = zip argPassingRegs vars
+
+  tell (map (\(a,v) -> IMove { iDest = a, iValue = v }) (zip argPassingRegs regVars))
+  tell (map (\v -> IPushArg { iValue = v }) (reverse stackVars))
+  tell [ ICall { iLabel = NamedLabel label, iArgs = map fst regArgs }
+       , IClearArgs { iSize = 4 * length stackVars } ]
 
 genCall1 :: Identifier -> [Var] -> CodeGen Var
 genCall1 label vars = do
@@ -332,8 +344,7 @@ genStmt (_, StmtFree expr@(ty, _)) = do
 
 genStmt (_, StmtReturn expr) = do
   v <- genExpr expr
-  tell [ IMove { iDest = Reg 0, iValue = v }
-       , IReturn ]
+  genReturn v
 
 genStmt (_, StmtExit expr) = do
   v <- genExpr expr
@@ -354,7 +365,7 @@ genStmt (_, StmtPrint expr@(ty, _) newline) = do
 genStmt (_, StmtRead lhs@(ty, _)) = do
   let fname = case ty of
               TyInt  -> "p_read_int"
-              TyBool -> "p_read_bool"
+              TyChar -> "p_read_char"
 
   v <- genCall1 fname []
   genAssign lhs v

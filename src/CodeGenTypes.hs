@@ -12,7 +12,6 @@ import Data.Maybe
 import Data.Set(Set)
 import qualified Data.Set as Set
 
-
 data Var = Local Int | Temp Int | Reg Int | Spilled Int
   deriving (Ord, Eq)
 
@@ -73,6 +72,9 @@ data IR
 
   | IHeapRead { iHeapVar :: Var, iDest :: Var, iOperand :: Operand, iType :: Type }
   | IHeapWrite { iHeapVar :: Var, iValue :: Var, iOperand :: Operand, iType :: Type }
+
+  | IPushArg { iValue :: Var }
+  | IClearArgs { iSize :: Int }
 
   deriving Show
 

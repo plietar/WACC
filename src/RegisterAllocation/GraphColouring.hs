@@ -299,6 +299,9 @@ mapIR colouring IHeapWrite{..}
         OperandLit x -> OperandLit x
         OperandVar v s -> OperandVar (colouring v) s
 
+mapIR colouring IPushArg{..}
+  = IPushArg { iValue = colouring iValue }
+
 -- Base Case
 mapIR colouring x = x
 

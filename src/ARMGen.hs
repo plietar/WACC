@@ -157,6 +157,12 @@ genARMInstruction (IJump {iLabel = label} )
   = emit ["B " ++ (show label)]
 
 --Call
+genARMInstruction IPushArg {..}
+  = emit ["PUSH " ++ show iValue ]
+
+genARMInstruction IClearArgs {..}
+  = genARMInstruction IFrameFree { iSize = iSize }
+
 genARMInstruction (ICall { iLabel = label })
   = emit ["BL " ++ show label ]
 
@@ -176,8 +182,14 @@ genARMInstruction (IFrameAllocate { iSize = size }) = do
 
 
 genARMInstruction (IFrameFree { iSize = 0 }) = return ()
-genARMInstruction (IFrameFree { iSize = size } )
-  = emit ["ADD sp, sp, #" ++ show size]
+genARMInstruction (IFrameFree { iSize = size }) = do
+  if size <= offsetLimitARM 
+  then 
+    emit ["ADD sp, sp, #" ++ show size]
+  else do
+    emit ["ADD sp, sp, #" ++ show offsetLimitARM ]
+    genARMInstruction (IFrameFree { iSize = size - offsetLimitARM })
+
 genARMInstruction (IFrameRead {iOffset = offset, iDest = dest, iType = ty} )
   = emit [ldrInstr ty ++ " " ++ show dest ++ ", [sp, #" ++ show offset ++ "]"]
 genARMInstruction (IFrameWrite {iOffset = offset, iValue = value, iType = ty} )

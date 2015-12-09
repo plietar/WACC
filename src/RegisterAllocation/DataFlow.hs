@@ -156,5 +156,7 @@ irUse IHeapRead{..}
   = case iOperand of
     OperandVar v _ -> Set.fromList [ iHeapVar, v ]       
     OperandLit x -> Set.fromList [ iHeapVar ]
+irUse IPushArg{..}       = Set.singleton iValue
+
 irUse _                  = Set.empty
 
