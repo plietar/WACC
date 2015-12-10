@@ -127,7 +127,8 @@ genARMInstruction IUnOp { iUnOp = op, iDest = dest,
   = case op of
       UnOpNot -> emit ["EOR " ++ show dest ++ ", " ++ show value ++ ", #1"]
       UnOpNeg -> do
-        emit ["RSB " ++ show dest ++ ", " ++ show value ++ ", #0"]
+        emit ["RSBS " ++ show dest ++ ", " ++ show value ++ ", #0"
+             , "BLVS p_throw_overflow_error"]
         emitFeature ThrowOverflowError 
       UnOpLen -> emit ["LDR " ++ show dest ++ ", [" ++ show value ++ "]"]
 
