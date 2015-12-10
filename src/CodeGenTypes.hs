@@ -93,8 +93,9 @@ typeSize TyBool = 1
 typeSize TyChar = 1
 -- Size of a reference to a pair (e.g. in an array)
 typeSize (TyPair _ _) = 4 
-typeSize (TyArray _) = 4
-typeSize t = error (show t)
+typeSize (TyArray _)  = 4
+typeSize (TyTuple _)  = 4
+typeSize t = error ("No type size for: " ++ (show t))
 
 rootFrame :: Frame
 rootFrame = Frame Map.empty Nothing False 0 Set.empty
