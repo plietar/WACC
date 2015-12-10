@@ -447,8 +447,8 @@ genCaseArm e ((_, CaseArm l b):cs) = do
 
   emit [ILiteral { iDest = literalVar, iLiteral = l}]
   
-  emit [IBinOp { iBinOp = BinOpEQ, iDest = condVar, iLeft = e, iRight = literalVar } ]
-  
+  emit [IBinOp { iBinOp = BinOpNE, iDest = condVar, iLeft = e, iRight = literalVar } ]
+
   emit [ICondJump { iLabel = endLabel, iValue = condVar}]
   genBlock b
   genCaseArm e cs
