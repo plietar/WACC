@@ -60,3 +60,9 @@ Page *BLACK_PAGES;
 Page *GREY_PAGES;
 Page *WHITE_PAGES;
 Heap *HEAPS; // List of heaps
+void GCInit(uint *sp);
+void GCInit(uint32_t *sp) {
+  allocateHeap();
+  top_stack = sp;
+  return;
+}
