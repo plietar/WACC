@@ -438,24 +438,22 @@ genStmt (_, StmtScope block) = genBlock block
 genCaseArm :: Var -> [Annotated CaseArm TypeA] -> CodeGen ()
 genCaseArm _ [] = do
   endLabel <- allocateLabel
-  tell [ILabel {iLabel = endLabel}]
+  emit [ILabel {iLabel = endLabel}]
 
 genCaseArm e ((_, CaseArm l b):cs) = do
-  condVar <- allocateVar
-  literalVar <- allocateVar
+  condVar <- allocateTemp
+  literalVar <- allocateTemp
   endLabel <- allocateLabel
 
-  tell [ILiteral { iDest = literalVar, iLiteral = l}]
+  emit [ILiteral { iDest = literalVar, iLiteral = l}]
   
-  tell [IBinOp { iBinOp = BinOpEQ, iDest = condVar, iLeft = e, iRight = literalVar } ]
-
+  emit [IBinOp { iBinOp = BinOpEQ, iDest = condVar, iLeft = e, iRight = literalVar } ]
+  
+  emit [ICondJump { iLabel = endLabel, iValue = condVar}]
   genBlock b
-
-  tell [ICondJump { iLabel = endLabel, iValue = condVar}]
-
   genCaseArm e cs
 
-  tell [ILabel { iLabel = endLabel}]
+  emit [ILabel { iLabel = endLabel}]
   
 -- Block code generation
 genBlock :: Annotated Block TypeA -> CodeGen ()
