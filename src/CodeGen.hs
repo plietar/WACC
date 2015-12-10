@@ -221,7 +221,7 @@ genArrayRead elemTy arrayVar indexExpr = do
   offsetedArray <- allocateTemp
   indexVar <- genExpr indexExpr
 
-  genCall0 "p_check_array_bounds" [arrayVar, indexVar]
+  genCall0 "p_check_array_bounds" [indexVar, arrayVar]
   emit [ ILiteral { iDest    = arrayOffsetVar
                    , iLiteral = LitInt 4 }
        , IBinOp { iBinOp = BinOpAdd
@@ -263,7 +263,7 @@ genAssign (elemTy, LHSArrayElem (_, ArrayElem ident exprs)) valueVar = do
 
   writeIndexVar <- genExpr writeIndexExpr
   arrayOffsetVar <- allocateTemp
-  genCall0 "p_check_array_bounds" [subArrayVar, writeIndexVar]
+  genCall0 "p_check_array_bounds" [writeIndexVar, subArrayVar]
   emit [ILiteral { iDest = arrayOffsetVar, iLiteral = LitInt 4 }
        , IBinOp { iBinOp = BinOpAdd, iDest = offsetedBase
                 , iLeft = arrayOffsetVar, iRight = subArrayVar } 
