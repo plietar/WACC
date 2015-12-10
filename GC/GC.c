@@ -67,6 +67,7 @@ void removePage(Page *page);
 void insert(Page *p, Page *list);
 void forwardHeapPointers(Page *page);
 void promote(Page *page, colour c);
+void allocateHeap(void);
 void GCCollect(uint32_t *sp);
 void moveReference(uint32_t **ref);
 uint32_t *GCAlloc(uint byte_size, type_info *type_information, uint32_t *bottom_stack);
@@ -282,6 +283,29 @@ uint getFreeWords(Page *page) {
   }
   return PAGE_WORDS - page->usedWords;
 }
+
+// TODO: double NUMBER_PAGES_TO_ALLOCATE every time you call this function
+//
+// Allocate a new heap from the operating system, initialise all the pages
+// in it and add them to the list of free pages
+void allocateHeap(void) {
+  uint32_t* heapAddr = NULL;
+  int res = posix_memalign((void**) &heapAddr, PAGE_WORDS * 4, NUMBER_PAGES_TO_ALLOCATE * PAGE_WORDS * 4);
+
+  // Build list of free pages
+  for (uint32_t *ptr = heapAddr; ptr < heapAddr + NUMBER_PAGES_TO_ALLOCATE * PAGE_WORDS;
+       ptr += PAGE_WORDS) {
+    Page *p = (Page *) ptr;
+    p->space = BLACK;
+    p->usedWords = 0;
+    insert(p, FREE_PAGES);
+  }
+  Heap *newHeap = (Heap *) malloc(sizeof(Heap));
+  newHeap->start = heapAddr;
+  newHeap->next = HEAPS;
+  return;
+}
+
 
 uint *allocateManyPages(void) {
   return NULL;
