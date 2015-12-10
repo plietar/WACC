@@ -14,6 +14,7 @@ import Features
 
 import Data.List (zipWith4)
 import Data.Maybe (fromMaybe)
+import qualified Data.Set as Set
 
 import Control.Applicative
 import Control.Monad
@@ -57,7 +58,9 @@ compile filename contents output
     tokens    = waccLexer  filename contents
     ast       = waccParser filename =<< tokens
     typedAst  = waccSemCheck        =<< ast
-    ir        = genProgram <$> typedAst
+    codeGen   = genProgram <$> typedAst
+    ir        = fst <$> codeGen
+    irFeatures = snd <$> codeGen
     cfg       = map (deadCodeElimination . basicBlocks) <$> ir :: WACCResult [Gr [IR] ()]
     flow      = map blockDataFlow <$> cfg
     allVars   = map allVariables <$> cfg
@@ -71,8 +74,9 @@ compile filename contents output
 
     irFinal   = concatMap (concatMap snd . Graph.labNodes) <$> cfgFinal
 
-    armWriter = genARM <$> irFinal :: WACCResult ARMWriter
-    feat      = genFeatures <$> (features <$> armWriter) :: WACCResult ([String], [String])
+    armWriter = genARM <$> irFinal
+    armFeatures = ARMGen.features <$> armWriter
+    feat      = genFeatures <$> (Set.union <$> armFeatures <*> irFeatures)
     asmSimple = concat <$> sequence
                              [ dataSegment <$> armWriter
                              , fst <$> feat

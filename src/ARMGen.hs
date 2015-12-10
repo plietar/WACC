@@ -41,6 +41,9 @@ emitLiteral s = do
   tell (ARMWriter [] [(l, s)] Set.empty)
   return l
 
+emitFeature :: Feature -> ARMGen ()
+emitFeature ft = tell (ARMWriter [] [] (Set.singleton ft))
+
 textSegment :: ARMWriter -> [String]
 textSegment w = ".text" : ".global main" : (assembly w)
 
@@ -49,10 +52,6 @@ dataSegment w = ".data" : concatMap genLit (stringLiterals w)
   where genLit (label, value) = [ label ++ ":"
                                 , ".word " ++ show (length value)
                                 , ".ascii " ++ show value ]
-
-
-emitFeature :: Feature -> ARMGen ()
-emitFeature ft = tell (ARMWriter [] [] (Set.singleton ft))
 
 genARM :: [IR] -> ARMWriter
 genARM irs = snd $ execRWS (mapM genARMInstruction irs) () (ARMState (map (("msg_" ++) . show) [0..]))

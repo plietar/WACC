@@ -4,6 +4,7 @@
 module CodeGenTypes where
 
 import Common.AST
+import Features
 
 import Control.Applicative
 import Control.Monad.RWS
@@ -102,7 +103,17 @@ data CodeGenState = CodeGenState {
   frame :: Frame
 }
 
-type CodeGen = RWS () [IR] CodeGenState
+data CodeGenOutput = CodeGenOutput {
+  instructions :: [IR],
+  features :: Set Feature
+}
+
+instance Monoid CodeGenOutput where
+  mempty = CodeGenOutput [] mempty
+  mappend (CodeGenOutput a b) (CodeGenOutput a' b')
+    = CodeGenOutput (mappend a a') (mappend b b')
+
+type CodeGen = RWS () CodeGenOutput CodeGenState
 
 allocateTemp :: CodeGen Var
 allocateTemp = do
