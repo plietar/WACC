@@ -61,6 +61,8 @@ Page *GREY_PAGES;
 Page *WHITE_PAGES;
 Heap *HEAPS; // List of heaps
 void GCInit(uint *sp);
+void removePage(Page *page);
+void insert(Page *p, Page *list);
 void GCCollect(uint32_t *sp);
 uint32_t *GCAlloc(uint byte_size, type_info *type_information, uint32_t *bottom_stack);
 uint32_t *allocateWordsNoGC(uint objWords, Page *list, colour colour);
@@ -150,3 +152,37 @@ uint32_t *allocateWordsNoGC(uint objWords, Page *list, colour colour) {
   uint32_t *objHeaderAddress = PAGE_DATA_START(page) + page->usedWords;
   return OBJECT_DATA_START(objHeaderAddress);
 }
+// Find number of free words in a page
+uint getFreeWords(Page *page) {
+  if (page == NULL) {
+    return 0;
+  }
+  return PAGE_WORDS - page->usedWords;
+}
+// Remove a page from the list of pages.
+void removePage(Page* page) {
+  if (page == NULL) {
+    return;
+  }
+
+  Page *prev = page->previous;
+  Page *next = page->next;
+
+  if (prev != NULL) {
+    prev->next = next;
+  }
+  if (next != NULL) {
+    next->previous = prev;
+  }
+  page->next = NULL;
+  page->previous = NULL;
+  return;
+}
+
+// Insert a page at the front of a list of pages
+void insert(Page *p, Page *list) {
+  p->next = list;
+  list->previous = p;
+  list = p;
+}
+
