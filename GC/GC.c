@@ -69,6 +69,8 @@ void moveReference(uint32_t **ref);
 uint32_t *GCAlloc(uint byte_size, type_info *type_information, uint32_t *bottom_stack);
 uint32_t *copy(uint32_t *heapObjPointer, Page *oldPage, object_header *oldHeader);
 uint32_t *allocateWordsNoGC(uint objWords, Page *list, colour colour);
+Page *getPage(uint32_t *ptr);
+Page *getValidPage(Page *list, uint words);
 bool isAmbiguousRoot(uint32_t *ptr);
 void GCInit(uint32_t *sp) {
   allocateHeap();
@@ -167,6 +169,38 @@ uint32_t *copy(uint32_t *heapObjPointer, Page *oldPage, object_header *oldHeader
   newHeader->forwardReference = NULL;
   return newLoc;
 }
+
+
+// Get a page from the list of pages that enough free space to fit
+// 'words' words
+Page *getValidPage(Page *list, uint words) {
+  Page *current = list;
+  uint freeWords = getFreeWords(current);
+  while (current != NULL && freeWords < words) {
+    current = current->next;
+    freeWords = getFreeWords(current);
+  }
+
+  if (current == NULL) {
+    if (FREE_PAGES == NULL) {
+      allocateHeap();
+    }
+    Page *tmpFree = FREE_PAGES->next;
+    current = FREE_PAGES;
+    removePage(FREE_PAGES);
+    FREE_PAGES = tmpFree;
+    insert(current, list);
+  }
+  return current;
+}
+
+// Get page that a pointer is pointing to
+// by rounding down to 32 bit alignment
+Page *getPage(uint32_t *pointer) {
+  uint mask = 0xffffffff ^ 0x1f;
+  return (Page *) ((uint) pointer & mask);
+}
+
 
 // Find whether a pointer points to one of the heaps
 bool isAmbiguousRoot(uint32_t *ptr) {
