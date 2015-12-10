@@ -268,23 +268,24 @@ checkAssignRHS (_, RHSNewTuple exprs) context = do
 checkAssignRHS (_, RHSCall fname args) context = do
   (expectedArgsType, returnType) <- getFunction fname context
   args' <- mapM (\e -> checkExpr e context) args
-  checkArgs 0 (length expectedArgsType) expectedArgsType (map fst args')
-  return (returnType, RHSCall fname args')
 
-  where checkArgs :: Int -> Int -> [Type] -> [Type] -> WACCResult ()
-        checkArgs _ _ [] [] = OK ()
-        checkArgs n expected (a1:as1) (a2:as2)
-          | compatibleType a1 a2 = checkArgs (n+1) expected as1 as2
-          | otherwise = semanticError ("Expected type " ++ show a2 
-                                    ++ " but got type " ++ show a1 
-                                    ++ " for argument " ++ show (n + 1)
-                                    ++ " of call to function "
-                                    ++ show fname)
-        checkArgs n expected _ _
-          = semanticError ("Wrong number of arguments in call"
-                        ++ " to function \"" ++ fname ++ "\"."
-                        ++ " Expected " ++ show expected
-                        ++ " but got " ++ show n)
+  let checkArgs :: Int -> [Type] -> [Type] -> WACCResult ()
+      checkArgs _ [] [] = OK ()
+      checkArgs n (a1:as1) (a2:as2)
+        | compatibleType a1 a2 = checkArgs (n+1) as1 as2
+        | otherwise = semanticError ("Expected type " ++ show a2 
+                                  ++ " but got type " ++ show a1 
+                                  ++ " for argument " ++ show (n + 1)
+                                  ++ " of call to function "
+                                  ++ show fname)
+      checkArgs n _ _
+        = semanticError ("Wrong number of arguments in call"
+                      ++ " to function \"" ++ fname ++ "\"."
+                      ++ " Expected " ++ show (length expectedArgsType)
+                      ++ " but got " ++ show (length args))
+
+  checkArgs 0 expectedArgsType (map fst args')
+  return (returnType, RHSCall fname args')
 
 
 checkBlock :: Annotated Block SpanA -> Context -> WACCResult (Annotated Block TypeA)

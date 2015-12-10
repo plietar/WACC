@@ -1,8 +1,10 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
 
 module CodeGenTypes where
 
 import Common.AST
+import Features
 
 import Control.Applicative
 import Control.Monad.RWS
@@ -11,11 +13,53 @@ import Data.Maybe
 import Data.Set(Set)
 import qualified Data.Set as Set
 
+data Var = Local Int | Temp Int | Reg Int | Spilled Int Var
+  deriving (Ord, Eq)
 
-data Var = Var Int
-  deriving (Show, Ord, Eq)
+{-
+argPassingRegs = Reg <$> [0,1]
+callerSaveRegs = Reg <$> [0,1,14]
+calleeSaveRegs = Reg <$> [4,5,14]
+allRegs = Reg <$> [0,1,4,5,14]
+spReg = Reg 13
+lrReg = Reg 14
+pcReg = Reg 15
+-}
+
+argPassingRegs :: [Var]
+argPassingRegs = Reg <$> [0..3]
+
+callerSaveRegs :: [Var]
+callerSaveRegs = Reg <$> ([0..3] ++ [14])
+
+calleeSaveRegs :: [Var]
+calleeSaveRegs = Reg <$> ([4..12] ++ [14])
+
+allRegs :: [Var]
+allRegs = Reg <$> ([0..12] ++ [14])
+
+spReg :: Var
+spReg = Reg 13
+
+lrReg :: Var
+lrReg = Reg 14
+
+pcReg :: Var
+pcReg = Reg 15
+
+instance Show Var where
+  show r | r == spReg = "sp"
+  show r | r == lrReg = "lr"
+  show r | r == pcReg = "pc"
+
+  show (Local n)     = "local_" ++ show n
+  show (Temp n)      = "temp_" ++ show n
+  show (Spilled n _) = "spill_" ++ show n
+  show (Reg n)       = "r" ++ show n
+
 data Label = NamedLabel String | UnnamedLabel Int
   deriving (Ord, Eq)
+
 data Operand = OperandVar Var Int | OperandLit Int
   deriving (Show)
 
@@ -24,14 +68,18 @@ instance Show Label where
   show (NamedLabel   n) = n
 
 data IR
-  = ILiteral { iDest :: Var, iLiteral :: Literal }
-  | IBinOp { iBinOp :: BinOp, iDest :: Var, iLeft :: Var, iRight :: Var }
-  | IUnOp { iUnOp :: UnOp, iDest :: Var, iValue :: Var }
-  | IMove { iValue :: Var, iDest :: Var }
+  = IFunctionBegin { iSavedRegs :: [Var], iArgs :: [Var] }
+  | IReturn { iSavedRegs :: [Var], iArgs :: [Var] }
+
+  | ILiteral { iDest :: Var, iLiteral :: Literal }
+  | IMul { iHigh :: Var, iLow :: Var, iLeft :: Var, iRight :: Var }
+  | IBinOp { iDest :: Var, iBinOp :: BinOp, iLeft :: Var, iRight :: Var }
+  | IUnOp { iDest :: Var, iUnOp :: UnOp, iValue :: Var }
+  | IMove { iDest :: Var, iValue :: Var }
 
   | ICondJump { iLabel :: Label, iValue :: Var }
   | IJump { iLabel :: Label }
-  | ICall { iLabel :: Label, iArgs :: [(Type, Var)], iDest :: Var }
+  | ICall { iLabel :: Label, iArgs :: [Var] }
   | ILabel { iLabel :: Label }
 
   | IFrameAllocate { iSize :: Int }
@@ -42,33 +90,41 @@ data IR
   | IHeapRead { iHeapVar :: Var, iDest :: Var, iOperand :: Operand, iType :: Type }
   | IHeapWrite { iHeapVar :: Var, iValue :: Var, iOperand :: Operand, iType :: Type }
 
-  | IArrayAllocate { iDest :: Var, iSize :: Int }
-  | IPairAllocate { iDest :: Var }
+  | IPushArg { iValue :: Var }
+  | IClearArgs { iSize :: Int }
 
-  | INullCheck { iValue :: Var }
-  | IBoundsCheck { iArray :: Var, iIndex :: Var }
-
-  | IPrint { iValue :: Var, iType :: Type, iNewline :: Bool }
-  | IRead { iDest :: Var, iType :: Type }
-  | IFree { iValue :: Var, iType :: Type }
-  | IExit { iValue :: Var }
-
-  | IFunctionBegin { }
-  | IReturn { iValue :: Var }
   deriving Show
 
 data CodeGenState = CodeGenState {
-  variables :: [Var],
+  tempNames :: [Var],
+  localNames :: [Var],
   labels :: [Label],
+
   frame :: Frame
 }
 
-type CodeGen = RWS () [IR] CodeGenState
+data CodeGenOutput = CodeGenOutput {
+  instructions :: [IR],
+  features :: Set Feature
+}
 
-allocateVar :: CodeGen Var
-allocateVar = do
-  (v:vs) <- gets variables
-  modify (\s -> s { variables = vs })
+instance Monoid CodeGenOutput where
+  mempty = CodeGenOutput [] mempty
+  mappend (CodeGenOutput a b) (CodeGenOutput a' b')
+    = CodeGenOutput (mappend a a') (mappend b b')
+
+type CodeGen = RWS () CodeGenOutput CodeGenState
+
+allocateTemp :: CodeGen Var
+allocateTemp = do
+  (v:vs) <- gets tempNames
+  modify (\s -> s { tempNames = vs })
+  return v
+
+allocateLocal :: CodeGen Var
+allocateLocal = do
+  (v:vs) <- gets localNames
+  modify (\s -> s { localNames = vs })
   return v
 
 allocateLabel :: CodeGen Label
@@ -79,12 +135,9 @@ allocateLabel = do
 
 
 data Frame = Frame
-  { offsets   :: Map String Int
-  , parent    :: Maybe Frame
-  , allocated :: Bool
-  , frameSize :: Int
-  , definedVariables :: Set String 
-  }
+  { parent    :: Maybe Frame
+  , frameLocals :: Map String Var
+  , definedLocals :: Set String }
 
 
 typeSize :: Type -> Int
@@ -97,40 +150,30 @@ typeSize (TyArray _)  = 4
 typeSize (TyTuple _)  = 4
 typeSize t = error ("No type size for: " ++ (show t))
 
-rootFrame :: Frame
-rootFrame = Frame Map.empty Nothing False 0 Set.empty
-childFrame :: Frame -> Frame
-childFrame parent = Frame Map.empty (Just parent) True 0 Set.empty
- 
-setVariables :: [(String, Type)] -> Int -> Frame -> Frame
-setVariables variables initialOffset original
-  = original { offsets = Map.fromList offsetTable
-             , frameSize = totalSize }
-  where
-    (offsetTable, totalSize) = walkVariables variables initialOffset
-    walkVariables [] off = ([], off)
-    walkVariables ((n,t):vs) off
-      = let (vs', off') = walkVariables vs (off + typeSize t)
-        in ((n,off):vs', off')
+emptyFrame :: Frame
+emptyFrame = Frame Nothing Map.empty Set.empty
 
-variableOffset :: String -> CodeGen Int
-variableOffset s = do
-  frame <- gets frame
-  return (getOffset s frame)
+setupFrame :: Map String Var -> CodeGen ()
+setupFrame args
+  = let f = Frame Nothing args (Set.fromList (Map.keys args))
+    in modify (\s -> s { frame = f })
 
-getOffset :: String -> Frame -> Int
-getOffset var Frame{..} =
-  if defined then 
-    case Map.lookup var offsets of
-      Nothing -> frameSize + getOffset var (fromJust parent)
-      Just offset -> offset
-  else 
-    (frameSize + getOffset var (fromJust parent))
-    where
-      defined = Set.member var definedVariables
+withChildFrame :: [String] -> CodeGen a -> CodeGen a
+withChildFrame names m = do
+  newLocals <- Map.fromList <$> forM names (\n -> (n,) <$> allocateLocal)
 
-totalAllocatedFrameSize :: Frame -> Int
-totalAllocatedFrameSize Frame{..}
-  = (if allocated then frameSize else 0) +
-    fromMaybe 0 (totalAllocatedFrameSize <$> parent)
+  parentFrame <- gets frame
+  let childFrame = Frame (Just parentFrame) newLocals Set.empty
+
+  modify (\s -> s { frame = childFrame } )
+  ret <- m
+  modify (\s -> s { frame = parentFrame } )
+
+  return ret
+
+getFrameLocal :: String -> Frame -> Var
+getFrameLocal name Frame{..}
+  = if Set.member name definedLocals
+    then frameLocals ! name
+    else getFrameLocal name (fromJust parent)
 
