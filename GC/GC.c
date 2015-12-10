@@ -67,6 +67,7 @@ void forwardHeapPointers(Page *page);
 void GCCollect(uint32_t *sp);
 void moveReference(uint32_t **ref);
 uint32_t *GCAlloc(uint byte_size, type_info *type_information, uint32_t *bottom_stack);
+uint32_t *copy(uint32_t *heapObjPointer, Page *oldPage, object_header *oldHeader);
 uint32_t *allocateWordsNoGC(uint objWords, Page *list, colour colour);
 void GCInit(uint32_t *sp) {
   allocateHeap();
@@ -154,6 +155,18 @@ uint32_t *allocateWordsNoGC(uint objWords, Page *list, colour colour) {
   uint32_t *objHeaderAddress = PAGE_DATA_START(page) + page->usedWords;
   return OBJECT_DATA_START(objHeaderAddress);
 }
+
+// Copy object to a new page and return the new address
+uint32_t *copy(uint32_t *heapObjPointer, Page *oldPage, object_header *oldHeader) {
+  uint32_t *newLoc = allocateWordsNoGC(oldHeader->objWords, GREY_PAGES, GREY);
+  object_header *newHeader = OBJECT_HEADER_START(newLoc);
+  memcpy((void *) newLoc, (const void*) heapObjPointer, oldHeader->objWords * 4);
+  newHeader->typeInfo = oldHeader->typeInfo;
+  newHeader->objWords = oldHeader->objWords;
+  newHeader->forwardReference = NULL;
+  return newLoc;
+}
+
 // CHECK this function
 // ref is a pointer to where a pointer to the heap is stored
 // Move a live reference that is in a white page to a grey page
