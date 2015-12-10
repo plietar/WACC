@@ -63,6 +63,7 @@ Heap *HEAPS; // List of heaps
 void GCInit(uint *sp);
 void removePage(Page *page);
 void insert(Page *p, Page *list);
+void forwardHeapPointers(Page *page);
 void GCCollect(uint32_t *sp);
 uint32_t *GCAlloc(uint byte_size, type_info *type_information, uint32_t *bottom_stack);
 uint32_t *allocateWordsNoGC(uint objWords, Page *list, colour colour);
@@ -151,6 +152,31 @@ uint32_t *allocateWordsNoGC(uint objWords, Page *list, colour colour) {
   page->usedWords += objWords;
   uint32_t *objHeaderAddress = PAGE_DATA_START(page) + page->usedWords;
   return OBJECT_DATA_START(objHeaderAddress);
+}
+// Move all the references in a given page to new pages in the
+// GREY set
+void forwardHeapPointers(Page *page) {
+  uint32_t *start = PAGE_DATA_START(page);
+  uint32_t *end = ((uint32_t *) page) + PAGE_WORDS;
+  object_header *header = (object_header *) start;
+
+  while ((uint32_t *) header < end) {
+    if (header->typeInfo != NULL) {
+      type_info *typeInfo = header->typeInfo;
+      uint32_t *data = OBJECT_DATA_START(header);
+      if (typeInfo->isArray) {
+        data++; // Skip size field
+      }
+
+      for (int i = 0; i < typeInfo->nElem; i++) {
+        if (typeInfo->elemIsPtr[i]) {
+          moveReference((uint32_t **) (data + i));
+        }
+      }
+    }
+    header = (object_header *) ( ((uint32_t *) header) + header->objWords);
+  }
+
 }
 // Find number of free words in a page
 uint getFreeWords(Page *page) {
