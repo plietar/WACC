@@ -79,6 +79,8 @@ literal = (lit >>= check) <?> "literal"
 
 semi :: Parser Token
 semi = token TokSemiColon
+colon :: Parser Token
+colon = token TokColon
 comma :: Parser Token
 comma = token TokComma
 equal :: Parser Token
@@ -190,6 +192,16 @@ skipStmt = spanned $ do
   keyword "skip"
   return StmtSkip
 
+letStmt :: Parser (Annotated Stmt SpanA)
+letStmt = spanned $ do
+  keyword "let"
+  i <- identifier
+  colon
+  t <- parseType
+  token TokEqual
+  r <- assignRHS
+  return (StmtVar t i r)
+
 varStmt :: Parser (Annotated Stmt SpanA)
 varStmt = spanned $ do
   t <- parseType
@@ -280,6 +292,7 @@ stmt = skipStmt    <|>
        freeStmt    <|>
        exitStmt    <|>
        returnStmt  <|>
+       letStmt     <|>
        varStmt     <?> "statement"
 
 block :: Parser (Annotated Block SpanA)

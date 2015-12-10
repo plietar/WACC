@@ -33,6 +33,7 @@ tokens :-
   -- Symbols
   ","                  { \(AlexPn _ line column) s -> ((line, column), TokComma) }
   ";"                  { \(AlexPn _ line column) s -> ((line, column), TokSemiColon) }
+  ":"                  { \(AlexPn _ line column) s -> ((line, column), TokColon) }
   "["                  { \(AlexPn _ line column) s -> ((line, column), TokLBracket) }
   "]"                  { \(AlexPn _ line column) s -> ((line, column), TokRBracket) }
   "("                  { \(AlexPn _ line column) s -> ((line, column), TokLParen) }
@@ -41,7 +42,7 @@ tokens :-
   -- Program Keywords
   begin | end | is | skip | read | free | return | exit | print | println | if
     | then | else | fi | while | do | done | newpair | call | fst | snd | int
-    | bool | char | string | pair | len | ord | chr | null
+    | bool | char | string | pair | len | ord | chr | null | let
                        { \(AlexPn _ line column) s-> ((line, column), TokKeyword s) }
  
   -- Operators
