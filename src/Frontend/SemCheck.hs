@@ -152,9 +152,9 @@ checkExpr (_, ExprVar varname) context = do
   ty <- getVariable varname context
   return (ty, ExprVar varname)
 
-checkExpr (_, ExprArrayElem arrayElem) context = do
-  arrayElem'@(ty, _) <- checkArrayElem arrayElem context
-  return (ty, ExprArrayElem arrayElem')
+checkExpr (_, ExprIndexingElem indexElem) context = do
+  indexElem'@(ty, _) <- checkIndexingElem indexElem context
+  return (ty, ExprIndexingElem indexElem')
 
 checkExpr (_, ExprUnOp op expr) context = do
   expr'@(t1, _) <- checkExpr expr context
@@ -219,24 +219,6 @@ checkBinOp op t1 t2
        else semanticError ("Cannot apply binary operator " ++ show op 
                         ++ " to types " ++ show t1 ++ " and " ++ show t2)
 
-
-checkArrayElem :: Annotated ArrayElem SpanA -> Context -> WACCResult (Annotated ArrayElem TypeA)
-checkArrayElem (_, ArrayElem varname exprs) context = do
-  baseTy <- getVariable varname context
-  exprs' <- mapM (\e -> checkExpr e context) exprs
-  ty <- checkArrayIndexing baseTy (map fst exprs') context
-  return (ty, ArrayElem varname exprs')
-
-checkArrayIndexing :: Type -> [Type] -> Context -> WACCResult Type
-checkArrayIndexing (TyArray innerType) (indexType : tys) context = do
-  if compatibleType TyInt indexType
-  then checkArrayIndexing innerType tys context
-  else semanticError ("Cannot index array with type " ++ show indexType)
-checkArrayIndexing TyAny _ _ = OK TyAny
-checkArrayIndexing t [] _    = OK t
-checkArrayIndexing t _ _     = semanticError ("Cannot index variable of type " ++ show t)
-
-
 checkPairElem :: Annotated PairElem SpanA -> Context -> WACCResult (Annotated PairElem TypeA)
 checkPairElem (_, PairElem side expr) context = do
   expr'@(outerType, _) <- checkExpr expr context
@@ -246,8 +228,7 @@ checkPairElem (_, PairElem side expr) context = do
     (_, TyAny           ) -> return TyAny
     (_, _               ) -> semanticError ("Type " ++ show outerType ++ " is not pair")
   return ((innerType, outerType), PairElem side expr')
-
-
+  
 checkAssignLHS :: Annotated AssignLHS SpanA -> Context -> WACCResult (Annotated AssignLHS TypeA)
 checkAssignLHS (_, LHSVar varname) context = do
   ty <- getVariable varname context
