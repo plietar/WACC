@@ -261,6 +261,10 @@ checkAssignRHS (_, RHSPairElem pairElem) context = do
   pairElem'@((ty, _), _) <- checkPairElem pairElem context
   return (ty, RHSPairElem pairElem')
 
+checkAssignRHS (_, RHSNewTuple exprs) context = do
+  exprs' <- mapM (\e -> checkExpr e context) exprs
+  return (TyTuple (map fst exprs'), RHSNewTuple exprs')
+
 checkAssignRHS (_, RHSCall fname args) context = do
   (expectedArgsType, returnType) <- getFunction fname context
   args' <- mapM (\e -> checkExpr e context) args
