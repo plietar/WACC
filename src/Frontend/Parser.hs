@@ -73,7 +73,7 @@ literal = (lit >>= check) <?> "literal"
 
     check :: Literal -> Parser Literal
     check x@(LitInt l) = if l > toInteger( maxBound :: Int32 )
-                         then (fail "Integer litteral too large")
+                         then (fail "Integer literal too large")
                          else return x
     check x = return x
 
