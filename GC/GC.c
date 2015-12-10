@@ -61,8 +61,52 @@ Page *GREY_PAGES;
 Page *WHITE_PAGES;
 Heap *HEAPS; // List of heaps
 void GCInit(uint *sp);
+void GCCollect(uint32_t *sp);
 void GCInit(uint32_t *sp) {
   allocateHeap();
   top_stack = sp;
+  return;
+}
+
+
+
+
+void GCCollect(uint32_t *bottom_stack) {
+  // Make all pages WHITE
+  WHITE_PAGES = BLACK_PAGES;
+  BLACK_PAGES = NULL;
+
+  for (uint32_t *ptr = top_stack; top_stack < bottom_stack; ptr++) {
+    // TODO: check all heaps
+    if (isAmbiguousRoot((uint32_t *) *ptr)) {
+      Page *refPage = getPage((uint32_t *) *ptr);
+      if (refPage->space == WHITE) {
+        removePage(refPage);
+        insert(refPage, GREY_PAGES);
+        promote(refPage, GREY);
+      }
+    }
+  }
+
+  // Trace all gray pages
+  Page *greyPage = GREY_PAGES;
+  while (greyPage) {
+    GREY_PAGES = greyPage->next;
+    forwardHeapPointers(greyPage);
+    promote(greyPage, BLACK);
+    greyPage->space = BLACK;
+    greyPage = greyPage->next;
+  }
+
+  Page *whitePage = WHITE_PAGES;
+  while (whitePage) {
+    whitePage->usedWords = 0;
+    whitePage->space = BLACK;
+
+    Page *next = whitePage->next;
+    removePage(whitePage);
+    insert(whitePage, FREE_PAGES);
+    whitePage = next;
+  }
   return;
 }
