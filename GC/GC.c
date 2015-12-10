@@ -63,6 +63,7 @@ Heap *HEAPS; // List of heaps
 void GCInit(uint *sp);
 void GCCollect(uint32_t *sp);
 uint32_t *GCAlloc(uint byte_size, type_info *type_information, uint32_t *bottom_stack);
+uint32_t *allocateWordsNoGC(uint objWords, Page *list, colour colour);
 void GCInit(uint32_t *sp) {
   allocateHeap();
   top_stack = sp;
@@ -138,4 +139,14 @@ uint32_t *GCAlloc(uint byte_size, type_info *type_information, uint32_t *bottom_
   header->typeInfo = type_information;
   header->forwardReference = NULL;
   return objPtr;
+}
+
+// Return: Address of the object data.
+//         Empty header at OBJECT_HEADER_START(address)
+uint32_t *allocateWordsNoGC(uint objWords, Page *list, colour colour) {
+  Page *page = getValidPage(list, objWords);
+  page->space = colour;
+  page->usedWords += objWords;
+  uint32_t *objHeaderAddress = PAGE_DATA_START(page) + page->usedWords;
+  return OBJECT_DATA_START(objHeaderAddress);
 }
