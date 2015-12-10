@@ -35,7 +35,7 @@ dependantOn CheckNullPointer   = Set.fromList [CheckNullPointer,  ThrowRuntimeEr
 dependantOn ThrowOverflowError = Set.fromList [ThrowOverflowError,ThrowRuntimeError, PrintString]
 dependantOn ThrowRuntimeError  = Set.fromList [ThrowRuntimeError, PrintString]
 dependantOn ThrowDoubleFreeError = Set.fromList [ThrowDoubleFreeError, PrintString]
-dependantOn Initialise         = Set.fromList [Initialise, ThrowDoubleFreeError]
+dependantOn Initialise         = Set.fromList [Initialise, ThrowDoubleFreeError, PrintString]
 dependantOn feature            = Set.fromList [feature]
 
 genFeature :: Feature -> ([String], [String])
