@@ -95,7 +95,7 @@ expr = buildExpressionParser exprTable term <?> "expression"
   where
     term = parens expr
            <|> spanned (ExprLit <$> literal)
-           <|> spanned (ExprArrayElem <$> arrayElem)
+           <|> spanned (ExprIndexingElem <$> indexingElem)
            <|> spanned (ExprVar <$> identifier)
            <?> "term"
 
@@ -116,15 +116,15 @@ expr = buildExpressionParser exprTable term <?> "expression"
     exprTable = [ [ prefix (op "!") UnOpNot, prefix (op "-") UnOpNeg
                   , prefix (keyword "len") UnOpLen, prefix (keyword "ord") UnOpOrd
                   , prefix (keyword "chr") UnOpChr ]
-                , [ left (op "*") BinOpMul, left (op "/") BinOpDiv, left (op "%") BinOpRem]
-                , [ left (op "+") BinOpAdd, left (op "-") BinOpSub ]
-                , [ nonassoc (op ">")  BinOpGT ]
-                , [ nonassoc (op ">=") BinOpGE ]
-                , [ nonassoc (op "<")  BinOpLT ]
-                , [ nonassoc (op "<=") BinOpLE ]
-                , [ nonassoc (op "==") BinOpEQ, nonassoc (op "!=") BinOpNE ]
-                , [ left (op "&&") BinOpAnd ]
-                , [ left (op "||") BinOpOr ]
+                  , [ left (op "*") BinOpMul, left (op "/") BinOpDiv, left (op "%") BinOpRem]
+                  , [ left (op "+") BinOpAdd, left (op "-") BinOpSub ]
+                  , [ nonassoc (op ">")  BinOpGT ]
+                  , [ nonassoc (op ">=") BinOpGE ]
+                  , [ nonassoc (op "<")  BinOpLT ]
+                  , [ nonassoc (op "<=") BinOpLE ]
+                  , [ nonassoc (op "==") BinOpEQ, nonassoc (op "!=") BinOpNE ]
+                  , [ left (op "&&") BinOpAnd ]
+                  , [ left (op "||") BinOpOr ]
                 ]
 
 parseType :: Parser Type
@@ -134,7 +134,7 @@ parseType = (do
   return (arr t)
   ) <?> "type"
   where
-    notArrayType = baseType <|> pairType
+    notArrayType = baseType <|> pairType <|> tupleType
     baseType = (keyword "int"    $> TyInt) <|>
                (keyword "bool"   $> TyBool) <|>
                (keyword "char"   $> TyChar) <|>
@@ -143,6 +143,9 @@ parseType = (do
       _ <- P.try (keyword "pair" <* P.lookAhead (token TokLParen))
       parens (TyPair <$> pairElemType <* comma <*> pairElemType)
     pairElemType = parseType <|> (keyword "pair" $> TyPair TyAny TyAny)
+    tupleType = do
+      _ <- P.try (keyword "tuple")
+      parens (TyTuple <$> (sepBy parseType comma))
 
 pairElem :: Parser (Annotated PairElem SpanA)
 pairElem = spanned $ do
