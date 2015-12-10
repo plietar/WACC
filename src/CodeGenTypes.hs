@@ -16,6 +16,7 @@ import qualified Data.Set as Set
 data Var = Local Int | Temp Int | Reg Int | Spilled Int Var
   deriving (Ord, Eq)
 
+{-
 argPassingRegs = Reg <$> [0,1]
 callerSaveRegs = Reg <$> [0,1,14]
 calleeSaveRegs = Reg <$> [4,5,14]
@@ -23,8 +24,8 @@ allRegs = Reg <$> [0,1,4,5,14]
 spReg = Reg 13
 lrReg = Reg 14
 pcReg = Reg 15
+-}
 
-{-
 argPassingRegs :: [Var]
 argPassingRegs = Reg <$> [0..3]
 
@@ -45,7 +46,6 @@ lrReg = Reg 14
 
 pcReg :: Var
 pcReg = Reg 15
--}
 
 instance Show Var where
   show r | r == spReg = "sp"
