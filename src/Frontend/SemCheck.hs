@@ -238,10 +238,9 @@ checkAssignLHS (_, LHSPairElem pairElem) context = do
   pairElem'@((ty, _), _) <- checkPairElem pairElem context
   return (ty, LHSPairElem pairElem')
 
-checkAssignLHS (_, LHSArrayElem arrayElem) context = do
-  arrayElem'@(ty, _) <- checkArrayElem arrayElem context
-  return (ty, LHSArrayElem arrayElem')
-
+checkAssignLHS (_, LHSIndexingElem indexElem) context = do
+  indexElem'@(ty, _) <- checkIndexingElem indexElem context
+  return (ty, LHSIndexingElem indexElem')
 
 checkAssignRHS :: Annotated AssignRHS SpanA -> Context -> WACCResult (Annotated AssignRHS TypeA)
 checkAssignRHS (_, RHSExpr expr) context = do
