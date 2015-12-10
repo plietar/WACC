@@ -61,7 +61,7 @@ exprWeight (_, ExprBinOp _ e1 e2)
     in min (max w1 (w2 + 1))
            (max (w1 + 1) w2)
 exprWeight (_, ExprVar _) = 1
-exprWeight (_, ExprArrayElem (_, ArrayElem _ exprs))
+exprWeight (_, ExprIndexingElem (_, IndexingElem _ exprs))
   = 1 + maximum (map exprWeight exprs)
 
 -- Literals
@@ -97,7 +97,7 @@ genExpr (_ , ExprBinOp operator expr1 expr2) = do
 genExpr (ty, ExprVar ident) = genFrameRead ty ident
 
 -- ArrayElem
-genExpr (elemTy, ExprArrayElem (_, ArrayElem ident exprs)) = do
+genExpr (elemTy, ExprIndexingElem (_, IndexingElem ident exprs)) = do
   let initIndexExprs = init exprs
       lastIndexExpr  = last exprs
 
@@ -105,9 +105,7 @@ genExpr (elemTy, ExprArrayElem (_, ArrayElem ident exprs)) = do
   -- The type is only used to determine the type of instruction (LDR vs LDRB)
   arrayVar <- genFrameRead (TyArray TyAny) ident
   subArrayVar <- foldM (genArrayRead (TyArray TyAny)) arrayVar initIndexExprs
-
   outVar <- genArrayRead elemTy subArrayVar lastIndexExpr
-
   return outVar
 
 -- Read from Frame
@@ -154,7 +152,7 @@ genAssign (_, LHSPairElem ((elemTy, pairTy), PairElem side pairExpr)) valueVar =
        , IHeapWrite { iHeapVar = pairVar, iValue = valueVar, iOperand = OperandLit (pairOffset side pairTy), iType = elemTy } ]
 
 -- LHS Array Indexing 
-genAssign (elemTy, LHSArrayElem (_, ArrayElem ident exprs)) valueVar = do
+genAssign (elemTy, LHSIndexingElem (_, IndexingElem ident exprs)) valueVar = do
   let readIndexExprs  = init exprs
       writeIndexExpr  = last exprs
 
@@ -214,6 +212,20 @@ genRHS (TyArray elemTy, RHSArrayLit exprs) = do
                  then (length exprs) * elemSize
                  else 0
       elemSize = typeSize elemTy
+
+
+genRHS (TyTuple types, RHSNewTuple exprs) = do
+  tupleVar <- allocateVar
+  tell [ IArrayAllocate { iDest = tupleVar, iSize = length exprs * 4 }]
+  forM (zip exprs [0..]) $ \(expr, index) -> do
+    elemVar <- genExpr expr  
+    tell [ IHeapWrite  { iHeapVar = tupleVar
+                       , iValue = elemVar
+                       , iOperand = OperandLit (index * 4)
+                       , iType = types !! index } ]
+  return tupleVar
+
+
 
 genRHS (t@(TyPair t1 t2), RHSNewPair fstExpr sndExpr) = do
   pairVar <- allocateVar
