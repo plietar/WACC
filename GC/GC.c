@@ -60,18 +60,27 @@ Page *BLACK_PAGES;
 Page *GREY_PAGES;
 Page *WHITE_PAGES;
 Heap *HEAPS; // List of heaps
+
+// Functions
 void GCInit(uint *sp);
 void removePage(Page *page);
 void insert(Page *p, Page *list);
 void forwardHeapPointers(Page *page);
+void promote(Page *page, colour c);
 void GCCollect(uint32_t *sp);
 void moveReference(uint32_t **ref);
 uint32_t *GCAlloc(uint byte_size, type_info *type_information, uint32_t *bottom_stack);
 uint32_t *copy(uint32_t *heapObjPointer, Page *oldPage, object_header *oldHeader);
 uint32_t *allocateWordsNoGC(uint objWords, Page *list, colour colour);
+
+uint *allocateManyPages();  // Unimplemented
 Page *getPage(uint32_t *ptr);
 Page *getValidPage(Page *list, uint words);
+uint getFreeWords(Page *page);
 bool isAmbiguousRoot(uint32_t *ptr);
+
+
+
 void GCInit(uint32_t *sp) {
   allocateHeap();
   top_stack = sp;
@@ -212,6 +221,12 @@ bool isAmbiguousRoot(uint32_t *ptr) {
   }
   return false;
 }
+
+// Promote the space of a page to the new colour 'c'
+void promote(Page *page, colour c) {
+  page->space = c;
+}
+
 // CHECK this function
 // ref is a pointer to where a pointer to the heap is stored
 // Move a live reference that is in a white page to a grey page
@@ -232,6 +247,7 @@ void moveReference(uint32_t **ref) {
     *ref = header->forwardReference;
   }
 }
+
 // Move all the references in a given page to new pages in the
 // GREY set
 void forwardHeapPointers(Page *page) {
@@ -257,6 +273,8 @@ void forwardHeapPointers(Page *page) {
   }
 
 }
+
+
 // Find number of free words in a page
 uint getFreeWords(Page *page) {
   if (page == NULL) {
@@ -264,6 +282,11 @@ uint getFreeWords(Page *page) {
   }
   return PAGE_WORDS - page->usedWords;
 }
+
+uint *allocateManyPages(void) {
+  return NULL;
+}
+
 // Remove a page from the list of pages.
 void removePage(Page* page) {
   if (page == NULL) {
@@ -290,4 +313,5 @@ void insert(Page *p, Page *list) {
   list->previous = p;
   list = p;
 }
+
 
