@@ -69,6 +69,7 @@ void moveReference(uint32_t **ref);
 uint32_t *GCAlloc(uint byte_size, type_info *type_information, uint32_t *bottom_stack);
 uint32_t *copy(uint32_t *heapObjPointer, Page *oldPage, object_header *oldHeader);
 uint32_t *allocateWordsNoGC(uint objWords, Page *list, colour colour);
+bool isAmbiguousRoot(uint32_t *ptr);
 void GCInit(uint32_t *sp) {
   allocateHeap();
   top_stack = sp;
@@ -167,6 +168,16 @@ uint32_t *copy(uint32_t *heapObjPointer, Page *oldPage, object_header *oldHeader
   return newLoc;
 }
 
+// Find whether a pointer points to one of the heaps
+bool isAmbiguousRoot(uint32_t *ptr) {
+  Heap *curr = HEAPS;
+  while (curr) {
+    if (ptr > curr->start && ptr < (curr->start + HEAP_SIZE_WORDS)) {
+      return true;
+    }
+  }
+  return false;
+}
 // CHECK this function
 // ref is a pointer to where a pointer to the heap is stored
 // Move a live reference that is in a white page to a grey page
