@@ -166,7 +166,7 @@ indexingElem = spanned $ do
 
 assignLHS :: Parser (Annotated AssignLHS SpanA)
 assignLHS
-  = spanned $ LHSArrayElem <$> arrayElem <|>
+  = spanned $ LHSIndexingElem <$> indexingElem <|>
               LHSPairElem <$> pairElem <|>
               LHSVar <$> identifier
 
@@ -176,17 +176,19 @@ assignRHS
               rhsArrayLit <|>
               rhsPairElem <|>
               rhsCall <|>
-              rhsNewPair
+              rhsNewPair <|>
+              rhsNewTuple
     where
-      rhsExpr     = RHSExpr <$> expr
-      rhsArrayLit = RHSArrayLit <$> brackets (sepBy expr comma) <?> "array literal"
-      rhsPairElem = RHSPairElem <$> pairElem
-      rhsNewPair = keyword "newpair" *> parens (RHSNewPair <$> expr <* comma <*> expr)
-      rhsCall = do
-        _  <- keyword "call"
-        i  <- identifier
-        es <- parens (sepBy expr comma)
-        return (RHSCall i es)
+      rhsExpr      = RHSExpr <$> expr
+      rhsArrayLit  = RHSArrayLit <$> brackets (sepBy expr comma) <?> "array literal"
+      rhsPairElem  = RHSPairElem <$> pairElem
+      rhsNewPair   = keyword "newpair" *> parens (RHSNewPair <$> expr <* comma <*> expr)
+      rhsCall      = do
+                     _  <- keyword "call"
+                     i  <- identifier
+                     es <- parens (sepBy expr comma)
+                     return (RHSCall i es)
+      rhsNewTuple  = keyword "newtuple" *> parens (RHSNewTuple <$> (sepBy expr comma))
 
 skipStmt :: Parser (Annotated Stmt SpanA)
 skipStmt = spanned $ do
