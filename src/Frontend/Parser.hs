@@ -196,8 +196,7 @@ letStmt :: Parser (Annotated Stmt SpanA)
 letStmt = spanned $ do
   keyword "let"
   i <- identifier
-  colon
-  t <- parseType
+  t <- (colon >> parseType) <|> return TyAny
   token TokEqual
   r <- assignRHS
   return (StmtVar t i r)

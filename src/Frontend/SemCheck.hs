@@ -293,11 +293,10 @@ checkStmt (_, StmtVar varType varname rhs) = do
   context <- get
   rhs'@(rhsType, _) <- lift $ checkAssignRHS rhs context
 
-  when (not (compatibleType varType rhsType))
-       (lift (semanticError ("Cannot assign RHS of type " ++ show rhsType
-                          ++ " to LHS of type " ++ show varType)))
-  addVariable varname varType
-  return (False, StmtVar varType varname rhs')
+  varType' <- lift $ mergeTypes varType rhsType
+
+  addVariable varname varType'
+  return (False, StmtVar varType' varname rhs')
 
 checkStmt (_, StmtAssign lhs rhs) = do
   context <- get
