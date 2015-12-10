@@ -156,13 +156,13 @@ pairElem = spanned $ do
     pairSide = (keyword "fst" $> PairFst) <|>
                (keyword "snd" $> PairSnd)
 
-arrayElem :: Parser (Annotated ArrayElem SpanA)
-arrayElem = spanned $ do
+indexingElem :: Parser (Annotated IndexingElem SpanA)
+indexingElem = spanned $ do
   i <- P.try (identifier <* P.lookAhead (token TokLBracket))
-  a <- many1 arrayIndex
-  return (ArrayElem i a)
+  a <- many1 index
+  return (IndexingElem i a)
   where
-    arrayIndex = brackets expr
+    index = brackets expr
 
 assignLHS :: Parser (Annotated AssignLHS SpanA)
 assignLHS
