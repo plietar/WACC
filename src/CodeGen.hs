@@ -355,6 +355,11 @@ genStmt (_, StmtAssign lhs rhs) = do
 
 genStmt (_, StmtFree expr@(ty, _)) = do
   v <- genExpr expr
+  case ty of
+    TyPair _ _ -> do
+      genCall0 "p_check_null_pointer" [v]
+      emitFeature CheckNullPointer
+    _ -> return ()
   genCall0 "free" [v]
 
 genStmt (_, StmtReturn expr) = do
