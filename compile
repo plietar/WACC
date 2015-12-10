@@ -1,4 +1,1 @@
-#!/usr/bin/env bash
-set -eu
-dist/build/wacc/wacc "$@"
-
+dist/build/wacc/wacc
