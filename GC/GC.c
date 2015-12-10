@@ -65,6 +65,7 @@ void removePage(Page *page);
 void insert(Page *p, Page *list);
 void forwardHeapPointers(Page *page);
 void GCCollect(uint32_t *sp);
+void moveReference(uint32_t **ref);
 uint32_t *GCAlloc(uint byte_size, type_info *type_information, uint32_t *bottom_stack);
 uint32_t *allocateWordsNoGC(uint objWords, Page *list, colour colour);
 void GCInit(uint32_t *sp) {
@@ -152,6 +153,26 @@ uint32_t *allocateWordsNoGC(uint objWords, Page *list, colour colour) {
   page->usedWords += objWords;
   uint32_t *objHeaderAddress = PAGE_DATA_START(page) + page->usedWords;
   return OBJECT_DATA_START(objHeaderAddress);
+}
+// CHECK this function
+// ref is a pointer to where a pointer to the heap is stored
+// Move a live reference that is in a white page to a grey page
+void moveReference(uint32_t **ref) {
+  uint32_t *heapPointer = *ref;
+  Page *pagePointed = getPage(heapPointer);
+  if (pagePointed->space == WHITE) {
+    object_header *header = OBJECT_HEADER_START(heapPointer);
+    if (header->forwardReference == NULL) {
+      header->forwardReference = copy(heapPointer, pagePointed, header);
+      header->typeInfo = NULL;
+      // Same header->size, so the page can still be iterated through
+      Page *destinationPage = getPage(header->forwardReference);
+      destinationPage->space = GREY;
+      removePage(destinationPage);
+      insert(destinationPage, GREY_PAGES);
+    }
+    *ref = header->forwardReference;
+  }
 }
 // Move all the references in a given page to new pages in the
 // GREY set
