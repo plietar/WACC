@@ -100,7 +100,6 @@ isVoidType :: Type -> Bool
 isVoidType TyVoid = True
 isVoidType _      = False
 
-
 checkLiteral :: Literal -> Type
 checkLiteral (LitInt _)    = TyInt
 checkLiteral (LitBool _)   = TyBool
@@ -108,6 +107,43 @@ checkLiteral (LitChar _)   = TyChar
 checkLiteral (LitString _) = TyArray TyChar
 checkLiteral  LitNull      = TyPair TyAny TyAny
 
+checkIndexingElem :: Annotated IndexingElem SpanA -> Context -> WACCResult (Annotated IndexingElem TypeA)
+checkIndexingElem (_, IndexingElem varname exprs) context = do
+  baseTy <- getVariable varname context
+  exprs' <- mapM (\e -> checkExpr e context) exprs
+  ty <- checkIndexingElem' baseTy exprs'
+  return (ty, IndexingElem varname exprs')
+
+checkIndexingElem' :: Type -> [Annotated Expr TypeA] -> WACCResult Type
+checkIndexingElem' baseTy exprs@((ty, e):es) = do
+  if compatibleType TyInt ty
+  then 
+       case baseTy of
+         TyTuple ts -> if checkIfExprIsLiteralInt e 
+                       then checkIndexingElem' (ts !! exprLitToInt e) es
+                       else semanticError ("Cannot index tuple with type " ++ show ty)
+         TyArray t  -> checkIndexingElem' t es   
+         TyAny     -> OK TyAny
+       else
+         semanticError("Cannot index variable with type " ++ show ty)
+
+checkIndexingElem' t [] = return t
+ 
+checkIfExprIsLiteralInt :: Expr a -> Bool
+checkIfExprIsLiteralInt (ExprLit (LitInt _)) = True
+checkIfExprIsLiteralInt _ = False
+
+exprLitToInt :: Expr a -> Int
+exprLitToInt (ExprLit (LitInt n)) = fromInteger n
+
+--checkArrayIndexing :: Type -> [Type] -> WACCResult Type
+--checkArrayIndexing (TyArray innerType) (indexType : tys) = do
+--  if compatibleType TyInt indexType
+--  then checkArrayIndexing innerType tys
+--  else semanticError ("Cannot index array with type " ++ show indexType)
+--checkArrayIndexing TyAny _ _ = OK TyAny
+--checkArrayIndexing t [] _    = OK t
+--checkArrayIndexing t _ _     = semanticError ("Cannot index variable of type " ++ show t)
 
 checkExpr :: Annotated Expr SpanA -> Context -> WACCResult (Annotated Expr TypeA)
 checkExpr (_, ExprLit lit) _ = return (checkLiteral lit, ExprLit lit)
