@@ -62,6 +62,7 @@ Page *WHITE_PAGES;
 Heap *HEAPS; // List of heaps
 void GCInit(uint *sp);
 void GCCollect(uint32_t *sp);
+uint32_t *GCAlloc(uint byte_size, type_info *type_information, uint32_t *bottom_stack);
 void GCInit(uint32_t *sp) {
   allocateHeap();
   top_stack = sp;
@@ -109,4 +110,32 @@ void GCCollect(uint32_t *bottom_stack) {
     whitePage = next;
   }
   return;
+}
+
+
+// TODO: Do we care about the colour of the page we are allocating?
+uint32_t *GCAlloc(uint byte_size, type_info *type_information, uint32_t *bottom_stack) {
+  if (FREE_PAGES == NULL && BLACK_PAGES != NULL) {
+    GCCollect(bottom_stack);
+  }
+
+
+  // Allocate multiple pages for large objects
+  if (byte_size > PAGE_WORDS * WORD_SIZE) {
+    return allocateManyPages();
+  }
+
+  // Size of the object data
+  uint objWords = (byte_size + sizeof(object_header)) / 4;
+
+
+  // This guarantees space for my object at objPtr position in
+  // a BLACK page. The header of the object is empty
+  uint32_t *objPtr = allocateWordsNoGC(objWords, BLACK_PAGES, BLACK);
+
+  object_header *header = (object_header *) OBJECT_DATA_START(objPtr);
+  header->objWords = objWords;
+  header->typeInfo = type_information;
+  header->forwardReference = NULL;
+  return objPtr;
 }
