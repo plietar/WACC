@@ -17,12 +17,12 @@ data Var = Local Int | Temp Int | Reg Int | Spilled Int Var
   deriving (Ord, Eq)
 
 argPassingRegs = Reg <$> [0,1]
-callerSaveRegs = Reg <$> [0,1,4]
-calleeSaveRegs = Reg <$> [2,3,4]
-allRegs = Reg <$> [0,1,2,3,4]
-spReg = Reg 6
-lrReg = Reg 4
-pcReg = Reg 5
+callerSaveRegs = Reg <$> [0,1,14]
+calleeSaveRegs = Reg <$> [4,5,14]
+allRegs = Reg <$> [0,1,4,5,14]
+spReg = Reg 13
+lrReg = Reg 14
+pcReg = Reg 15
 
 {-
 argPassingRegs :: [Var]

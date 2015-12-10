@@ -55,7 +55,7 @@ genFunction (_, FuncDef _ fname params body) = do
             emit [ IMove { iDest = v, iValue = r } ]
             return (name, v)
 
-          stackArgsMap <- forM (zip stackNames [4,8..]) $ \(name, offset) -> do
+          stackArgsMap <- forM (zip stackNames [0,4..]) $ \(name, offset) -> do
             v <- allocateTemp
             emit [ IFrameRead { iDest = v, iOffset = offset, iType = TyInt } ]
             return (name, v)

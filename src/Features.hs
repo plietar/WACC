@@ -1,5 +1,6 @@
 module Features where
 
+import Data.Monoid
 import Data.Set (Set)
 import qualified Data.Set as Set
 

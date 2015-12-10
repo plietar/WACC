@@ -24,7 +24,7 @@ import Data.Tuple (swap)
 import GHC.Exts
 import Debug.Trace
 
-graphNMapM :: (Monad m, DynGraph gr) => (a -> m b) -> gr a c -> m (gr b c)
+graphNMapM :: (Functor m, Monad m, DynGraph gr) => (a -> m b) -> gr a c -> m (gr b c)
 graphNMapM f gr = do
   nodes <- mapM (\(l, n) -> (l,) <$> f n) (Graph.labNodes gr)
   return (Graph.mkGraph nodes (Graph.labEdges gr))

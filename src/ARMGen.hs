@@ -143,7 +143,7 @@ genARMInstruction (IJump {iLabel = label} )
 
 --Call
 genARMInstruction IPushArg {..}
-  = emit ["PUSH " ++ show iValue ]
+  = emit ["PUSH {" ++ show iValue ++ "}"]
 
 genARMInstruction IClearArgs {..}
   = genARMInstruction IFrameFree { iSize = iSize }
