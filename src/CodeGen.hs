@@ -286,9 +286,6 @@ genStmt (_, StmtIfNoElse condition thenBlock) = do
   genBlock thenBlock
   tell [ILabel { iLabel = endLabel }]
 
---genStmt (_, StmtSwitch condition caseArm) = do
-  
-
 genStmt (_, StmtIf condition thenBlock elseBlock) = do
   thenLabel <- allocateLabel
   endLabel <- allocateLabel
@@ -314,9 +311,34 @@ genStmt (_, StmtWhile condition block ) = do
   condVar <- genExpr condition
   tell [ICondJump { iLabel = startLabel, iValue = condVar }]
 
+genStmt (_, StmtSwitch expr cs) = do
+  e <- genExpr expr
+  genCaseArm e cs 
+
 genStmt (_, StmtScope block) = genBlock block
 
+genCaseArm :: Var -> [Annotated CaseArm TypeA] -> CodeGen ()
+genCaseArm _ [] = do
+  endLabel <- allocateLabel
+  tell [ILabel {iLabel = endLabel}]
 
+genCaseArm e ((_, CaseArm l b):cs) = do
+  condVar <- allocateVar
+  literalVar <- allocateVar
+  endLabel <- allocateLabel
+
+  tell [ILiteral { iDest = literalVar, iLiteral = l}]
+  
+  tell [IBinOp { iBinOp = BinOpEQ, iDest = condVar, iLeft = e, iRight = literalVar } ]
+
+  genBlock b
+
+  tell [ICondJump { iLabel = endLabel, iValue = condVar}]
+
+  genCaseArm e cs
+
+  tell [ILabel { iLabel = endLabel}]
+  
 
 -- Block code generation
 genBlock :: Annotated Block TypeA -> CodeGen ()
@@ -329,6 +351,8 @@ genBlock ((_, locals), Block stmts) = do
   tell [ IFrameFree { iSize = frameSize updatedFrame } ]
   child <- gets frame
   modify (\s -> s { frame = fromJust (parent child) })
+
+
 
 
 
