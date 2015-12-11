@@ -337,8 +337,6 @@ genStmt (st, StmtVar ty ident rhs) = do
 
 genStmt (_, StmtAssign lhs rhs) = do
   v <- genRHS rhs
-  genCall0 "p_check_null_pointer" [v]
-  emitFeature CheckNullPointer 
   genAssign lhs v
 
 genStmt (_, StmtFree expr@(ty, _)) = do
