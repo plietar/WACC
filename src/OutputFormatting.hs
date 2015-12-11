@@ -185,11 +185,11 @@ showAssignRHS (_, RHSArrayLit es) = do
   indent <- ask  
   tell [ (tabs indent) ++ "- AssignRhsArrayLit" ]
   mapM_ showExpr es 
-showAssignRHS (_, RHSNewPair e1 e2) = do
-  indent <- ask
-  tell [ (tabs indent) ++ "- AssignRhsNewPair" ]
-  local (+ 1) (showExpr e1)
-  local (+ 1) (showExpr e2)
+--showAssignRHS (_, RHSNewPair e1 e2) = do
+--  indent <- ask
+--  tell [ (tabs indent) ++ "- AssignRhsNewPair" ]
+--  local (+ 1) (showExpr e1)
+--  local (+ 1) (showExpr e2)
 
 showAssignRHS (_, RHSPairElem e) = showPairElem e
 showAssignRHS (_, RHSNewTuple es) = do
