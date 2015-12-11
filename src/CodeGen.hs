@@ -428,10 +428,36 @@ genStmt (_, StmtWhile condition block ) = do
   condVar <- genExpr condition
   emit [ICondJump { iLabel = startLabel, iValue = condVar }]
 
+genStmt (_, StmtSwitch expr cs) = do
+  e <- genExpr expr
+  genCaseArm e cs 
+
 genStmt (_, StmtScope block) = genBlock block
 
+genCaseArm :: Var -> [Annotated CaseArm TypeA] -> CodeGen ()
+genCaseArm _ [] = do
+  endLabel <- allocateLabel
+  emit [ILabel {iLabel = endLabel}]
+
+genCaseArm e ((_, CaseArm l b):cs) = do
+  condVar <- allocateTemp
+  literalVar <- allocateTemp
+  endLabel <- allocateLabel
+
+  emit [ILiteral { iDest = literalVar, iLiteral = l}]
+  
+  emit [IBinOp { iBinOp = BinOpNE, iDest = condVar, iLeft = e, iRight = literalVar } ]
+
+  emit [ICondJump { iLabel = endLabel, iValue = condVar}]
+  genBlock b
+  genCaseArm e cs
+
+  emit [ILabel { iLabel = endLabel}]
+  
 -- Block code generation
 genBlock :: Annotated Block TypeA -> CodeGen ()
 genBlock ((_, locals), Block stmts)
   = withChildFrame (map fst locals) (forM_ stmts genStmt)
+
+
 
