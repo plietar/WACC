@@ -422,6 +422,10 @@ genStmt (_, StmtWhile condition block ) = do
 
 genStmt (_, StmtScope block) = genBlock block
 
+genStmt (_, StmtCall name exprs) = do
+  argVars <- mapM genExpr exprs
+  genCall0 name argVars
+
 -- Block code generation
 genBlock :: Annotated Block TypeA -> CodeGen ()
 genBlock ((_, locals), Block stmts)

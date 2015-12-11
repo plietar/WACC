@@ -253,6 +253,11 @@ checkAssignRHS (_, RHSPairElem pairElem) context = do
   return (ty, RHSPairElem pairElem')
 
 checkAssignRHS (_, RHSCall fname args) context = do
+  (symbolName, args', returnType) <- checkCall fname args context
+  return (returnType, RHSCall symbolName args')
+
+checkCall :: Identifier -> [Annotated Expr SpanA] -> Context -> WACCResult (Identifier, [Annotated Expr TypeA], Type)
+checkCall fname args context = do
   (symbolName, expectedArgsType, returnType) <- getFunction fname context
   args' <- mapM (\e -> checkExpr e context) args
 
@@ -263,7 +268,7 @@ checkAssignRHS (_, RHSCall fname args) context = do
         | otherwise = semanticError ("Expected type " ++ show a2 
                                   ++ " but got type " ++ show a1 
                                   ++ " for argument " ++ show (n + 1)
-                                  ++ " of call to function "
+                                  ++ " in call to function "
                                   ++ show fname)
       checkArgs n _ _
         = semanticError ("Wrong number of arguments in call"
@@ -272,8 +277,8 @@ checkAssignRHS (_, RHSCall fname args) context = do
                       ++ " but got " ++ show (length args))
 
   checkArgs 0 expectedArgsType (map fst args')
-  return (returnType, RHSCall symbolName args')
 
+  return (symbolName, args', returnType)
 
 checkBlock :: Annotated Block SpanA -> Context -> WACCResult (Annotated Block TypeA)
 checkBlock (_, Block stmts) parent = do
@@ -376,6 +381,10 @@ checkStmt (_, StmtScope block) = do
   block'@((al, _),_) <- lift $ checkBlock block context
   return (al, StmtScope block')
 
+checkStmt (_, StmtCall fname args) = do
+  context <- get
+  (symbolName, args', _) <- lift $ checkCall fname args context
+  return (False, StmtCall symbolName args')
 
 checkFunction :: Annotated FuncDef SpanA -> Context -> WACCResult (Annotated FuncDef TypeA)
 checkFunction (_, FuncDef expectedReturnType name args block) globalContext

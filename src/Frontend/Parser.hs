@@ -282,6 +282,13 @@ returnStmt = spanned $ do
   e <- expr
   return (StmtReturn e)
 
+callStmt :: Parser (Annotated Stmt SpanA)
+callStmt = spanned $ do
+  _ <- keyword "call"
+  name <- identifier
+  args <- parens (sepBy expr comma)
+  return (StmtCall name args)
+
 stmt :: Parser (Annotated Stmt SpanA)
 stmt = skipStmt    <|>
        whileStmt   <|>
@@ -295,7 +302,8 @@ stmt = skipStmt    <|>
        exitStmt    <|>
        returnStmt  <|>
        letStmt     <|>
-       varStmt     <?> "statement"
+       varStmt     <|>
+       callStmt    <?> "statement"
 
 block :: Parser (Annotated Block SpanA)
 block = spanned $ Block <$> sepBy1 stmt semi

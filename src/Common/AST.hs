@@ -31,6 +31,7 @@ data Stmt a
   | StmtIf     (Annotated Expr a) (Annotated Block a) (Annotated Block a)
   | StmtWhile  (Annotated Expr a) (Annotated Block a)
   | StmtScope  (Annotated Block a)
+  | StmtCall   Identifier [Annotated Expr a]
 
 data AssignLHS a
   = LHSVar       Identifier
