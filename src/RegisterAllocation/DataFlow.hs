@@ -145,7 +145,6 @@ irUse IMul{..}           = Set.fromList [ iRight, iLeft ]
 irUse IUnOp{..}          = Set.singleton iValue
 irUse IMove{..}          = Set.singleton iValue
 irUse ICall{..}          = Set.fromList  iArgs
-irUse ICondJump{..}      = Set.singleton iValue
 irUse IFrameWrite{..}    = Set.singleton iValue
 irUse IHeapWrite{..}
   = case iOperand of
@@ -156,6 +155,10 @@ irUse IHeapRead{..}
     OperandVar v _ -> Set.fromList [ iHeapVar, v ]       
     OperandLit x -> Set.fromList [ iHeapVar ]
 irUse IPushArg{..}       = Set.singleton iValue
+irUse ICompare{..}
+  = case iOperand of
+    OperandVar v _ -> Set.fromList [ iValue, v ]
+    OperandLit x -> Set.fromList [ iValue ]
 
 irUse _                  = Set.empty
 

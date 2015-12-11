@@ -303,10 +303,6 @@ mapIR colouring IMove{..}
   = IMove { iValue = colouring iValue
            , iDest = colouring iDest }
 
-mapIR colouring ICondJump{..}
-  = ICondJump { iLabel = iLabel
-              , iValue = colouring iValue }
-
 mapIR colouring IFrameRead{..}
   = IFrameRead { iOffset = iOffset
                , iDest   = colouring iDest
@@ -339,6 +335,14 @@ mapIR colouring IHeapWrite{..}
 
 mapIR colouring IPushArg{..}
   = IPushArg { iValue = colouring iValue }
+
+mapIR colouring ICompare{..}
+  = ICompare { iValue   = colouring iValue
+             , iOperand = operand }
+  where
+    operand = case iOperand of
+      OperandLit x -> OperandLit x
+      OperandVar v s -> OperandVar (colouring v) s
 
 -- Base Case
 mapIR colouring x = x

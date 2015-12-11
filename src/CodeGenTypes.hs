@@ -63,9 +63,15 @@ data Label = NamedLabel String | UnnamedLabel Int
 data Operand = OperandVar Var Int | OperandLit Int
   deriving (Show)
 
+data Condition = CondEQ | CondNE
+
 instance Show Label where
   show (UnnamedLabel i) = "L" ++ show i
   show (NamedLabel   n) = n
+
+instance Show Condition where
+  show CondEQ = "EQ"
+  show CondNE = "NE"
 
 data IR
   = IFunctionBegin { iSavedRegs :: [Var], iArgs :: [Var] }
@@ -77,7 +83,8 @@ data IR
   | IUnOp { iDest :: Var, iUnOp :: UnOp, iValue :: Var }
   | IMove { iDest :: Var, iValue :: Var }
 
-  | ICondJump { iLabel :: Label, iValue :: Var }
+  | ICompare { iValue :: Var, iOperand :: Operand }
+  | ICondJump { iLabel :: Label, iCondition :: Condition }
   | IJump { iLabel :: Label }
   | ICall { iLabel :: Label, iArgs :: [Var] }
   | ILabel { iLabel :: Label }

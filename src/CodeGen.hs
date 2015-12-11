@@ -396,14 +396,15 @@ genStmt (_, StmtRead lhs@(ty, _)) = do
   genAssign lhs v
 
 genStmt (_, StmtIf condition thenBlock elseBlock) = do
-  thenLabel <- allocateLabel
+  elseLabel <- allocateLabel
   endLabel <- allocateLabel
 
   condVar <- genExpr condition
-  emit [ICondJump { iLabel = thenLabel, iValue = condVar }]
+  emit [ ICompare { iValue = condVar, iOperand = OperandLit 0 }
+       , ICondJump { iLabel = elseLabel, iCondition = CondEQ } ]
   genBlock elseBlock
   emit [ IJump { iLabel = endLabel }
-       , ILabel { iLabel = thenLabel }]
+       , ILabel { iLabel = elseLabel }]
   genBlock thenBlock
   emit [ILabel { iLabel = endLabel }]
 
@@ -418,7 +419,8 @@ genStmt (_, StmtWhile condition block ) = do
 
   emit [ILabel { iLabel = endLabel }]
   condVar <- genExpr condition
-  emit [ICondJump { iLabel = startLabel, iValue = condVar }]
+  emit [ ICompare { iValue = condVar, iOperand = OperandLit 0 }
+       , ICondJump { iLabel = startLabel, iCondition = CondNE } ]
 
 genStmt (_, StmtScope block) = genBlock block
 

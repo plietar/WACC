@@ -136,11 +136,19 @@ genARMInstruction IMove { iDest = dest, iValue = value }
   = emit ["MOV " ++ show dest ++ ", " ++ show value]
 
 --Jumps
-genARMInstruction (ICondJump { iLabel = label, iValue = value})
-  = emit ["CMP " ++ show value ++ ", #0",
-          "BNE " ++ (show label)]
-genARMInstruction (IJump {iLabel = label} )
-  = emit ["B " ++ (show label)]
+genARMInstruction ICompare{..}
+  = emit ["CMP " ++ show iValue ++ ", " ++ operand]
+  where
+    operand = case iOperand of
+      OperandVar op shift -> let scaling = if shift /= 0 then ", lsl #" ++ show shift else ""
+                             in show op ++ scaling
+      OperandLit lit -> "#" ++ show lit
+
+genARMInstruction ICondJump{..}
+  = emit [ "B" ++ show iCondition ++ " " ++ show iLabel ]
+
+genARMInstruction IJump{..}
+  = emit [ "B " ++ show iLabel ]
 
 --Call
 genARMInstruction IPushArg {..}
