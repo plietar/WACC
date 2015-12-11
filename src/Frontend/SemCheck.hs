@@ -82,7 +82,7 @@ isArrayType TyAny       = True
 isArrayType _           = False
 
 isHeapType :: Type -> Bool
-isHeapType (TyPair _ _) = True
+isHeapType (TyTuple _ ) = True
 isHeapType (TyArray _)  = True
 isHeapType TyAny        = True
 isHeapType _            = False
@@ -109,7 +109,7 @@ checkLiteral (LitInt _)    = TyInt
 checkLiteral (LitBool _)   = TyBool
 checkLiteral (LitChar _)   = TyChar
 checkLiteral (LitString _) = TyArray TyChar
-checkLiteral  LitNull      = TyPair TyAny TyAny
+checkLiteral  LitNull      = TyNull
 
 checkIndexingElem :: Annotated IndexingElem SpanA -> Context -> WACCResult (Annotated IndexingElem TypeA)
 checkIndexingElem (_, IndexingElem varname exprs) context = do
