@@ -70,6 +70,8 @@ genARMInstruction (ILiteral { iDest = dest, iLiteral = LitChar chr } )
 genARMInstruction (ILiteral { iDest = dest, iLiteral = LitString str  } ) = do
   message <- emitLiteral str
   emit ["LDR " ++ show dest ++ ", =" ++ message]
+genARMInstruction (ILiteral { iDest = dest, iLiteral = LitLabel label } ) = do
+  emit ["LDR " ++ show dest ++ ", =" ++ label ]
 
 --BinOp
 genARMInstruction (IBinOp { iBinOp = op, iDest = dest,

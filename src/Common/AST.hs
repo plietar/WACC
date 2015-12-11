@@ -80,6 +80,7 @@ data Literal = LitInt Integer
              | LitChar Char
              | LitString String
              | LitNull
+             | LitLabel String
   deriving Show
 
 data UnOp = UnOpNot
@@ -109,7 +110,7 @@ data Type = TyInt
           | TyArray Type
           | TyAny
           | TyVoid
-    deriving (Eq)
+    deriving (Eq, Ord)
 
 deriving instance Annotation a => Show (Program a)
 deriving instance Annotation a => Show (FuncDef a)
