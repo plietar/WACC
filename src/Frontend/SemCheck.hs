@@ -157,8 +157,8 @@ checkExpr (_, ExprVar varname) context = do
   return (ty, ExprVar varname)
 
 checkExpr (_, ExprIndexingElem indexElem) context = do
-  indexElem'@(ty, _) <- checkIndexingElem indexElem context
-  return (ty, ExprIndexingElem indexElem')
+  indexElem'@((t, tys), ts) <- checkIndexingElem indexElem context
+  return (t, ExprIndexingElem indexElem')
 
 checkExpr (_, ExprUnOp op expr) context = do
   expr'@(t1, _) <- checkExpr expr context
@@ -223,16 +223,6 @@ checkBinOp op t1 t2
        else semanticError ("Cannot apply binary operator " ++ show op 
                         ++ " to types " ++ show t1 ++ " and " ++ show t2)
 
-checkPairElem :: Annotated PairElem SpanA -> Context -> WACCResult (Annotated PairElem TypeA)
-checkPairElem (_, PairElem side expr) context = do
-  expr'@(outerType, _) <- checkExpr expr context
-  innerType <- case (side, outerType) of
-    (PairFst, TyPair f _) -> return f
-    (PairSnd, TyPair _ s) -> return s
-    (_, TyAny           ) -> return TyAny
-    (_, _               ) -> semanticError ("Type " ++ show outerType ++ " is not pair")
-  return ((innerType, outerType), PairElem side expr')
-  
 checkAssignLHS :: Annotated AssignLHS SpanA -> Context -> WACCResult (Annotated AssignLHS TypeA)
 checkAssignLHS (_, LHSVar varname) context = do
   ty <- getVariable varname context
