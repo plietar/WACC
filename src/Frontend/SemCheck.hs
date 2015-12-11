@@ -96,6 +96,13 @@ isReadableType TyChar = True
 isReadableType TyAny  = True
 isReadableType _      = False
 
+isAbstractType :: Type -> Bool
+isAbstractType TyAny          = True
+isAbstractType TyVoid         = True
+isAbstractType (TyPair ta tb) = isAbstractType ta || isAbstractType tb
+isAbstractType (TyArray ty)   = isAbstractType ty
+isAbstractType _              = False
+
 isVoidType :: Type -> Bool
 isVoidType TyVoid = True
 isVoidType _      = False
@@ -294,6 +301,10 @@ checkStmt (_, StmtVar varType varname rhs) = do
   rhs'@(rhsType, _) <- lift $ checkAssignRHS rhs context
 
   varType' <- lift $ mergeTypes varType rhsType
+
+  when (isAbstractType varType')
+       (lift (semanticError ("Cannot declare variable " ++ varname
+                          ++ " of incomplete type " ++ show varType')))
 
   addVariable varname varType'
   return (False, StmtVar varType' varname rhs')
