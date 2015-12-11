@@ -161,10 +161,13 @@ indexingElem = spanned $ do
   where
     index = brackets expr
 
+wrapSpan :: (Annotated a SpanA -> b SpanA) -> Annotated a SpanA -> Annotated b SpanA
+wrapSpan f x@(sp, _) = (sp, f x)
+
 assignLHS :: Parser (Annotated AssignLHS SpanA)
 assignLHS
   = spanned $ LHSIndexingElem <$> indexingElem <|>
-              LHSPairElem <$> pairElem <|>
+              LHSIndexingElem <$> pairElem <|>
               LHSVar <$> identifier
 
 assignRHS :: Parser (Annotated AssignRHS SpanA)
@@ -178,8 +181,8 @@ assignRHS
     where
       rhsExpr      = RHSExpr <$> expr
       rhsArrayLit  = RHSArrayLit <$> brackets (sepBy expr comma) <?> "array literal"
-      rhsPairElem  = RHSPairElem <$> pairElem
-      rhsNewPair   = keyword "newpair" *> parens (RHSNewPair <$> expr <* comma <*> expr)
+      rhsPairElem  = RHSExpr <$> wrapSpan ExprIndexingElem <$> pairElem
+      rhsNewPair   = keyword "newpair" *> parens (RHSNewTuple <$> ((\a b -> [a,b]) <$> expr <* comma <*> expr))
       rhsCall      = do
                      _  <- keyword "call"
                      i  <- identifier
