@@ -10,6 +10,7 @@ data Token =
     TokLBracket       | 
     TokRBracket       | 
     TokSemiColon      | 
+    TokColon          |
     TokIdent String   | 
     TokBoolLit Bool   | 
     TokStrLit String  | 
@@ -27,6 +28,7 @@ instance Show Token where
   show TokLBracket      = "left bracket"
   show TokRBracket      = "right bracket"
   show TokSemiColon     = "semicolon"
+  show TokColon         = "colon"
   show (TokIdent ident) = "identifier " ++ show ident
   show (TokBoolLit _)   = "boolean literal"
   show (TokStrLit _)    = "string literal"

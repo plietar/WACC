@@ -54,6 +54,7 @@ basicBlocks ir = Graph.mkGraph cfgNodes (map (\e -> Graph.toLEdge e ()) cfgEdges
     targets IJump{..}     _   = Just [labeledBlocks ! iLabel]
     targets ICondJump{..} idx = Just [idx + 1, labeledBlocks ! iLabel]
     targets IReturn{..}   _   = Just []
-    targets IExit{..}     _   = Just []
+    targets ICall{ iLabel = NamedLabel "exit" } _
+      = Just []
     targets _             _   = Nothing
 

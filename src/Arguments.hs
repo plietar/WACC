@@ -22,7 +22,8 @@ data OutputType = OutputTokens
 
 data Arguments = Arguments
                  { sourceFile :: String
-                 , outputType :: OutputType }
+                 , outputType :: OutputType
+                 , outputFile :: Maybe String }
                  deriving Show
 
 argumentList = Arguments
@@ -42,6 +43,7 @@ argumentList = Arguments
                     <|> flag' OutputDotColouring (long "dot-colouring")
 #endif
                     <|> pure OutputASM)
+               <*> (optional (strOption (short 'o' <> metavar "OUTPUT")))
 
 argumentInfo = info (helper <*> argumentList) fullDesc
 

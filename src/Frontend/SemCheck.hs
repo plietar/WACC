@@ -248,23 +248,24 @@ checkAssignRHS (_, RHSPairElem pairElem) context = do
 checkAssignRHS (_, RHSCall fname args) context = do
   (expectedArgsType, returnType) <- getFunction fname context
   args' <- mapM (\e -> checkExpr e context) args
-  checkArgs 0 (length expectedArgsType) expectedArgsType (map fst args')
-  return (returnType, RHSCall fname args')
 
-  where checkArgs :: Int -> Int -> [Type] -> [Type] -> WACCResult ()
-        checkArgs _ _ [] [] = OK ()
-        checkArgs n expected (a1:as1) (a2:as2)
-          | compatibleType a1 a2 = checkArgs (n+1) expected as1 as2
-          | otherwise = semanticError ("Expected type " ++ show a2 
-                                    ++ " but got type " ++ show a1 
-                                    ++ " for argument " ++ show (n + 1)
-                                    ++ " of call to function "
-                                    ++ show fname)
-        checkArgs n expected _ _
-          = semanticError ("Wrong number of arguments in call"
-                        ++ " to function \"" ++ fname ++ "\"."
-                        ++ " Expected " ++ show expected
-                        ++ " but got " ++ show n)
+  let checkArgs :: Int -> [Type] -> [Type] -> WACCResult ()
+      checkArgs _ [] [] = OK ()
+      checkArgs n (a1:as1) (a2:as2)
+        | compatibleType a1 a2 = checkArgs (n+1) as1 as2
+        | otherwise = semanticError ("Expected type " ++ show a2 
+                                  ++ " but got type " ++ show a1 
+                                  ++ " for argument " ++ show (n + 1)
+                                  ++ " of call to function "
+                                  ++ show fname)
+      checkArgs n _ _
+        = semanticError ("Wrong number of arguments in call"
+                      ++ " to function \"" ++ fname ++ "\"."
+                      ++ " Expected " ++ show (length expectedArgsType)
+                      ++ " but got " ++ show (length args))
+
+  checkArgs 0 expectedArgsType (map fst args')
+  return (returnType, RHSCall fname args')
 
 
 checkBlock :: Annotated Block SpanA -> Context -> WACCResult (Annotated Block TypeA)
@@ -277,6 +278,13 @@ checkBlock (_, Block stmts) parent = do
 
   return ((alwaysReturns, locals), Block stmts')
 
+checkCaseArm :: Type -> Annotated CaseArm SpanA -> Context -> WACCResult (Annotated CaseArm TypeA)
+checkCaseArm expectedType (_,  CaseArm l b) parent = do
+  b' <- checkBlock b parent
+  let litType = checkLiteral l
+  when (not (compatibleType expectedType litType))
+       ((semanticError ("Wrong type")))
+  return (litType, CaseArm l b')
 
 checkPosStmt :: Annotated Stmt SpanA -> ContextState (Annotated Stmt TypeA)
 checkPosStmt stmt@(((line,column,fname),_), _)
@@ -340,16 +348,27 @@ checkStmt (_, StmtPrint expr ln) = do
   expr' <- lift $ checkExpr expr context
   return (False, StmtPrint expr' ln)
 
-checkStmt (_, StmtIf predicate b1 b2) = do
+checkStmt (_, StmtIf predicate b1 maybeB2) = do
   context <- get
   predicate'@(predicateType, _) <- lift $ checkExpr predicate context
   when (not (compatibleType TyBool predicateType))
        (lift (semanticError ("Condition cannot be of type " ++ show predicateType)))
-  b1'@((al1,_),_) <- lift $ checkBlock b1 context
-  b2'@((al2,_),_) <- lift $ checkBlock b2 context
+  case maybeB2 of 
+    Just b2 -> do
+      b1'@((al1,_),_) <- lift $ checkBlock b1 context
+      b2'@((al2,_),_) <- lift $ checkBlock b2 context
+      let al = al1 && al2
+      return (al, StmtIf predicate' b1' (Just b2'))
 
-  let al = al1 && al2
-  return (al, StmtIf predicate' b1' b2')
+    Nothing -> do
+      b <- lift $ checkBlock b1 context
+      return (False, StmtIf predicate' b Nothing)
+
+checkStmt (_, StmtSwitch value cs) = do
+  context <- get
+  value'@(valueType, _) <- lift $ checkExpr value context
+  cs' <- lift $ mapM (\c -> checkCaseArm valueType c context) cs
+  return (False, StmtSwitch value' cs')
 
 checkStmt (_, StmtWhile predicate block) = do
   context <- get

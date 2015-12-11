@@ -1,4 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE CPP #-}
 
 module Main where
@@ -11,8 +10,14 @@ import CodeGen
 import Arguments
 import ARMGen
 import OutputFormatting
+import Features
+
+import Data.List (zipWith4)
+import Data.Maybe (fromMaybe)
+import qualified Data.Set as Set
 
 import Control.Applicative
+import Control.Monad
 
 import RegisterAllocation.ControlFlow
 import RegisterAllocation.DataFlow
@@ -23,7 +28,6 @@ import System.FilePath.Posix
 
 import Data.Graph.Inductive.PatriciaTree (Gr)
 import qualified Data.Graph.Inductive.Graph as Graph
-
 
 exitCodeForResult :: WACCResult a -> ExitCode
 exitCodeForResult (OK _)                  = ExitSuccess
@@ -54,40 +58,50 @@ compile filename contents output
     tokens    = waccLexer  filename contents
     ast       = waccParser filename =<< tokens
     typedAst  = waccSemCheck        =<< ast
-    ir        = genProgram <$> typedAst
+    codeGen   = genProgram <$> typedAst
+    ir        = fst <$> codeGen
+    irFeatures = snd <$> codeGen
     cfg       = map (deadCodeElimination . basicBlocks) <$> ir :: WACCResult [Gr [IR] ()]
     flow      = map blockDataFlow <$> cfg
-    live      = zipWith liveVariables <$> cfg <*> flow
-    rig       = map interferenceGraph <$> live :: WACCResult [Gr Var ()]
-    colouring = sequence <$> map (\g -> colourGraph g (fmap Var [4..12])) <$> rig >>= \case
-                Just c  -> OK c
-                Nothing -> codegenError "Graph Colouring failed"
-    cfgFinal  = zipWith (\c g -> Graph.nmap (applyColouring c) g)
-                    <$> colouring <*> cfg
+    allVars   = map allVariables <$> cfg
+    live      = map liveVariables <$> flow
+    rig       = zipWith interferenceGraph <$> allVars <*> live :: WACCResult [Gr Var ()]
+    moves     = zipWith movesGraph <$> allVars <*> cfg
+
+    allocation = join (sequence <$> (zipWith4 allocateRegisters <$> allVars <*> live <*> rig <*> moves))
+    cfgFinal  = map fst <$> allocation
+    colouring = map snd <$> allocation
 
     irFinal   = concatMap (concatMap snd . Graph.labNodes) <$> cfgFinal
 
-    armWriter = genARM <$> irFinal :: WACCResult ARMWriter
-    feat      = mergeFeatures <$> features <$> armWriter :: WACCResult ([String], [String])
-    asmSimple = concat <$> sequence [dataSegment 
-                       <$> armWriter, fst <$> feat, textSegment 
-                       <$> armWriter, snd <$> feat] :: WACCResult [String]
+    armWriter = genARM <$> irFinal
+    armFeatures = ARMGen.features <$> armWriter
+    feat      = genFeatures <$> (Set.union <$> armFeatures <*> irFeatures)
+    asmSimple = concat <$> sequence
+                             [ dataSegment <$> armWriter
+                             , fst <$> feat
+                             , textSegment <$> armWriter
+                             , snd <$> feat] :: WACCResult [String]
     asm       = map tabbedInstruction <$> asmSimple
-   
 
 main :: IO ()
 main = do
   args <- waccArguments
 
   let filename = sourceFile args
-  let outputFile = dropExtension (takeFileName filename) <.> "s"
+  let defaultOutputFile = dropExtension (takeFileName filename) <.> "s"
+
+  let outFile = fromMaybe defaultOutputFile (outputFile args)
+
+  let out = if outFile == "-"
+            then putStr
+            else writeFile outFile
 
   contents <- readFile filename
   
   let result = compile filename contents (outputType args)
   case result of
-    OK output -> writeFile outputFile (unlines output)
---    OK output -> putStr (unlines output)
+    OK output -> out (unlines output)
     Error kind msg -> do
       putStrLn ("Error " ++ show kind)
       putStr (unlines (reverse msg))
