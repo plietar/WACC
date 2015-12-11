@@ -200,18 +200,19 @@ genExpr (_, ExprIndexingElem ((t, ts), IndexingElem ident exprs)) = do
   return outVar
 
 -- Read from Frame
-genFrameRead :: Type -> String -> CodeGen Var
-genFrameRead ty ident = gets (getFrameLocal ident . frame)
+genFrameRead :: String -> CodeGen Var
+genFrameRead ident = gets (getFrameLocal ident . frame)
 
--- Read from Array
-genArrayRead :: Type -> Var -> Annotated Expr TypeA -> CodeGen Var
-genArrayRead elemTy arrayVar indexExpr = do
+-- Read from Tuple/Array
+genIndexingRead :: Var -> (Type, Annotated Expr TypeA) -> CodeGen Var
+genIndexingRead arrayVar (elemTy@(TyArray t), indexExpr) = do
+  
+  
   emitFeature CheckArrayBounds
-
-  outVar <- allocateTemp
+  outVar         <- allocateTemp
   arrayOffsetVar <- allocateTemp 
-  offsetedArray <- allocateTemp
-  indexVar <- genExpr indexExpr
+  offsetedArray  <- allocateTemp
+  indexVar       <- genExpr indexExpr
 
   genCall0 "p_check_array_bounds" [indexVar, arrayVar]
   emit [ ILiteral { iDest    = arrayOffsetVar
