@@ -118,20 +118,29 @@ checkIndexingElem (_, IndexingElem varname exprs) context = do
   ty <- checkIndexingElem' baseTy exprs'
   return (ty, IndexingElem varname exprs')
 
-checkIndexingElem' :: Type -> [Annotated Expr TypeA] -> WACCResult Type
-checkIndexingElem' baseTy exprs@((ty, e):es) = do
-  if compatibleType TyInt ty
-  then 
-       case baseTy of
-         TyTuple ts -> if checkIfExprIsLiteralInt e 
-                       then checkIndexingElem' (ts !! exprLitToInt e) es
-                       else semanticError ("Cannot index tuple with type " ++ show ty)
-         TyArray t  -> checkIndexingElem' t es   
-         TyAny     -> OK TyAny
-       else
-         semanticError("Cannot index variable with type " ++ show ty)
+checkIndexingElem' :: Type -> [Annotated Expr TypeA] -> WACCResult (Type, [Type])
+checkIndexingElem' baseType@(TyTuple ts) exprs@((ty, e):es) 
+  | compatible && literal && bounded = do
+      (elemType, baseTypes) <- checkIndexingElem' (ts !! exprLitToInt e) es 
+      return (elemType, baseType : baseTypes)
+  | compatible && literal            = semanticError("Cannot index " 
+                                         ++ show (exprLitToInt e) ++ " out of bounds in tuple.")
+  | otherwise                        = semanticError("Cannot index a variable of type " ++ show ty) 
+    where
+      compatible = compatibleType TyInt ty
+      literal    = checkIfExprIsLiteralInt e
+      bounded    = -1 < exprLitToInt e && exprLitToInt e < length ts
 
-checkIndexingElem' t [] = return t
+checkIndexingElem' baseType@(TyArray t) exprs@((ty, e):es)
+  | compatible   = do 
+     (elemType, baseTypes) <- checkIndexingElem' t es
+     return (elemType, baseType : baseTypes)
+  | otherwise    = semanticError ("Cannot index a variable with variable of type " ++ show ty)
+    where 
+      compatible = compatibleType TyInt ty
+      
+checkIndexingElem' t [] = OK (t, [])
+checkIndexingElem' t _  = semanticError("Type " ++ show t ++ " not indexable")
  
 checkIfExprIsLiteralInt :: Expr a -> Bool
 checkIfExprIsLiteralInt (ExprLit (LitInt _)) = True
