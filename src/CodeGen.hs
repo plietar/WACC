@@ -393,15 +393,17 @@ genStmt (_, StmtRead lhs@(ty, _)) = do
   v <- genCall1 fname []
   genAssign lhs v
 
-genStmt (_, StmtIfNoElse condition thenBlock) = do
-  thenLabel <- allocateLabel
-  endLabel <- allocateLabel
+--genStmt (_, StmtIfNoElse condition thenBlock) = do
+--  endLabel <- allocateLabel
+--  thenLabel <- allocateLabel
 
-  condVar <- genExpr condition
-  emit [ICondJump { iLabel = thenLabel, iValue = condVar }]
-  emit [ILabel { iLabel = thenLabel }]
-  genBlock thenBlock
-  emit [ILabel { iLabel = endLabel }]
+--  condVar <- genExpr condition
+
+--  emit [ICondJump { iLabel = thenLabel, iValue = condVar }
+--       , ILabel { iLabel = thenLabel }
+--       , IJump { iLabel = endLabel }]
+--  genBlock thenBlock
+--  emit [ILabel { iLabel = endLabel }]
 
 genStmt (_, StmtIf condition thenBlock elseBlock) = do
   thenLabel <- allocateLabel
@@ -409,9 +411,14 @@ genStmt (_, StmtIf condition thenBlock elseBlock) = do
 
   condVar <- genExpr condition
   emit [ICondJump { iLabel = thenLabel, iValue = condVar }]
-  genBlock elseBlock
-  emit [ IJump { iLabel = endLabel }
-       , ILabel { iLabel = thenLabel }]
+
+  case elseBlock of 
+    Just b -> genBlock b
+            
+    Nothing -> return ()
+
+  emit [IJump { iLabel = endLabel }
+       , ILabel { iLabel = thenLabel }] 
   genBlock thenBlock
   emit [ILabel { iLabel = endLabel }]
 
@@ -443,7 +450,7 @@ genCaseArm endLabel e (_, CaseArm l b) = do
   nextCase <- allocateLabel
 
   emit [ILiteral { iDest = literalVar, iLiteral = l}
-       , IBinOp { iBinOp = BinOpNE, iDest = condVar, iLeft = e, iRight = literalVar }]
+       , IBinOp { iBinOp = BinOpNE, iDest = condVar, iLeft = e, iRight = literalVar }
        , ICondJump { iLabel = nextCase, iValue = condVar }]
   genBlock b
   emit [IJump {iLabel = endLabel}
