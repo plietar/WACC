@@ -63,11 +63,19 @@ data PairElem a
 
 data PairSide = PairFst | PairSnd
 
+data Label = NamedLabel String | UnnamedLabel Int
+  deriving (Ord, Eq)
+
+instance Show Label where
+  show (UnnamedLabel i) = "L" ++ show i
+  show (NamedLabel   n) = n
+
 data Literal = LitInt Integer
              | LitBool Bool
              | LitChar Char
              | LitString String
              | LitNull
+             | LitLabel Label
   deriving Show
 
 data UnOp = UnOpNot
@@ -135,7 +143,7 @@ instance Show PairSide where
   show PairSnd = "snd"
 
 instance Show FuncName where
-  show MainFunc = "main"
+  show MainFunc = "wacc_main"
   show (FuncName name) = "f_" ++ name
 
 

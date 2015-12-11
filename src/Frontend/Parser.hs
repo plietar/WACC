@@ -357,7 +357,7 @@ decl = (wrapSpan DeclFuncDef <$> function) <|>
 mainFunc :: Parser (Annotated FuncDef SpanA)
 mainFunc = spanned $ do
   b <- block
-  return (FuncDef TyVoid False MainFunc [] b)
+  return (FuncDef TyVoid True MainFunc [] b)
 
 program :: Parser (Annotated Program SpanA)
 program = spanned $ do

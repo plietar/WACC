@@ -31,6 +31,17 @@ genDecl :: Annotated Decl TypeA -> RWS () ([[IR]], Set Feature) [Label] ()
 genDecl (_, DeclFuncDef f) = genFunction f
 genDecl (_, DeclFFIFunc f) = return ()
 
+genYield :: Var -> CodeGen ()
+genYield value = do
+  continuationLabel <- allocateLabel
+  continuationVar <- allocateTemp
+
+  emit [ IMove { iDest = Reg 0, iValue = GeneratorState }
+       , IMove { iDest = Reg 1, iValue = value }
+       , ILiteral { iDest = continuationVar, iLiteral = LitLabel continuationLabel }
+       , IYield { iSavedRegs = calleeSaveRegs }
+       , ILabel { iLabel = continuationLabel } ]
+
 -- Functions
 genFunction :: Annotated FuncDef TypeA -> RWS () ([[IR]], Set Feature) [Label] ()
 genFunction (_, FuncDef _ async fname params body) = do
@@ -43,15 +54,17 @@ genFunction (_, FuncDef _ async fname params body) = do
           frame = emptyFrame
         }
 
-        argRegCount = length argPassingRegs
+        argRegSkip = if async then 1 else 0
+        argRegCount = length argPassingRegs - argRegSkip
         (regNames, stackNames) = splitAt argRegCount (map snd params)
-        argZip = (zip regNames argPassingRegs)
+        argZip = (zip regNames (drop argRegSkip argPassingRegs))
 
         generation = do
           emit [ ILabel { iLabel = NamedLabel (show fname) }
                , IFunctionBegin { iArgs = map snd argZip, iSavedRegs = calleeSaveRegs }
                , IFrameAllocate { iSize = 0 } ] -- Fixed later once colouring / spilling is done
 
+          {-
           regArgsMap <- forM argZip $ \(name, r) -> do
             v <- allocateTemp
             emit [ IMove { iDest = v, iValue = r } ]
@@ -62,13 +75,41 @@ genFunction (_, FuncDef _ async fname params body) = do
             emit [ IFrameRead { iDest = v, iOffset = offset, iType = TyInt } ]
             return (name, v)
 
+          setupFrame (Map.fromList (regArgsMap ++ stackArgsMap))
+
+          -}
+
           case fname of
             MainFunc -> do
               genCall0 "p_initialise" []
               emitFeature Initialise
             _ -> return ()
 
-          setupFrame (Map.fromList (regArgsMap ++ stackArgsMap))
+          when async $ do
+            emit [ IMove { iDest = GeneratorState, iValue = Reg 0 } ]
+
+            startLabel <- allocateLabel
+            emit [ ICompare { iValue = GeneratorState, iOperand = OperandLit 0 }
+                 , ICondJump { iCondition = CondEQ, iLabel = startLabel } ]
+
+            continuationVar <- allocateTemp
+            emit [ IHeapRead { iHeapVar = GeneratorState
+                             , iDest = continuationVar
+                             , iOperand = OperandLit 0
+                             , iType = TyInt }
+                 , IJumpReg { iValue = continuationVar } ]
+
+            emit [ ILabel { iLabel = startLabel } ]
+
+            sizeVar <- allocateTemp
+            emit [ ILiteral { iDest = sizeVar, iLiteral = LitInt 4 } ]
+            stateVar <- genCall1 "malloc" [sizeVar]
+            emit [ IMove { iDest = GeneratorState, iValue = stateVar } ]
+
+            zeroVar <- allocateTemp
+            emit [ ILiteral { iDest = zeroVar, iLiteral = LitInt 0 } ]
+
+            genYield zeroVar
 
           genBlock body
 
@@ -427,6 +468,36 @@ genStmt (_, StmtScope block) = genBlock block
 genStmt (_, StmtCall name exprs) = do
   argVars <- mapM genExpr exprs
   genCall0 name argVars
+
+genStmt (_, StmtAwait name exprs) = do
+  stateVar <- allocateTemp
+  resultVar <- allocateTemp
+
+  againLabel <- allocateLabel
+  endLabel <- allocateLabel
+
+  argVars <- mapM genExpr exprs
+
+  nullVar <- allocateTemp
+  emit [ ILiteral { iDest = nullVar, iLiteral = LitInt 0 } ]
+  (s, r) <- genCall2 name (nullVar : argVars)
+  emit [ IMove { iDest = stateVar, iValue = s } ]
+  emit [ IMove { iDest = resultVar, iValue = r } ]
+
+  emit [ ILabel { iLabel = againLabel } ]
+
+  emit [ ICompare { iValue = stateVar, iOperand = OperandLit 0 } ]
+  emit [ ICondJump { iLabel = endLabel, iCondition = CondEQ } ]
+
+  genYield resultVar
+
+  (s, r) <- genCall2 name [stateVar]
+  emit [ IMove { iDest = stateVar, iValue = s } ]
+  emit [ IMove { iDest = resultVar, iValue = r } ]
+  emit [ IJump { iLabel = againLabel } ]
+
+  emit [ ILabel { iLabel = endLabel } ]
+
 
 -- Block code generation
 genBlock :: Annotated Block TypeA -> CodeGen ()

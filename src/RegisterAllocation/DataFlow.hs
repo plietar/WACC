@@ -136,6 +136,7 @@ irDef IMove{..}          = Set.singleton iDest
 irDef ICall{..}          = Set.fromList (callerSaveRegs)
 irDef IFrameRead{..}     = Set.singleton iDest
 irDef IHeapRead{..}      = Set.singleton iDest
+irDef IYield{..}         = Set.empty
 irDef _                  = Set.empty
 
 irUse :: IR -> Set Var
@@ -159,6 +160,7 @@ irUse ICompare{..}
   = case iOperand of
     OperandVar v _ -> Set.fromList [ iValue, v ]
     OperandLit x -> Set.fromList [ iValue ]
+irUse IJumpReg{..}      = Set.singleton iValue
 
 irUse _                  = Set.empty
 

@@ -4,6 +4,7 @@
 module RegisterAllocation.ControlFlow where
 
 import CodeGenTypes
+import Common.AST
 
 import Data.Map (Map,(!))
 import qualified Data.Map as Map
@@ -54,6 +55,7 @@ basicBlocks ir = Graph.mkGraph cfgNodes (map (\e -> Graph.toLEdge e ()) cfgEdges
     targets IJump{..}     _   = Just [labeledBlocks ! iLabel]
     targets ICondJump{..} idx = Just [idx + 1, labeledBlocks ! iLabel]
     targets IReturn{..}   _   = Just []
+    targets IJumpReg{..}   _   = Just []
     targets ICall{ iLabel = NamedLabel "exit" } _
       = Just []
     targets _             _   = Nothing

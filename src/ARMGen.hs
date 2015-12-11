@@ -67,9 +67,11 @@ genARMInstruction (ILiteral { iDest = dest, iLiteral = LitBool False } )
   = emit ["MOV " ++ show dest ++ ", #0"]
 genARMInstruction (ILiteral { iDest = dest, iLiteral = LitChar chr } ) 
   = emit ["MOV " ++ show dest ++ ", #" ++ (show (ord chr))]
-genARMInstruction (ILiteral { iDest = dest, iLiteral = LitString str  } ) = do
+genARMInstruction (ILiteral { iDest = dest, iLiteral = LitString str } ) = do
   message <- emitLiteral str
   emit ["LDR " ++ show dest ++ ", =" ++ message]
+genARMInstruction (ILiteral { iDest = dest, iLiteral = LitLabel lab } ) = do
+  emit ["LDR " ++ show dest ++ ", =" ++ show lab]
 
 --BinOp
 genARMInstruction (IBinOp { iBinOp = op, iDest = dest,
@@ -216,6 +218,18 @@ genARMInstruction IReturn{..} = do
   unless (elem lrReg iSavedRegs)
          (emit ["BX lr"])
   emit [ ".ltorg" ]
+
+genARMInstruction IJumpReg{..}
+  = emit [ "BX " ++ show iValue ]
+
+genARMInstruction IYield{..} = do
+  let popRegs = map (\x -> if x == lrReg then pcReg else x) iSavedRegs
+  unless (null popRegs)
+         (emit [ "POP {" ++ intercalate "," (map show popRegs) ++ "}" ])
+  unless (elem lrReg iSavedRegs)
+         (emit ["BX lr"])
+
+genARMInstruction x = error (show x)
 
 strInstr :: Type -> String
 strInstr TyBool = "STRB"

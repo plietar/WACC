@@ -13,7 +13,7 @@ import Data.Maybe
 import Data.Set(Set)
 import qualified Data.Set as Set
 
-data Var = Local Int | Temp Int | Reg Int | Spilled Int Var
+data Var = Local Int | Temp Int | Reg Int | Spilled Int Var | GeneratorState
   deriving (Ord, Eq)
 
 {-
@@ -56,18 +56,12 @@ instance Show Var where
   show (Temp n)      = "temp_" ++ show n
   show (Spilled n _) = "spill_" ++ show n
   show (Reg n)       = "r" ++ show n
-
-data Label = NamedLabel String | UnnamedLabel Int
-  deriving (Ord, Eq)
+  show GeneratorState = "generator"
 
 data Operand = OperandVar Var Int | OperandLit Int
   deriving (Show)
 
 data Condition = CondEQ | CondNE
-
-instance Show Label where
-  show (UnnamedLabel i) = "L" ++ show i
-  show (NamedLabel   n) = n
 
 instance Show Condition where
   show CondEQ = "EQ"
@@ -86,19 +80,28 @@ data IR
   | ICompare { iValue :: Var, iOperand :: Operand }
   | ICondJump { iLabel :: Label, iCondition :: Condition }
   | IJump { iLabel :: Label }
+  | IJumpReg { iValue :: Var }
   | ICall { iLabel :: Label, iArgs :: [Var] }
   | ILabel { iLabel :: Label }
 
   | IFrameAllocate { iSize :: Int }
   | IFrameFree { iSize :: Int }
-  | IFrameRead { iOffset :: Int, iDest :: Var, iType :: Type }
-  | IFrameWrite { iOffset :: Int, iValue :: Var, iType :: Type }
+
+  | IFrameRead { iOffset :: Int
+               , iDest :: Var
+               , iType :: Type }
+
+  | IFrameWrite { iOffset :: Int
+                , iValue :: Var
+                , iType :: Type }
 
   | IHeapRead { iHeapVar :: Var, iDest :: Var, iOperand :: Operand, iType :: Type }
   | IHeapWrite { iHeapVar :: Var, iValue :: Var, iOperand :: Operand, iType :: Type }
 
   | IPushArg { iValue :: Var }
   | IClearArgs { iSize :: Int }
+
+  | IYield { iSavedRegs :: [Var] }
 
   deriving Show
 

@@ -112,6 +112,7 @@ allocateRegisters allVars cfg rig moves = maybe (codegenError "Graph Colouring f
 
       fixSavedRegisters IFunctionBegin{..} = IFunctionBegin { iArgs = iArgs, iSavedRegs = savedRegs }
       fixSavedRegisters IReturn{..}        = IReturn { iArgs = iArgs, iSavedRegs = savedRegs }
+      fixSavedRegisters IYield{..}         = IYield { iSavedRegs = savedRegs }
       fixSavedRegisters ir = ir
 
       fixFrameSize ir@IFrameAllocate{..} = ir { iSize   = iSize + frameSize }
@@ -343,6 +344,9 @@ mapIR colouring ICompare{..}
     operand = case iOperand of
       OperandLit x -> OperandLit x
       OperandVar v s -> OperandVar (colouring v) s
+
+mapIR colouring IJumpReg{..}
+  = IJumpReg { iValue = colouring iValue }
 
 -- Base Case
 mapIR colouring x = x
