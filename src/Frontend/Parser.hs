@@ -229,13 +229,6 @@ ifStmt = spanned $ do
   _ <- keyword "fi"
   return (StmtIf i t e)
 
-ifNoElseStmt :: Parser (Annotated Stmt SpanA)
-ifNoElseStmt = spanned $ do
-  _ <- keyword "if"
-  i <- expr
-  t <- block
-  _ <- keyword "fi"
-  return (StmtIfNoElse i t)
 
 switchStmt :: Parser (Annotated Stmt SpanA)
 switchStmt = spanned $ do
