@@ -348,24 +348,21 @@ checkStmt (_, StmtPrint expr ln) = do
   expr' <- lift $ checkExpr expr context
   return (False, StmtPrint expr' ln)
 
-checkStmt (_, StmtIf predicate b1 b2) = do
+checkStmt (_, StmtIf predicate b1 maybeB2) = do
   context <- get
   predicate'@(predicateType, _) <- lift $ checkExpr predicate context
   when (not (compatibleType TyBool predicateType))
        (lift (semanticError ("Condition cannot be of type " ++ show predicateType)))
-  b1'@((al1,_),_) <- lift $ checkBlock b1 context
-  b2'@((al2,_),_) <- lift $ checkBlock b2 context
+  case maybeB2 of 
+    Just b2 -> do
+      b1'@((al1,_),_) <- lift $ checkBlock b1 context
+      b2'@((al2,_),_) <- lift $ checkBlock b2 context
+      let al = al1 && al2
+      return (al, StmtIf predicate' b1' (Just b2'))
 
-  let al = al1 && al2
-  return (al, StmtIf predicate' b1' b2')
-
-checkStmt (_, StmtIfNoElse predicate b) = do
-  context <- get
-  predicate'@(predicateType, _) <- lift $ checkExpr predicate context
-  when (not (compatibleType TyBool predicateType))
-       (lift (semanticError ("Condition cannot be of type " ++ show predicateType)))
-  b@((al,_),_) <- lift $ checkBlock b context
-  return (al, StmtIfNoElse predicate' b)
+    Nothing -> do
+      b <- lift $ checkBlock b1 context
+      return (False, StmtIf predicate' b Nothing)
 
 checkStmt (_, StmtSwitch value cs) = do
   context <- get
