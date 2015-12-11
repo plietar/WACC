@@ -136,15 +136,11 @@ instance Show Type where
   show TyInt        = "int"
   show TyBool       = "bool"
   show TyChar       = "char"
-  show (TyPair f s) = "pair(" ++ show f ++ "," ++ show s ++ ")"
   show (TyTuple ts) = "tuple(" ++ intercalate ", " (map show ts) ++ ")"
   show (TyArray t)  = show t ++ "[]"
   show TyAny        = "any"
   show TyVoid       = "void"
-
-instance Show PairSide where
-  show PairFst = "fst"
-  show PairSnd = "snd"
+  show TyNull       = "null"
 
 instance Show FuncName where
   show MainFunc = "main"
@@ -163,5 +159,4 @@ instance Annotation TypeA where
   type Ann TypeA Expr         = Type
   type Ann TypeA AssignLHS    = Type
   type Ann TypeA AssignRHS    = Type
-  type Ann TypeA PairElem     = (Type, Type) -- type of the element, type of the entire tuple
-  type Ann TypeA IndexingElem = Type
+  type Ann TypeA IndexingElem = (Type, [Type])
