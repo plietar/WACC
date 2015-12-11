@@ -284,14 +284,27 @@ pairOffset PairFst (TyPair _ _)= 0
 pairOffset PairSnd (TyPair t _)  = typeSize t
 
 
+-- Garbage Collector Type Information Methods
+genGCTypeInfo :: Type -> CodeGen Var
+genGCTypeInfo t = do
+  emitFeature (GCTypeInformation t)
+  let label = mangle t
+  typeInfoVar <- allocateTemp
+  emit [ ILiteral { iDest = typeInfoVar, iLiteral = LitLabel (mangle t) } ]
+  return typeInfoVar
+
+
+
+
+
 -- RHS Expression Assignment
 genRHS :: Annotated AssignRHS TypeA -> CodeGen Var
 genRHS (_, RHSExpr expr) = genExpr expr
-genRHS (TyArray elemTy, RHSArrayLit exprs) = do
+genRHS (t@(TyArray elemTy), RHSArrayLit exprs) = do
   sizeVar <- allocateTemp
+  typeInfoVar <- genGCTypeInfo t
   emit [ ILiteral { iDest = sizeVar, iLiteral = LitInt (toInteger size) } ]
-  arrayVar <- genCall1 "malloc" [sizeVar]
-
+  arrayVar <- genCall1 "GCAlloc" [sizeVar, typeInfoVar]
   arrayLen <- allocateTemp
   emit [ ILiteral { iDest = arrayLen, iLiteral = LitInt (toInteger (length exprs)) }
        , IHeapWrite { iHeapVar = arrayVar
@@ -315,9 +328,9 @@ genRHS (TyArray elemTy, RHSArrayLit exprs) = do
 
 genRHS (t@(TyPair t1 t2), RHSNewPair fstExpr sndExpr) = do
   sizeVar <- allocateTemp
+  typeInfoVar <- genGCTypeInfo t
   emit [ ILiteral { iDest = sizeVar, iLiteral = LitInt 8 }]
-  pairVar <- genCall1 "malloc" [sizeVar]
-
+  pairVar <- genCall1 "GCAlloc" [sizeVar, typeInfoVar]
   fstVar <- genExpr fstExpr
   emit [ IHeapWrite { iHeapVar = pairVar, iValue = fstVar, iOperand = OperandLit (pairOffset PairFst t), iType = t1 } ]
 
