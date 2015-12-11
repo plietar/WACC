@@ -277,12 +277,6 @@ typeShift TyChar = 0
 typeShift TyBool = 0
 typeShift _      = 2
 
--- Offset for a pair 
-pairOffset :: PairSide -> Type -> Int
-pairOffset PairFst (TyPair _ _)= 0
-pairOffset PairSnd (TyPair t _)  = typeSize t
-
-
 -- RHS Expression Assignment
 genRHS :: Annotated AssignRHS TypeA -> CodeGen Var
 genRHS (_, RHSExpr expr) = genExpr expr
@@ -312,17 +306,13 @@ genRHS (TyArray elemTy, RHSArrayLit exprs) = do
                  else 0
       elemSize = typeSize elemTy
 
-genRHS (t@(TyPair t1 t2), RHSNewPair fstExpr sndExpr) = do
-  sizeVar <- allocateTemp
-  emit [ ILiteral { iDest = sizeVar, iLiteral = LitInt 8 }]
-  pairVar <- genCall1 "malloc" [sizeVar]
-
 genRHS (TyTuple types, RHSNewTuple exprs) = do
-  tupleVar <- allocateVar
-  tell [ IArrayAllocate { iDest = tupleVar, iSize = length exprs * 4 }]
+  sizeVar <- allocateTemp
+  emit [ ILiteral { iDest = sizeVar, iLiteral = LitInt (toInteger (length exprs * 4)) }]
+  tupleVar <- genCall1 "malloc" [sizeVar]
   forM (zip exprs [0..]) $ \(expr, index) -> do
     elemVar <- genExpr expr  
-    tell [ IHeapWrite  { iHeapVar = tupleVar
+    emit [ IHeapWrite  { iHeapVar = tupleVar
                        , iValue = elemVar
                        , iOperand = OperandLit (index * 4)
                        , iType = types !! index } ]
