@@ -228,12 +228,8 @@ checkAssignLHS (_, LHSVar varname) context = do
   ty <- getVariable varname context
   return (ty, LHSVar varname)
 
-checkAssignLHS (_, LHSPairElem pairElem) context = do
-  pairElem'@((ty, _), _) <- checkPairElem pairElem context
-  return (ty, LHSPairElem pairElem')
-
 checkAssignLHS (_, LHSIndexingElem indexElem) context = do
-  indexElem'@(ty, _) <- checkIndexingElem indexElem context
+  indexElem'@((ty, tys), _) <- checkIndexingElem indexElem context
   return (ty, LHSIndexingElem indexElem')
 
 checkAssignRHS :: Annotated AssignRHS SpanA -> Context -> WACCResult (Annotated AssignRHS TypeA)
@@ -245,15 +241,6 @@ checkAssignRHS (_, RHSArrayLit exprs) context = do
   exprs' <- mapM (\e -> checkExpr e context) exprs
   innerType <- foldM mergeTypes TyAny (map fst exprs')
   return (TyArray innerType, RHSArrayLit exprs')
-
-checkAssignRHS (_, RHSNewPair e1 e2) context = do
-  e1'@(t1,_) <- checkExpr e1 context
-  e2'@(t2,_) <- checkExpr e2 context
-  return (TyPair t1 t2, RHSNewPair e1' e2')
-
-checkAssignRHS (_, RHSPairElem pairElem) context = do
-  pairElem'@((ty, _), _) <- checkPairElem pairElem context
-  return (ty, RHSPairElem pairElem')
 
 checkAssignRHS (_, RHSNewTuple exprs) context = do
   exprs' <- mapM (\e -> checkExpr e context) exprs
