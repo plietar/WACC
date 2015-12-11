@@ -253,6 +253,7 @@ genAssign (_, LHSIndexingElem ((elemTy, ts), IndexingElem ident exprs)) valueVar
 genIndexingWrite :: Type -> Annotated Expr TypeA -> Var -> Var -> CodeGen ()
 genIndexingWrite (TyArray elemTy) writeIndexExpr subIndexVar valueVar = do
   
+  emitFeature CheckArrayBounds
   offsetedBase <- allocateTemp
   writeIndexVar <- genExpr writeIndexExpr
   arrayOffsetVar <- allocateTemp
