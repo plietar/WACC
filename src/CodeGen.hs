@@ -430,29 +430,25 @@ genStmt (_, StmtWhile condition block ) = do
 
 genStmt (_, StmtSwitch expr cs) = do
   e <- genExpr expr
-  genCaseArm e cs 
+  endLabel <- allocateLabel
+  mapM (genCaseArm endLabel e) cs
+  emit [ILabel {iLabel = endLabel }] 
 
 genStmt (_, StmtScope block) = genBlock block
 
-genCaseArm :: Var -> [Annotated CaseArm TypeA] -> CodeGen ()
-genCaseArm _ [] = do
-  endLabel <- allocateLabel
-  emit [ILabel {iLabel = endLabel}]
-
-genCaseArm e ((_, CaseArm l b):cs) = do
+genCaseArm :: Label -> Var -> Annotated CaseArm TypeA -> CodeGen ()
+genCaseArm endLabel e (_, CaseArm l b) = do
   condVar <- allocateTemp
   literalVar <- allocateTemp
-  endLabel <- allocateLabel
+  nextCase <- allocateLabel
 
-  emit [ILiteral { iDest = literalVar, iLiteral = l}]
-  
-  emit [IBinOp { iBinOp = BinOpNE, iDest = condVar, iLeft = e, iRight = literalVar } ]
-
-  emit [ICondJump { iLabel = endLabel, iValue = condVar}]
+  emit [ILiteral { iDest = literalVar, iLiteral = l}
+       , IBinOp { iBinOp = BinOpNE, iDest = condVar, iLeft = e, iRight = literalVar }]
+       , ICondJump { iLabel = nextCase, iValue = condVar }]
   genBlock b
-  genCaseArm e cs
+  emit [IJump {iLabel = endLabel}
+       , ILabel {iLabel = nextCase}]
 
-  emit [ILabel { iLabel = endLabel}]
   
 -- Block code generation
 genBlock :: Annotated Block TypeA -> CodeGen ()
