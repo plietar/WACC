@@ -165,10 +165,10 @@ showAssignLHS (_, LHSVar id) = do
   indent <- ask  
   tell [ (tabs indent) ++ "- AssignLHSVar " ++ show id ]
 
-showAssignLHS (_, LHSPairElem elem) = do
-  indent <- ask  
-  tell [ (tabs indent) ++ "- AssignLhsPairElem" ]
-  local (+ 1) (showPairElem elem)
+--showAssignLHS (_, LHSPairElem elem) = do
+--  indent <- ask  
+--  tell [ (tabs indent) ++ "- AssignLhsPairElem" ]
+--  local (+ 1) (showPairElem elem)
 
 showAssignLHS (_, LHSIndexingElem elem) = do
   indent <- ask  
