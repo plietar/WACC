@@ -165,11 +165,6 @@ showAssignLHS (_, LHSVar id) = do
   indent <- ask  
   tell [ (tabs indent) ++ "- AssignLHSVar " ++ show id ]
 
---showAssignLHS (_, LHSPairElem elem) = do
---  indent <- ask  
---  tell [ (tabs indent) ++ "- AssignLhsPairElem" ]
---  local (+ 1) (showPairElem elem)
-
 showAssignLHS (_, LHSIndexingElem elem) = do
   indent <- ask  
   tell [ (tabs indent) ++ "- AssignLhsIndexingElem" ]
@@ -185,13 +180,7 @@ showAssignRHS (_, RHSArrayLit es) = do
   indent <- ask  
   tell [ (tabs indent) ++ "- AssignRhsArrayLit" ]
   mapM_ showExpr es 
---showAssignRHS (_, RHSNewPair e1 e2) = do
---  indent <- ask
---  tell [ (tabs indent) ++ "- AssignRhsNewPair" ]
---  local (+ 1) (showExpr e1)
---  local (+ 1) (showExpr e2)
 
-----showAssignRHS (_, RHSPairElem e) = showPairElem e
 showAssignRHS (_, RHSNewTuple es) = do
   indent <- ask
   tell [ (tabs indent) ++ "- AssignRhsNewTuple" ]
@@ -207,12 +196,6 @@ showIndexingElem (_, IndexingElem id es) = do
   indent <- ask
   tell [ (tabs indent) ++ "- IndexingElem " ++ id  ]
   mapM_ (\e -> local (+ 1) (showExpr e)) es
---showPairElem :: (Annotated PairElem TypeA) -> PrintAST ()
---showPairElem (_, PairElem side e) = do
---  indent <- ask
---  tell [ (tabs indent) ++ "- PairElem" ]
---  tell [ (tabs (indent + 1)) ++ "- " ++ show side ]
---  local (+ 2) (showExpr e)
 
 showIR :: [IR] -> [String]
 showIR = map show
