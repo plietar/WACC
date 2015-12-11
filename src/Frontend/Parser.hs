@@ -141,8 +141,8 @@ parseType = (do
                (keyword "string" $> TyArray TyChar)
     pairType = do
       _ <- P.try (keyword "pair" <* P.lookAhead (token TokLParen))
-      parens (TyPair <$> pairElemType <* comma <*> pairElemType)
-    pairElemType = parseType <|> (keyword "pair" $> TyPair TyAny TyAny)
+      parens (TyTuple <$> (sepBy pairElemType comma))
+    pairElemType = parseType <|> (keyword "pair" $> TyTuple [TyAny, TyAny])
     tupleType = do
       _ <- P.try (keyword "tuple")
       parens (TyTuple <$> (sepBy parseType comma))
