@@ -65,8 +65,12 @@ mergeTypes t1 TyAny = OK t1
 mergeTypes TyAny t2 = OK t2
 mergeTypes (TyArray t1) (TyArray t2)
   = TyArray <$> mergeTypes t1 t2
-mergeTypes (TyPair f1 s1) (TyPair f2 s2)
-  = TyPair <$> mergeTypes f1 f2 <*> mergeTypes s1 s2
+mergeTypes (TyTuple ts1) (TyTuple ts2)
+  = TyTuple <$> sequence (zipWith mergeTypes ts1 ts2)
+mergeTypes TyNull (TyTuple ts1)
+  = OK (TyTuple ts1)
+mergeTypes (TyTuple ts1) TyNull
+  = OK (TyTuple ts1)
 mergeTypes t1 t2
   | t1 == t2  = OK t1
   | otherwise = semanticError ("Types " ++ show t1 ++ " and " ++ 
