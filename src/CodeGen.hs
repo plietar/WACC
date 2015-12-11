@@ -246,21 +246,29 @@ genAssign (_, LHSIndexingElem ((elemTy, ts), IndexingElem ident exprs)) valueVar
   let readIndexExprs  = init exprs
       writeIndexExpr  = last exprs
 
-  -- Here we don't care / know what's inside the arrays
-  -- The type is only used to determine the type of instruction (LDR vs LDRB)
-  arrayVar <- genFrameRead (TyArray TyAny) ident
-  subArrayVar <- foldM (genArrayRead (TyArray TyAny)) arrayVar readIndexExprs
-  offsetedBase <- allocateTemp
+  indexVar   <- genFrameRead ident
+  subIndexVar <- foldM genIndexingRead indexVar (zip ts readIndexExprs)
+  genIndexingWrite (last ts) writeIndexExpr subIndexVar valueVar
 
+genIndexingWrite :: Type -> Annotated Expr TypeA -> Var -> Var -> CodeGen ()
+genIndexingWrite elemTy@(TyArray t) writeIndexExpr subIndexVar valueVar = do
+  offsetedBase <- allocateTemp
   writeIndexVar <- genExpr writeIndexExpr
   arrayOffsetVar <- allocateTemp
-  genCall0 "p_check_array_bounds" [writeIndexVar, subArrayVar]
+
+  genCall0 "p_check_array_bounds" [writeIndexVar, subIndexVar]
   emit [ILiteral { iDest = arrayOffsetVar, iLiteral = LitInt 4 }
        , IBinOp { iBinOp = BinOpAdd, iDest = offsetedBase
-                , iLeft = arrayOffsetVar, iRight = subArrayVar } 
+                , iLeft = arrayOffsetVar, iRight = subIndexVar } 
        , IHeapWrite { iHeapVar = offsetedBase 
                     , iValue  = valueVar
                     , iOperand = OperandVar writeIndexVar (typeShift elemTy)
+                    , iType = elemTy } ]
+
+genIndexingWrite elemTy@(TyTuple ts) (_, ExprLit (LitInt x)) subIndexVar valueVar = 
+  emit [ IHeapWrite { iHeapVar = subIndexVar 
+                    , iValue  = valueVar
+                    , iOperand = OperandLit (4 * fromInteger x)
                     , iType = elemTy } ]
 
 -- Shift depending on size of type
