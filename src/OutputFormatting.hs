@@ -108,15 +108,18 @@ showStmt (_, StmtPrint e b) = do
   where
     line = if b then "ln" else ""
 
-showStmt (_, StmtIf cond b1 b2) = do
+showStmt (_, StmtIf cond b1 maybeB2) = do
   indent <- ask
   tell [ (tabs indent) ++ "- StmtIf" ]
   tell [ (tabs (indent + 1)) ++ "- COND" ]
   local (+ 2) (showExpr cond)
   tell [ (tabs (indent + 1)) ++ "- THEN" ]
   local (+ 2) (showBlock b1)
-  tell [ (tabs (indent + 1)) ++ "- ELSE" ]
-  local (+ 2) (showBlock b2)
+  case maybeB2 of 
+    Just b2 -> do
+      tell [ (tabs (indent + 1)) ++ "- ELSE" ]
+      local (+ 2) (showBlock b2)
+    Nothing -> return ()
 
 showStmt (_, StmtWhile cond b) = do
   indent <- ask
