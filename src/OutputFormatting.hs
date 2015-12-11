@@ -59,7 +59,7 @@ showDecl (_, DeclFuncDef f) = showFuncDef f
 showDecl (_, DeclFFIFunc f) = tell [show f]
 
 showFuncDef :: (Annotated FuncDef TypeA) -> PrintAST ()
-showFuncDef (_, FuncDef t n args block) = do
+showFuncDef (_, FuncDef t _ n args block) = do
   indent <- ask
   tell [ (tabs indent) ++ "- "
          ++ (show t) ++ " " ++ (show n) ++ "(" ++ showArgs args ++ ")" ]

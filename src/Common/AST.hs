@@ -14,8 +14,8 @@ data Program a = Program [Annotated Decl a]
 data Decl a = DeclFuncDef (Annotated FuncDef a)
             | DeclFFIFunc (Annotated FFIFunc a)
 
-data FFIFunc a = FFIFunc Type Identifier [Type] Identifier
-data FuncDef a = FuncDef Type FuncName [(Type, Identifier)] (Annotated Block a)
+data FFIFunc a = FFIFunc Type Bool Identifier [Type] Identifier
+data FuncDef a = FuncDef Type Bool FuncName [(Type, Identifier)] (Annotated Block a)
 
 data Block a = Block [Annotated Stmt a]
 
@@ -32,6 +32,7 @@ data Stmt a
   | StmtWhile  (Annotated Expr a) (Annotated Block a)
   | StmtScope  (Annotated Block a)
   | StmtCall   Identifier [Annotated Expr a]
+  | StmtAwait  Identifier [Annotated Expr a]
 
 data AssignLHS a
   = LHSVar       Identifier

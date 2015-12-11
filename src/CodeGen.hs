@@ -33,7 +33,7 @@ genDecl (_, DeclFFIFunc f) = return ()
 
 -- Functions
 genFunction :: Annotated FuncDef TypeA -> RWS () ([[IR]], Set Feature) [Label] ()
-genFunction (_, FuncDef _ fname params body) = do
+genFunction (_, FuncDef _ async fname params body) = do
     labs <- get
 
     let initialState = CodeGenState {

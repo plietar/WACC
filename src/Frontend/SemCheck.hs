@@ -15,8 +15,9 @@ import qualified Data.Map as Map
 
 data Context = Context
   { variables  :: ScopedMap String Type
-  , functions  :: Map String (String, [Type], Type)
+  , functions  :: Map String (String, Bool, [Type], Type)
   , returnType :: Type
+  , asyncContext :: Bool
   }
 type ContextState a = StateT Context WACCResult a
 
@@ -33,21 +34,21 @@ getVariable name context
       Just value -> OK value
       Nothing    -> semanticError ("Unknown variable " ++ show name)
 
-addFunction :: String -> (String, [Type], Type) -> ContextState ()
+addFunction :: String -> (String, Bool, [Type], Type) -> ContextState ()
 addFunction name typ = do
   context <- get
   case Map.lookup name (functions context) of
     Just _  -> lift $ semanticError ("Function " ++ show name ++ " already exists")
     Nothing -> put context { functions = Map.insert name typ (functions context) }
 
-getFunction :: String -> Context -> WACCResult (String, [Type], Type)
+getFunction :: String -> Context -> WACCResult (String, Bool, [Type], Type)
 getFunction name context
   = case Map.lookup name (functions context) of
       Just value -> OK value
       Nothing    -> semanticError ("Unknown function " ++ show name)
 
 emptyContext :: Context
-emptyContext = Context ScopedMap.empty Map.empty TyVoid
+emptyContext = Context ScopedMap.empty Map.empty TyVoid False
 
 newContext :: Context -> Context
 newContext parent
@@ -256,27 +257,28 @@ checkAssignRHS (_, RHSCall fname args) context = do
   (symbolName, args', returnType) <- checkCall fname args context
   return (returnType, RHSCall symbolName args')
 
+checkArgs :: [Type] -> [Type] -> WACCResult ()
+checkArgs actual expected = checkArgs' 0 actual expected 
+  where
+    checkArgs' :: Int -> [Type] -> [Type] -> WACCResult ()
+    checkArgs' _ [] [] = OK ()
+    checkArgs' n (a1:as1) (a2:as2)
+      | compatibleType a1 a2 = checkArgs' (n+1) as1 as2
+      | otherwise = semanticError ("Expected type " ++ show a2 
+                                ++ " but got type " ++ show a1 
+                                ++ " for argument " ++ show (n + 1))
+    checkArgs' n _ _
+      = semanticError ("Wrong number of arguments."
+                    ++ " Expected " ++ show (length expected)
+                    ++ " but got " ++ show (length actual))
+
 checkCall :: Identifier -> [Annotated Expr SpanA] -> Context -> WACCResult (Identifier, [Annotated Expr TypeA], Type)
 checkCall fname args context = do
-  (symbolName, expectedArgsType, returnType) <- getFunction fname context
+  (symbolName, async, expectedArgsType, returnType) <- getFunction fname context
+  when async (semanticError ("Cannot call asynchronous function " ++ fname))
+
   args' <- mapM (\e -> checkExpr e context) args
-
-  let checkArgs :: Int -> [Type] -> [Type] -> WACCResult ()
-      checkArgs _ [] [] = OK ()
-      checkArgs n (a1:as1) (a2:as2)
-        | compatibleType a1 a2 = checkArgs (n+1) as1 as2
-        | otherwise = semanticError ("Expected type " ++ show a2 
-                                  ++ " but got type " ++ show a1 
-                                  ++ " for argument " ++ show (n + 1)
-                                  ++ " in call to function "
-                                  ++ show fname)
-      checkArgs n _ _
-        = semanticError ("Wrong number of arguments in call"
-                      ++ " to function \"" ++ fname ++ "\"."
-                      ++ " Expected " ++ show (length expectedArgsType)
-                      ++ " but got " ++ show (length args))
-
-  checkArgs 0 expectedArgsType (map fst args')
+  checkArgs expectedArgsType (map fst args')
 
   return (symbolName, args', returnType)
 
@@ -386,11 +388,23 @@ checkStmt (_, StmtCall fname args) = do
   (symbolName, args', _) <- lift $ checkCall fname args context
   return (False, StmtCall symbolName args')
 
+checkStmt (_, StmtAwait fname args) = do
+  context <- get
+
+  (symbolName, async, expectedArgsType, returnType) <- lift $ getFunction fname context
+  unless async (lift $ semanticError ("Cannot await synchronous function " ++ fname))
+
+  args' <- lift $ mapM (\e -> checkExpr e context) args
+  lift $ checkArgs expectedArgsType (map fst args')
+
+  return (False, StmtAwait symbolName args')
+
 checkFunction :: Annotated FuncDef SpanA -> Context -> WACCResult (Annotated FuncDef TypeA)
-checkFunction (_, FuncDef expectedReturnType name args block) globalContext
+checkFunction (_, FuncDef expectedReturnType async name args block) globalContext
   = withErrorContext ("In function " ++ show name) $ do
       let setupContext = do
-           modify (\c -> c { returnType = expectedReturnType })
+           modify (\c -> c { returnType = expectedReturnType,
+                             asyncContext = async })
            forM_ args (\(argType, argName) -> addVariable argName argType)
 
       context <- execStateT setupContext globalContext 
@@ -399,24 +413,24 @@ checkFunction (_, FuncDef expectedReturnType name args block) globalContext
       unless (isVoidType expectedReturnType || alwaysReturns)
              (syntaxError ("Function " ++ show name ++ " does not always return"))
 
-      return ((), FuncDef expectedReturnType name args block')
+      return ((), FuncDef expectedReturnType async name args block')
 
 checkFFIFunc :: Annotated FFIFunc SpanA -> Context -> WACCResult (Annotated FFIFunc TypeA)
-checkFFIFunc (_, FFIFunc returnType name args symbolName) ctx
-  = return ((), FFIFunc returnType name args symbolName)
+checkFFIFunc (_, FFIFunc returnType async name args symbolName) ctx
+  = return ((), FFIFunc returnType async name args symbolName)
 
 checkDecl :: Annotated Decl SpanA -> Context -> WACCResult (Annotated Decl TypeA)
 checkDecl (_, DeclFuncDef f) ctx = ((),) <$> DeclFuncDef <$> checkFunction f ctx
 checkDecl (_, DeclFFIFunc f) ctx = ((),) <$> DeclFFIFunc <$> checkFFIFunc f ctx
 
 defineFunction :: Annotated FuncDef SpanA -> ContextState ()
-defineFunction (_, FuncDef returnType (FuncName name) args _)
-  = addFunction name ("f_" ++ name, map fst args, returnType)
-defineFunction (_, FuncDef _ MainFunc _ _) = return ()
+defineFunction (_, FuncDef returnType async (FuncName name) args _)
+  = addFunction name ("f_" ++ name, async, map fst args, returnType)
+defineFunction (_, FuncDef _ _ MainFunc _ _) = return ()
 
 defineFFIFunc :: Annotated FFIFunc SpanA -> ContextState ()
-defineFFIFunc (_, FFIFunc returnType name args symbolName)
-  = addFunction name (symbolName, args, returnType)
+defineFFIFunc (_, FFIFunc returnType async name args symbolName)
+  = addFunction name (symbolName, async, args, returnType)
 
 defineDecl :: Annotated Decl SpanA -> ContextState ()
 defineDecl (_, DeclFuncDef f) = defineFunction f

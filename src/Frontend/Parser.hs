@@ -292,6 +292,13 @@ callStmt = spanned $ do
   args <- parens (sepBy expr comma)
   return (StmtCall name args)
 
+awaitStmt :: Parser (Annotated Stmt SpanA)
+awaitStmt = spanned $ do
+  _ <- keyword "await"
+  name <- identifier
+  args <- parens (sepBy expr comma)
+  return (StmtAwait name args)
+
 stmt :: Parser (Annotated Stmt SpanA)
 stmt = skipStmt    <|>
        whileStmt   <|>
@@ -306,7 +313,8 @@ stmt = skipStmt    <|>
        returnStmt  <|>
        letStmt     <|>
        varStmt     <|>
-       callStmt    <?> "statement"
+       callStmt    <|>
+       awaitStmt   <?> "statement"
 
 block :: Parser (Annotated Block SpanA)
 block = spanned $ Block <$> sepBy1 stmt semi
@@ -316,29 +324,31 @@ param = (,) <$> parseType <*> identifier
 
 function :: Parser (Annotated FuncDef SpanA)
 function = spanned $ do
-  (returnType, functionName) <- P.try $ do
+  (returnType, async, functionName) <- P.try $ do
+    a <- option False (keyword "async" >> return True)
     t <- parseType <|> voidType
     i <- identifier
     lookAhead (token TokLParen)
-    return (t,i)
+    return (t, a, i)
 
   args <- parens (sepBy param comma)
   _ <- keyword "is"
   body <- block
   _ <- keyword "end"
-  return (FuncDef returnType (FuncName functionName) args body)
+  return (FuncDef returnType async (FuncName functionName) args body)
 
 newFunction :: Parser (Annotated Decl SpanA)
 newFunction = wrapSpan DeclFFIFunc <$> (spanned $ do
   keyword "func"
   keyword "ffi"
+  async <- option False (keyword "async" >> return True)
   functionName <- identifier
   args <- parens (sepBy parseType comma)
   returnType <- (colon >> (parseType <|> voidType)) <|> return TyVoid
   symbolName <- (equal >> identifier) <|> return functionName
   semi
 
-  return (FFIFunc returnType functionName args symbolName))
+  return (FFIFunc returnType async functionName args symbolName))
 
 decl :: Parser (Annotated Decl SpanA)
 decl = (wrapSpan DeclFuncDef <$> function) <|>
@@ -347,7 +357,7 @@ decl = (wrapSpan DeclFuncDef <$> function) <|>
 mainFunc :: Parser (Annotated FuncDef SpanA)
 mainFunc = spanned $ do
   b <- block
-  return (FuncDef TyVoid MainFunc [] b)
+  return (FuncDef TyVoid False MainFunc [] b)
 
 program :: Parser (Annotated Program SpanA)
 program = spanned $ do
