@@ -398,10 +398,10 @@ genStmt (_, StmtIfNoElse condition thenBlock) = do
   endLabel <- allocateLabel
 
   condVar <- genExpr condition
-  tell [ICondJump { iLabel = thenLabel, iValue = condVar }]
-  tell [ILabel { iLabel = thenLabel }]
+  emit [ICondJump { iLabel = thenLabel, iValue = condVar }]
+  emit [ILabel { iLabel = thenLabel }]
   genBlock thenBlock
-  tell [ILabel { iLabel = endLabel }]
+  emit [ILabel { iLabel = endLabel }]
 
 genStmt (_, StmtIf condition thenBlock elseBlock) = do
   thenLabel <- allocateLabel
