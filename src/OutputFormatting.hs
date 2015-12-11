@@ -51,8 +51,12 @@ showProgram :: (Annotated Program TypeA) -> PrintAST ()
 showProgram (_, Program fs) = do
   indent <- ask
   tell [ (tabs indent) ++ "Program" ]
-  forM_ fs (\f -> local (+ 1) (showFuncDef f))
+  forM_ fs (\f -> local (+ 1) (showDecl f))
   return ()
+
+showDecl :: (Annotated Decl TypeA) -> PrintAST ()
+showDecl (_, DeclFuncDef f) = showFuncDef f
+showDecl (_, DeclFFIFunc f) = tell [show f]
 
 showFuncDef :: (Annotated FuncDef TypeA) -> PrintAST ()
 showFuncDef (_, FuncDef t n args block) = do

@@ -40,6 +40,9 @@ spanned p = do
   finalPos <- position
   return ((initialPos, finalPos), node)
 
+wrapSpan :: (Annotated a SpanA -> b SpanA) -> Annotated a SpanA -> Annotated b SpanA
+wrapSpan f x@(sp, _) = (sp, f x)
+
 identifier :: Parser Identifier
 identifier = P.token showTok posTok matchTok <?> "identifier"
   where
@@ -309,6 +312,23 @@ function = spanned $ do
   _ <- keyword "end"
   return (FuncDef t (FuncName i) x b)
 
+newFunction :: Parser (Annotated Decl SpanA)
+newFunction = wrapSpan DeclFFIFunc <$> (spanned $ do
+  keyword "func"
+  keyword "ffi"
+  i <- identifier
+  args <- parens (sepBy parseType comma)
+  colon
+  returnType <- parseType
+  l <- (equal >> identifier) <|> return i
+  semi
+
+  return (FFIFunc returnType i args l))
+
+decl :: Parser (Annotated Decl SpanA)
+decl = (wrapSpan DeclFuncDef <$> function) <|>
+       newFunction
+
 mainFunc :: Parser (Annotated FuncDef SpanA)
 mainFunc = spanned $ do
   b <- block
@@ -317,10 +337,10 @@ mainFunc = spanned $ do
 program :: Parser (Annotated Program SpanA)
 program = spanned $ do
   _ <- keyword "begin"
-  f <- many function
+  f <- many decl
   m <- mainFunc
   _ <- keyword "end"
-  return (Program (m:f))
+  return (Program ((wrapSpan DeclFuncDef m):f))
 
 waccParser :: String -> [(Pos, Token)] -> WACCResult (Annotated Program SpanA)
 waccParser fname tokens

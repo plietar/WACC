@@ -8,25 +8,15 @@ module Common.AST where
 
 import Common.Span
 
-class ( Show (Ann a Program)
-      , Show (Ann a FuncDef)
-      , Show (Ann a Block)
-      , Show (Ann a Stmt)
-      , Show (Ann a Expr)
-      , Show (Ann a AssignLHS)
-      , Show (Ann a AssignRHS)
-      , Show (Ann a ArrayElem)
-      , Show (Ann a PairElem)
-      ) => Annotation a where
-  type Ann a (t :: * -> *)
-
-type Annotated (t :: * -> *) (a :: *)
-  = (Ann a t, t a)
-
 data FuncName = FuncName Identifier | MainFunc
 
-data Program a = Program [Annotated FuncDef a]
+data Program a = Program [Annotated Decl a]
+data Decl a = DeclFuncDef (Annotated FuncDef a)
+            | DeclFFIFunc (Annotated FFIFunc a)
+
+data FFIFunc a = FFIFunc Type Identifier [Type] Identifier
 data FuncDef a = FuncDef Type FuncName [(Type, Identifier)] (Annotated Block a)
+
 data Block a = Block [Annotated Stmt a]
 
 data Stmt a
@@ -107,16 +97,6 @@ data Type = TyInt
           | TyVoid
     deriving (Eq)
 
-deriving instance Annotation a => Show (Program a)
-deriving instance Annotation a => Show (FuncDef a)
-deriving instance Annotation a => Show (Block a)
-deriving instance Annotation a => Show (Stmt a)
-deriving instance Annotation a => Show (Expr a)
-deriving instance Annotation a => Show (AssignLHS a)
-deriving instance Annotation a => Show (AssignRHS a)
-deriving instance Annotation a => Show (ArrayElem a)
-deriving instance Annotation a => Show (PairElem a)
-
 instance Show BinOp where
   show BinOpAdd = "+"
   show BinOpSub = "-"
@@ -156,6 +136,36 @@ instance Show FuncName where
   show MainFunc = "main"
   show (FuncName name) = "f_" ++ name
 
+
+class ( Show (Ann a Program)
+      , Show (Ann a Decl)
+      , Show (Ann a FuncDef)
+      , Show (Ann a FFIFunc)
+      , Show (Ann a Block)
+      , Show (Ann a Stmt)
+      , Show (Ann a Expr)
+      , Show (Ann a AssignLHS)
+      , Show (Ann a AssignRHS)
+      , Show (Ann a ArrayElem)
+      , Show (Ann a PairElem)
+      ) => Annotation a where
+  type Ann a (t :: * -> *)
+
+deriving instance Annotation a => Show (Program a)
+deriving instance Annotation a => Show (Decl a)
+deriving instance Annotation a => Show (FuncDef a)
+deriving instance Annotation a => Show (FFIFunc a)
+deriving instance Annotation a => Show (Block a)
+deriving instance Annotation a => Show (Stmt a)
+deriving instance Annotation a => Show (Expr a)
+deriving instance Annotation a => Show (AssignLHS a)
+deriving instance Annotation a => Show (AssignRHS a)
+deriving instance Annotation a => Show (ArrayElem a)
+deriving instance Annotation a => Show (PairElem a)
+
+type Annotated (t :: * -> *) (a :: *)
+  = (Ann a t, t a)
+
 data SpanA
 instance Annotation SpanA where
   type Ann SpanA t = Span
@@ -163,7 +173,9 @@ instance Annotation SpanA where
 data TypeA
 instance Annotation TypeA where
   type Ann TypeA Program = ()
+  type Ann TypeA Decl = ()
   type Ann TypeA FuncDef = ()
+  type Ann TypeA FFIFunc = ()
   type Ann TypeA Block = (Bool, [(String, Type)])
   type Ann TypeA Stmt = Bool
   type Ann TypeA Expr = Type

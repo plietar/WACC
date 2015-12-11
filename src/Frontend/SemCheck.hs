@@ -15,7 +15,7 @@ import qualified Data.Map as Map
 
 data Context = Context
   { variables  :: ScopedMap String Type
-  , functions  :: Map String ([Type], Type)
+  , functions  :: Map String (String, [Type], Type)
   , returnType :: Type
   }
 type ContextState a = StateT Context WACCResult a
@@ -33,14 +33,14 @@ getVariable name context
       Just value -> OK value
       Nothing    -> semanticError ("Unknown variable " ++ show name)
 
-addFunction :: String -> ([Type], Type) -> ContextState ()
+addFunction :: String -> (String, [Type], Type) -> ContextState ()
 addFunction name typ = do
   context <- get
   case Map.lookup name (functions context) of
     Just _  -> lift $ semanticError ("Function " ++ show name ++ " already exists")
     Nothing -> put context { functions = Map.insert name typ (functions context) }
 
-getFunction :: String -> Context -> WACCResult ([Type], Type)
+getFunction :: String -> Context -> WACCResult (String, [Type], Type)
 getFunction name context
   = case Map.lookup name (functions context) of
       Just value -> OK value
@@ -253,7 +253,7 @@ checkAssignRHS (_, RHSPairElem pairElem) context = do
   return (ty, RHSPairElem pairElem')
 
 checkAssignRHS (_, RHSCall fname args) context = do
-  (expectedArgsType, returnType) <- getFunction fname context
+  (symbolName, expectedArgsType, returnType) <- getFunction fname context
   args' <- mapM (\e -> checkExpr e context) args
 
   let checkArgs :: Int -> [Type] -> [Type] -> WACCResult ()
@@ -272,7 +272,7 @@ checkAssignRHS (_, RHSCall fname args) context = do
                       ++ " but got " ++ show (length args))
 
   checkArgs 0 expectedArgsType (map fst args')
-  return (returnType, RHSCall fname args')
+  return (returnType, RHSCall symbolName args')
 
 
 checkBlock :: Annotated Block SpanA -> Context -> WACCResult (Annotated Block TypeA)
@@ -392,17 +392,32 @@ checkFunction (_, FuncDef expectedReturnType name args block) globalContext
 
       return ((), FuncDef expectedReturnType name args block')
 
+checkFFIFunc :: Annotated FFIFunc SpanA -> Context -> WACCResult (Annotated FFIFunc TypeA)
+checkFFIFunc (_, FFIFunc returnType name args symbolName) ctx
+  = return ((), FFIFunc returnType name args symbolName)
+
+checkDecl :: Annotated Decl SpanA -> Context -> WACCResult (Annotated Decl TypeA)
+checkDecl (_, DeclFuncDef f) ctx = ((),) <$> DeclFuncDef <$> checkFunction f ctx
+checkDecl (_, DeclFFIFunc f) ctx = ((),) <$> DeclFFIFunc <$> checkFFIFunc f ctx
+
+defineFunction :: Annotated FuncDef SpanA -> ContextState ()
+defineFunction (_, FuncDef returnType (FuncName name) args _)
+  = addFunction name ("f_" ++ name, map fst args, returnType)
+defineFunction (_, FuncDef _ MainFunc _ _) = return ()
+
+defineFFIFunc :: Annotated FFIFunc SpanA -> ContextState ()
+defineFFIFunc (_, FFIFunc returnType name args symbolName)
+  = addFunction name (symbolName, args, returnType)
+
+defineDecl :: Annotated Decl SpanA -> ContextState ()
+defineDecl (_, DeclFuncDef f) = defineFunction f
+defineDecl (_, DeclFFIFunc f) = defineFFIFunc f
+
 checkProgram :: Annotated Program SpanA -> WACCResult (Annotated Program TypeA)
-checkProgram (_, Program funcs) = do
-  let defineFunc (_, FuncDef returnType (FuncName name) args _)
-        = addFunction name (map fst args, returnType)
-      defineFunc (_, FuncDef _ MainFunc _ _) = return ()
-
-      defineAllFuncs = forM_ funcs defineFunc
-  context <- execStateT defineAllFuncs emptyContext
-  funcs' <- forM funcs (\f -> checkFunction f context)
-  return ((), Program funcs')
-
+checkProgram (_, Program decls) = do
+  context <- execStateT (forM_ decls defineDecl) emptyContext
+  decls' <- forM decls (\d -> checkDecl d context)
+  return ((), Program decls')
 
 waccSemCheck :: Annotated Program SpanA -> WACCResult (Annotated Program TypeA)
 waccSemCheck = checkProgram

@@ -25,12 +25,14 @@ emitFeature f = tell (CodeGenOutput [] (Set.singleton f))
 
 genProgram :: Annotated Program TypeA -> ([[IR]], Set Feature)
 genProgram (_, Program fs)
-  = let generate = sequence (map genFunction fs)
-        result = evalState generate (map UnnamedLabel [0..])
-    in (map fst result, Set.unions (map snd result))
+  = snd $ evalRWS (mapM genDecl fs) () (map UnnamedLabel [0..]) 
+
+genDecl :: Annotated Decl TypeA -> RWS () ([[IR]], Set Feature) [Label] ()
+genDecl (_, DeclFuncDef f) = genFunction f
+genDecl (_, DeclFFIFunc f) = return ()
 
 -- Functions
-genFunction :: Annotated FuncDef TypeA -> State [Label] ([IR], Set Feature)
+genFunction :: Annotated FuncDef TypeA -> RWS () ([[IR]], Set Feature) [Label] ()
 genFunction (_, FuncDef _ fname params body) = do
     labs <- get
 
@@ -77,7 +79,7 @@ genFunction (_, FuncDef _ fname params body) = do
         (endState, result) = (execRWS generation () initialState)
 
     put (labels endState)
-    return (instructions result, features result)
+    tell ([instructions result], features result)
 
 genReturn :: Var -> CodeGen ()
 genReturn retVal
@@ -337,7 +339,7 @@ genRHS (_, RHSPairElem ((elemTy, pairTy), PairElem side pairExpr)) = do
 
 genRHS (_, RHSCall name exprs) = do
   argVars <- mapM genExpr exprs
-  genCall1 ("f_" ++ name) argVars
+  genCall1 name argVars
 
 genStmt :: Annotated Stmt TypeA -> CodeGen ()
 genStmt (_, StmtSkip) = return ()
