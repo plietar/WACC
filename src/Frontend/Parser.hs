@@ -149,6 +149,9 @@ parseType = (do
       parens (TyPair <$> pairElemType <* comma <*> pairElemType)
     pairElemType = parseType <|> (keyword "pair" $> TyPair TyAny TyAny)
 
+voidType :: Parser Type
+voidType = keyword "void" $> TyVoid
+
 pairElem :: Parser (Annotated PairElem SpanA)
 pairElem = spanned $ do
   side <- pairSide
@@ -313,25 +316,29 @@ param = (,) <$> parseType <*> identifier
 
 function :: Parser (Annotated FuncDef SpanA)
 function = spanned $ do
-  (t,i) <- P.try ((,) <$> parseType <*> identifier <* lookAhead (token TokLParen))
-  x <- parens (sepBy param comma)
+  (returnType, functionName) <- P.try $ do
+    t <- parseType <|> voidType
+    i <- identifier
+    lookAhead (token TokLParen)
+    return (t,i)
+
+  args <- parens (sepBy param comma)
   _ <- keyword "is"
-  b <- block
+  body <- block
   _ <- keyword "end"
-  return (FuncDef t (FuncName i) x b)
+  return (FuncDef returnType (FuncName functionName) args body)
 
 newFunction :: Parser (Annotated Decl SpanA)
 newFunction = wrapSpan DeclFFIFunc <$> (spanned $ do
   keyword "func"
   keyword "ffi"
-  i <- identifier
+  functionName <- identifier
   args <- parens (sepBy parseType comma)
-  colon
-  returnType <- parseType
-  l <- (equal >> identifier) <|> return i
+  returnType <- (colon >> (parseType <|> voidType)) <|> return TyVoid
+  symbolName <- (equal >> identifier) <|> return functionName
   semi
 
-  return (FFIFunc returnType i args l))
+  return (FFIFunc returnType functionName args symbolName))
 
 decl :: Parser (Annotated Decl SpanA)
 decl = (wrapSpan DeclFuncDef <$> function) <|>
