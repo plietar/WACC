@@ -147,14 +147,11 @@ parseType = (do
       _ <- P.try (keyword "tuple")
       parens (TyTuple <$> (sepBy parseType comma))
 
-pairElem :: Parser (Annotated PairElem SpanA)
+pairElem :: Parser (Annotated IndexingElem SpanA)
 pairElem = spanned $ do
-  side <- pairSide
-  e <- expr
-  return (PairElem side e)
-  where
-    pairSide = (keyword "fst" $> PairFst) <|>
-               (keyword "snd" $> PairSnd)
+  index <- spanned $ ExprLit <$> LitInt <$> ((keyword "fst" $> 0) <|> (keyword "snd" $> 1))
+  i    <- identifier
+  return (IndexingElem i [index])
 
 indexingElem :: Parser (Annotated IndexingElem SpanA)
 indexingElem = spanned $ do
