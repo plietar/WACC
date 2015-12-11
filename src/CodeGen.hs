@@ -318,27 +318,6 @@ genRHS (TyTuple types, RHSNewTuple exprs) = do
                        , iType = types !! index } ]
   return tupleVar
 
-
-
-genRHS (t@(TyPair t1 t2), RHSNewPair fstExpr sndExpr) = do
-  pairVar <- allocateVar
-  fstVar <- genExpr fstExpr
-  emit [ IHeapWrite { iHeapVar = pairVar, iValue = fstVar, iOperand = OperandLit (pairOffset PairFst t), iType = t1 } ]
-
-  sndVar <- genExpr sndExpr
-  emit [ IHeapWrite { iHeapVar = pairVar, iValue = sndVar, iOperand = OperandLit (pairOffset PairSnd t), iType = t2 } ]
-
-  return pairVar
-
-genRHS (_, RHSPairElem ((elemTy, pairTy), PairElem side pairExpr)) = do
-  emitFeature CheckNullPointer
-
-  outVar <- allocateTemp
-  pairVar <- genExpr pairExpr
-  genCall1 "p_check_null_pointer" [pairVar]
-  emit [IHeapRead { iHeapVar = pairVar, iDest = outVar, iOperand = OperandLit (pairOffset side pairTy), iType = elemTy } ]
-  return outVar
-
 genRHS (_, RHSCall name exprs) = do
   argVars <- mapM genExpr exprs
   genCall1 ("f_" ++ name) argVars
@@ -357,15 +336,10 @@ genStmt (_, StmtAssign lhs rhs) = do
   v <- genRHS rhs
   genAssign lhs v
 
-genStmt (_, StmtRead lhs@(ty, _)) = do
-  v <- allocateVar
-  tell [ IRead { iDest = v, iType = ty }]
-  genAssign lhs v
-
 genStmt (_, StmtFree expr@(ty, _)) = do
   v <- genExpr expr
   case ty of
-    TyPair _ _ -> do
+    TyTuple _  -> do
       genCall0 "p_check_null_pointer" [v]
       emitFeature CheckNullPointer
     _ -> return ()
