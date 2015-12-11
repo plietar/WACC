@@ -227,22 +227,22 @@ genIndexingRead arrayVar (elemTy@(TyArray t), indexExpr) = do
                    , iType    = elemTy } ]
   return outVar
 
+genIndexingRead tupleVar (elemTy@(TyTuple ts), (_, ExprLit (LitInt x))) = do
+  outVar   <- allocateTemp
+  emit [ IHeapRead { iHeapVar = tupleVar 
+                   , iDest    = outVar
+                   , iOperand = OperandLit (4 * fromInteger x)
+                   , iType    = elemTy } ]
+  return outVar
+
 -- LHS Assign
 genAssign :: Annotated AssignLHS TypeA -> Var -> CodeGen ()
 genAssign (ty, LHSVar ident) valueVar = do
   localVar <- gets (getFrameLocal ident . frame)
   emit [ IMove { iDest = localVar, iValue = valueVar } ]
 
--- LHS Pair 
-genAssign (_, LHSPairElem ((elemTy, pairTy), PairElem side pairExpr)) valueVar = do
-  emitFeature CheckNullPointer
+genAssign (_, LHSIndexingElem ((elemTy, ts), IndexingElem ident exprs)) valueVar = do
 
-  pairVar <- genExpr pairExpr
-  genCall0 "p_check_null_pointer" [pairVar]
-  emit [ IHeapWrite { iHeapVar = pairVar, iValue = valueVar, iOperand = OperandLit (pairOffset side pairTy), iType = elemTy } ]
-
--- LHS Array Indexing 
-genAssign (elemTy, LHSIndexingElem (_, IndexingElem ident exprs)) valueVar = do
   let readIndexExprs  = init exprs
       writeIndexExpr  = last exprs
 
