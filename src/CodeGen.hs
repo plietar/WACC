@@ -193,18 +193,10 @@ genExpr (_ , ExprBinOp operator expr1 expr2) = do
 -- Variable
 genExpr (ty, ExprVar ident) = genFrameRead ident
 
--- ArrayElem
-genExpr (elemTy, ExprIndexingElem (_, IndexingElem ident exprs)) = do
-  let initIndexExprs = init exprs
-      lastIndexExpr  = last exprs
+genExpr (_, ExprIndexingElem ((t, ts), IndexingElem ident exprs)) = do
 
-  -- Here we don't care / know what's inside the arrays
-  -- The type is only used to determine the type of instruction (LDR vs LDRB)
-  arrayVar <- genFrameRead (TyArray TyAny) ident
-  subArrayVar <- foldM (genArrayRead (TyArray TyAny)) arrayVar initIndexExprs
-
-  outVar <- genArrayRead elemTy subArrayVar lastIndexExpr
-
+  indexVar    <- genFrameRead ident
+  outVar      <- foldM genIndexingRead indexVar (zip ts exprs)
   return outVar
 
 -- Read from Frame
