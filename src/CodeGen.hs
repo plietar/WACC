@@ -205,7 +205,7 @@ genFrameRead ident = gets (getFrameLocal ident . frame)
 
 -- Read from Tuple/Array
 genIndexingRead :: Var -> (Type, Annotated Expr TypeA) -> CodeGen Var
-genIndexingRead arrayVar (elemTy@(TyArray t), indexExpr) = do
+genIndexingRead arrayVar ((TyArray elemTy), indexExpr) = do
   
   
   emitFeature CheckArrayBounds
@@ -251,9 +251,9 @@ genAssign (_, LHSIndexingElem ((elemTy, ts), IndexingElem ident exprs)) valueVar
   genIndexingWrite (last ts) writeIndexExpr subIndexVar valueVar
 
 genIndexingWrite :: Type -> Annotated Expr TypeA -> Var -> Var -> CodeGen ()
-genIndexingWrite elemTy@(TyArray t) writeIndexExpr subIndexVar valueVar = do
+genIndexingWrite (TyArray elemTy) writeIndexExpr subIndexVar valueVar = do
+  
   offsetedBase <- allocateTemp
-
   writeIndexVar <- genExpr writeIndexExpr
   arrayOffsetVar <- allocateTemp
 
@@ -261,16 +261,16 @@ genIndexingWrite elemTy@(TyArray t) writeIndexExpr subIndexVar valueVar = do
   emit [ILiteral { iDest = arrayOffsetVar, iLiteral = LitInt 4 }
        , IBinOp { iBinOp = BinOpAdd, iDest = offsetedBase
                 , iLeft = arrayOffsetVar, iRight = subIndexVar } 
-       , IHeapWrite { iHeapVar = offsetedBase 
-                    , iValue  = valueVar
-                    , iOperand = OperandVar writeIndexVar (typeShift elemTy)
-                    , iType = elemTy } ]
+       , IHeapWrite { iHeapVar  = offsetedBase 
+                    , iValue    = valueVar
+                    , iOperand  = OperandVar writeIndexVar (typeShift elemTy)
+                    , iType     = elemTy } ]
 
-genIndexingWrite elemTy@(TyTuple ts) (_, ExprLit (LitInt x)) subIndexVar valueVar = 
+genIndexingWrite (TyTuple ts) (_, ExprLit (LitInt x)) subIndexVar valueVar = 
   emit [ IHeapWrite { iHeapVar = subIndexVar 
                     , iValue  = valueVar
                     , iOperand = OperandLit (4 * fromInteger x)
-                    , iType = elemTy } ]
+                    , iType = TyInt } ]
 
 -- Shift depending on size of type
 typeShift :: Type -> Int
