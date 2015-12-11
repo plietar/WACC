@@ -149,15 +149,6 @@ checkIfExprIsLiteralInt _ = False
 exprLitToInt :: Expr a -> Int
 exprLitToInt (ExprLit (LitInt n)) = fromInteger n
 
---checkArrayIndexing :: Type -> [Type] -> WACCResult Type
---checkArrayIndexing (TyArray innerType) (indexType : tys) = do
---  if compatibleType TyInt indexType
---  then checkArrayIndexing innerType tys
---  else semanticError ("Cannot index array with type " ++ show indexType)
---checkArrayIndexing TyAny _ _ = OK TyAny
---checkArrayIndexing t [] _    = OK t
---checkArrayIndexing t _ _     = semanticError ("Cannot index variable of type " ++ show t)
-
 checkExpr :: Annotated Expr SpanA -> Context -> WACCResult (Annotated Expr TypeA)
 checkExpr (_, ExprLit lit) _ = return (checkLiteral lit, ExprLit lit)
 
