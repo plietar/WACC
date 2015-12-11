@@ -34,10 +34,10 @@ typedef struct Page {
 // Assume all objects in the heap variable take 4 bytes.
 // NOTE: Compiler must do it this way.
 typedef struct type_info {
-  bool isArray;
-  uint nElem;
+  uint8_t isArray;
+  uint32_t nElem;
   bool elemIsPtr[];
-} type_info;
+} type_info __attribute__((packed)) ;
 
 typedef struct object_header {
   uint objWords;
@@ -70,16 +70,16 @@ void promote(Page *page, colour c);
 void allocateHeap(void);
 void GCCollect(uint32_t *sp);
 void moveReference(uint32_t **ref);
-uint32_t *GCAlloc(uint byte_size, type_info *type_information, uint32_t *bottom_stack);
+uint32_t *GCInternalAlloc(uint byte_size, type_info *type_information, uint32_t *bottom_stack);
 uint32_t *copy(uint32_t *heapObjPointer, Page *oldPage, object_header *oldHeader);
 uint32_t *allocateWordsNoGC(uint objWords, Page *list, colour colour);
-
 uint *allocateManyPages();  // Unimplemented
 Page *getPage(uint32_t *ptr);
 Page *getValidPage(Page *list, uint words);
 uint getFreeWords(Page *page);
 bool isAmbiguousRoot(uint32_t *ptr);
-
+ 
+void GCAlloc(void) __attribute__ ( ( naked ) );
 
 
 void GCInit(uint32_t *sp) {
@@ -89,7 +89,14 @@ void GCInit(uint32_t *sp) {
 }
 
 
-
+void GCAlloc() {
+  __asm__ ("push {r4-r12, lr};"
+            "mov r2, sp;"
+            "bl GCInternalAlloc;"
+            "add sp, #36;"
+            "pop {pc};"
+            );
+}
 
 void GCCollect(uint32_t *bottom_stack) {
   // Make all pages WHITE
@@ -133,7 +140,7 @@ void GCCollect(uint32_t *bottom_stack) {
 
 
 // TODO: Do we care about the colour of the page we are allocating?
-uint32_t *GCAlloc(uint byte_size, type_info *type_information, uint32_t *bottom_stack) {
+uint32_t *GCInternalAlloc(uint byte_size, type_info *type_information, uint32_t *bottom_stack) {
   if (FREE_PAGES == NULL && BLACK_PAGES != NULL) {
     GCCollect(bottom_stack);
   }
