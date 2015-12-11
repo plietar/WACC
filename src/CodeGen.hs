@@ -191,7 +191,7 @@ genExpr (_ , ExprBinOp operator expr1 expr2) = do
   return outVar
 
 -- Variable
-genExpr (ty, ExprVar ident) = genFrameRead ty ident
+genExpr (ty, ExprVar ident) = genFrameRead ident
 
 -- ArrayElem
 genExpr (elemTy, ExprIndexingElem (_, IndexingElem ident exprs)) = do
