@@ -64,8 +64,6 @@ type Identifier = String
 data IndexingElem a
   = IndexingElem Identifier [(Annotated Expr a)]
 
-data PairSide = PairFst | PairSnd
-
 data Literal = LitInt Integer
              | LitBool Bool
              | LitChar Char
@@ -96,11 +94,11 @@ data BinOp = BinOpAdd
 data Type = TyInt
           | TyBool
           | TyChar
-          | TyPair Type Type
           | TyTuple [Type]
           | TyArray Type
           | TyAny
           | TyVoid
+          | TyNull 
     deriving (Eq)
 
 deriving instance Annotation a => Show (Program a)
@@ -110,7 +108,6 @@ deriving instance Annotation a => Show (Stmt a)
 deriving instance Annotation a => Show (Expr a)
 deriving instance Annotation a => Show (AssignLHS a)
 deriving instance Annotation a => Show (AssignRHS a)
-deriving instance Annotation a => Show (PairElem a)
 deriving instance Annotation a => Show (IndexingElem a)
 
 instance Show BinOp where
