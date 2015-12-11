@@ -7,7 +7,7 @@ import Common.Span
 import Common.WACCResult
 import Frontend.Tokens
 
-import Control.Applicative
+import Control.Applicative 
 import Data.Int
 import Text.Parsec.Combinator
 import Text.Parsec.Expr
@@ -210,13 +210,13 @@ whileStmt = spanned $ do
   _ <- keyword "done"
   return (StmtWhile e b)
 
-ifNoElseStmt :: Parser (Annotated Stmt SpanA)
-ifNoElseStmt = spanned $ do
-  _ <- keyword "if"
-  i <- expr
-  t <- block
-  _ <- keyword "fi"
-  return (StmtIfNoElse i t)
+--ifNoElseStmt :: Parser (Annotated Stmt SpanA)
+--ifNoElseStmt = spanned $ do
+--  _ <- keyword "if"
+--  i <- expr
+--  t <- block
+--  _ <- keyword "fi"
+--  return (StmtIfNoElse i t)
 
 ifStmt :: Parser (Annotated Stmt SpanA)
 ifStmt = spanned $ do
@@ -224,8 +224,7 @@ ifStmt = spanned $ do
   i <- expr
   _ <- keyword "then"
   t <- block
-  _ <- keyword "else"
-  e <- block
+  e <- optionMaybe (keyword "else" >> block)
   _ <- keyword "fi"
   return (StmtIf i t e)
 
@@ -299,7 +298,6 @@ returnStmt = spanned $ do
 stmt :: Parser (Annotated Stmt SpanA)
 stmt = skipStmt    <|>
        whileStmt   <|>
-       ifNoElseStmt <|>
        ifStmt      <|>
        switchStmt  <|>
        scopeStmt   <|>
