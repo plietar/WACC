@@ -443,10 +443,10 @@ genStmt (_, StmtIf condition thenBlock elseBlock) = do
   condVar <- genExpr condition
   emit [ ICompare { iValue = condVar, iOperand = OperandLit 0 }
        , ICondJump { iLabel = elseLabel, iCondition = CondEQ } ]
-  genBlock elseBlock
+  genBlock thenBlock
   emit [ IJump { iLabel = endLabel }
        , ILabel { iLabel = elseLabel }]
-  genBlock thenBlock
+  genBlock elseBlock
   emit [ILabel { iLabel = endLabel }]
 
 genStmt (_, StmtWhile condition block ) = do
