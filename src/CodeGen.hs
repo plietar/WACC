@@ -31,22 +31,6 @@ genDecl :: Annotated Decl TypeA -> RWS () ([[IR]], Set Feature) [Label] ()
 genDecl (_, DeclFuncDef f) = genFunction f
 genDecl (_, DeclFFIFunc f) = return ()
 
-genYield :: Var -> CodeGen ()
-genYield value = do
-  continuationLabel <- allocateLabel
-  continuationVar <- allocateTemp
-
-  emit [ ILiteral { iDest = continuationVar, iLiteral = LitLabel continuationLabel }
-       , IHeapWrite { iHeapVar = GeneratorState
-                    , iValue = continuationVar
-                    , iOperand = OperandLit 0
-                    , iType = TyInt }
-       , IMove { iDest = Reg 0, iValue = GeneratorState }
-       , IMove { iDest = Reg 1, iValue = value }
-       , IYield { iSavedRegs = calleeSaveRegs, iValue = GeneratorState, iSavedContext = [] }
-       , ILabel { iLabel = continuationLabel }
-       , IRestore { iValue = GeneratorState, iSavedContext = [] } ]
-
 -- Functions
 genFunction :: Annotated FuncDef TypeA -> RWS () ([[IR]], Set Feature) [Label] ()
 genFunction (_, FuncDef _ async fname params body) = do
@@ -57,6 +41,10 @@ genFunction (_, FuncDef _ async fname params body) = do
           tempNames = map Temp [0..],
           labels = labs,
           frame = emptyFrame
+        }
+
+        reader = CodeGenReader {
+            asyncContext = async
         }
 
         argRegSkip = if async then 1 else 0
@@ -115,9 +103,6 @@ genFunction (_, FuncDef _ async fname params body) = do
             stateVar <- genCall1 "malloc" [sizeVar]
             emit [ IMove { iDest = GeneratorState, iValue = stateVar } ]
 
-            zeroVar <- allocateTemp
-            emit [ ILiteral { iDest = zeroVar, iLiteral = LitInt 0 } ]
-            genYield zeroVar
           else setupArguments
 
           genBlock body
@@ -126,16 +111,45 @@ genFunction (_, FuncDef _ async fname params body) = do
           emit [ ILiteral { iDest = retVal, iLiteral = LitInt 0 } ]
           genReturn retVal
 
-        (endState, result) = (execRWS generation () initialState)
+        (endState, result) = (execRWS generation reader initialState)
 
     put (labels endState)
     tell ([instructions result], features result)
 
+genYield :: Var -> CodeGen ()
+genYield value = do
+  continuationLabel <- allocateLabel
+  continuationVar <- allocateTemp
+
+  emit [ ILiteral { iDest = continuationVar, iLiteral = LitLabel continuationLabel }
+       , IHeapWrite { iHeapVar = GeneratorState
+                    , iValue = continuationVar
+                    , iOperand = OperandLit 0
+                    , iType = TyInt }
+       , IMove { iDest = Reg 0, iValue = GeneratorState }
+       , IMove { iDest = Reg 1, iValue = value }
+       , IYield { iSavedRegs = calleeSaveRegs, iValue = GeneratorState, iSavedContext = [] }
+       , ILabel { iLabel = continuationLabel }
+       , IRestore { iValue = GeneratorState, iSavedContext = [] } ]
+
 genReturn :: Var -> CodeGen ()
-genReturn retVal
-  = emit [ IMove { iDest = Reg 0, iValue = retVal }
-         , IFrameFree { iSize = 0 } -- Fixed later once colouring / spilling is done
-         , IReturn { iArgs = [ Reg 0 ], iSavedRegs = calleeSaveRegs } ]
+genReturn retVal = do
+  async <- asks asyncContext
+  if async
+  then do
+    -- FIXME
+    -- genCall "free" [ GeneratorState ]
+
+    zeroVal <- allocateTemp
+    emit [ ILiteral { iDest = zeroVal, iLiteral = LitInt 0 }
+         , IMove { iDest = Reg 0, iValue = zeroVal }
+         , IMove { iDest = Reg 1, iValue = retVal }
+         , IFrameFree { iSize = 0 }
+         , IReturn { iArgs = [ Reg 0, Reg 1 ], iSavedRegs = [] } ]
+
+  else emit [ IMove { iDest = Reg 0, iValue = retVal }
+            , IFrameFree { iSize = 0 }
+            , IReturn { iArgs = [ Reg 0 ], iSavedRegs = [] } ]
 
 genCall0 :: Identifier -> [Var] -> CodeGen ()
 genCall0 label vars = do
@@ -164,6 +178,39 @@ genCall2 label vars = do
   emit [ IMove { iDest = outVal0, iValue = Reg 0 }
        , IMove { iDest = outVal1, iValue = Reg 1 } ]
   return (outVal0, outVal1)
+
+genAwait :: Identifier -> [Var] -> CodeGen Var
+genAwait name argVars = do
+  stateVar <- allocateTemp
+  resultVar <- allocateTemp
+
+  againLabel <- allocateLabel
+  endLabel <- allocateLabel
+
+  -- Initial call
+  nullVar <- allocateTemp
+  emit [ ILiteral { iDest = nullVar, iLiteral = LitInt 0 } ]
+  (s, r) <- genCall2 name (nullVar : argVars)
+  emit [ IMove { iDest = stateVar, iValue = s } ]
+  emit [ IMove { iDest = resultVar, iValue = r } ]
+
+  emit [ ICompare { iValue = stateVar, iOperand = OperandLit 0 } ]
+  emit [ ICondJump { iLabel = endLabel, iCondition = CondEQ } ]
+
+  emit [ ILabel { iLabel = againLabel } ]
+  -- Keep calling until function is ready
+  genYield resultVar
+
+  (s, r) <- genCall2 name [stateVar]
+  emit [ IMove { iDest = stateVar, iValue = s } ]
+  emit [ IMove { iDest = resultVar, iValue = r } ]
+
+  emit [ ICompare { iValue = stateVar, iOperand = OperandLit 0 } ]
+  emit [ ICondJump { iLabel = againLabel, iCondition = CondNE } ]
+
+  emit [ ILabel { iLabel = endLabel } ]
+
+  return resultVar
 
 -- This does not attempt to be 100% accurate
 -- The register allocator affects a lot how many register are used
@@ -391,6 +438,10 @@ genRHS (_, RHSCall name exprs) = do
   argVars <- mapM genExpr exprs
   genCall1 name argVars
 
+genRHS (_, RHSAwait name exprs) = do
+  argVars <- mapM genExpr exprs
+  genAwait name argVars
+
 genStmt :: Annotated Stmt TypeA -> CodeGen ()
 genStmt (_, StmtSkip) = return ()
 
@@ -479,34 +530,9 @@ genStmt (_, StmtCall name exprs) = do
   genCall0 name argVars
 
 genStmt (_, StmtAwait name exprs) = do
-  stateVar <- allocateTemp
-  resultVar <- allocateTemp
-
-  againLabel <- allocateLabel
-  endLabel <- allocateLabel
-
   argVars <- mapM genExpr exprs
-
-  nullVar <- allocateTemp
-  emit [ ILiteral { iDest = nullVar, iLiteral = LitInt 0 } ]
-  (s, r) <- genCall2 name (nullVar : argVars)
-  emit [ IMove { iDest = stateVar, iValue = s } ]
-  emit [ IMove { iDest = resultVar, iValue = r } ]
-
-  emit [ ILabel { iLabel = againLabel } ]
-
-  emit [ ICompare { iValue = stateVar, iOperand = OperandLit 0 } ]
-  emit [ ICondJump { iLabel = endLabel, iCondition = CondEQ } ]
-
-  genYield resultVar
-
-  (s, r) <- genCall2 name [stateVar]
-  emit [ IMove { iDest = stateVar, iValue = s } ]
-  emit [ IMove { iDest = resultVar, iValue = r } ]
-  emit [ IJump { iLabel = againLabel } ]
-
-  emit [ ILabel { iLabel = endLabel } ]
-
+  genAwait name argVars
+  return ()
 
 -- Block code generation
 genBlock :: Annotated Block TypeA -> CodeGen ()

@@ -181,6 +181,7 @@ assignRHS
               rhsArrayLit <|>
               rhsPairElem <|>
               rhsCall <|>
+              rhsAwait <|>
               rhsNewPair
     where
       rhsExpr     = RHSExpr <$> expr
@@ -192,6 +193,11 @@ assignRHS
         i  <- identifier
         es <- parens (sepBy expr comma)
         return (RHSCall i es)
+      rhsAwait = do
+        keyword "await"
+        name <- identifier
+        args <- parens (sepBy expr comma)
+        return (RHSAwait name args)
 
 skipStmt :: Parser (Annotated Stmt SpanA)
 skipStmt = spanned $ do

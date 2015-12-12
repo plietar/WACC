@@ -45,6 +45,7 @@ data AssignRHS a
   | RHSNewPair  (Annotated Expr a) (Annotated Expr a)
   | RHSPairElem (Annotated PairElem a)
   | RHSCall     Identifier [Annotated Expr a]
+  | RHSAwait    Identifier [Annotated Expr a]
 
 data Expr a
   = ExprLit       Literal

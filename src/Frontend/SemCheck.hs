@@ -257,6 +257,10 @@ checkAssignRHS (_, RHSCall fname args) context = do
   (symbolName, args', returnType) <- checkCall fname args context
   return (returnType, RHSCall symbolName args')
 
+checkAssignRHS (_, RHSAwait fname args) context = do
+  (symbolName, args', returnType) <- checkAwait fname args context
+  return (returnType, RHSAwait symbolName args')
+
 checkArgs :: [Type] -> [Type] -> WACCResult ()
 checkArgs actual expected = checkArgs' 0 actual expected 
   where
@@ -276,6 +280,16 @@ checkCall :: Identifier -> [Annotated Expr SpanA] -> Context -> WACCResult (Iden
 checkCall fname args context = do
   (symbolName, async, expectedArgsType, returnType) <- getFunction fname context
   when async (semanticError ("Cannot call asynchronous function " ++ fname))
+
+  args' <- mapM (\e -> checkExpr e context) args
+  checkArgs expectedArgsType (map fst args')
+
+  return (symbolName, args', returnType)
+
+checkAwait :: Identifier -> [Annotated Expr SpanA] -> Context -> WACCResult (Identifier, [Annotated Expr TypeA], Type)
+checkAwait fname args context = do
+  (symbolName, async, expectedArgsType, returnType) <- getFunction fname context
+  unless async (semanticError ("Cannot await synchronous function " ++ fname))
 
   args' <- mapM (\e -> checkExpr e context) args
   checkArgs expectedArgsType (map fst args')
@@ -390,13 +404,7 @@ checkStmt (_, StmtCall fname args) = do
 
 checkStmt (_, StmtAwait fname args) = do
   context <- get
-
-  (symbolName, async, expectedArgsType, returnType) <- lift $ getFunction fname context
-  unless async (lift $ semanticError ("Cannot await synchronous function " ++ fname))
-
-  args' <- lift $ mapM (\e -> checkExpr e context) args
-  lift $ checkArgs expectedArgsType (map fst args')
-
+  (symbolName, args', _) <- lift $ checkAwait fname args context
   return (False, StmtAwait symbolName args')
 
 checkFunction :: Annotated FuncDef SpanA -> Context -> WACCResult (Annotated FuncDef TypeA)

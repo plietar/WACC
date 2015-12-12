@@ -109,6 +109,10 @@ data IR
 
   deriving Show
 
+data CodeGenReader = CodeGenReader {
+  asyncContext :: Bool
+}
+
 data CodeGenState = CodeGenState {
   tempNames :: [Var],
   localNames :: [Var],
@@ -127,7 +131,7 @@ instance Monoid CodeGenOutput where
   mappend (CodeGenOutput a b) (CodeGenOutput a' b')
     = CodeGenOutput (mappend a a') (mappend b b')
 
-type CodeGen = RWS () CodeGenOutput CodeGenState
+type CodeGen = RWS CodeGenReader CodeGenOutput CodeGenState
 
 allocateTemp :: CodeGen Var
 allocateTemp = do
