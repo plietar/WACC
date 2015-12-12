@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
 set -eux
 
-./compile $1/$2.wacc
-arm-linux-gnueabi-gcc -o $2 -mcpu=arm1176jzf-s -mtune=arm1176jzf-s $2.s
-qemu-arm -L /usr/arm-linux-gnueabi/ $2
+dir=$(dirname $1)
+filename=$(basename $1)
+name=${filename%.*}
+
+RUNTIME=src/runtime/async.c
+
+./compile ${1}
+arm-linux-gnueabi-gcc -std=c99 -mcpu=arm1176jzf-s -mtune=arm1176jzf-s \
+  -o $name ${name}.s ${RUNTIME}
+time qemu-arm -L /usr/arm-linux-gnueabi/ $name
 
 
