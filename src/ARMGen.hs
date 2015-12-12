@@ -7,7 +7,7 @@ import Data.Monoid
 import Control.Monad.RWS
 import Data.Set (Set)
 import Data.Char
-import Data.List (intercalate)
+import Data.List (intercalate, sort)
 import qualified Data.Set as Set
 import Features
 
@@ -230,7 +230,7 @@ genARMInstruction IYield{..} = do
 
   unless (null iSavedContext) $
       emit [ "ADD " ++ show iValue ++ ", " ++ show iValue ++ ", #4"
-           , "STMIA " ++ show iValue ++ ", {" ++ intercalate "," (map show iSavedContext) ++ "}"
+           , "STMIA " ++ show iValue ++ ", {" ++ intercalate "," (map show (sort iSavedContext)) ++ "}"
            , "SUB " ++ show iValue ++ ", " ++ show iValue ++ ", #4" ]
 
   unless (null popRegs)
@@ -241,7 +241,7 @@ genARMInstruction IYield{..} = do
 genARMInstruction IRestore{..} = do
   unless (null iSavedContext) $
       emit [ "ADD " ++ show iValue ++ ", " ++ show iValue ++ ", #4"
-           , "LDMIA " ++ show iValue ++ ", {" ++ intercalate "," (map show iSavedContext) ++ "}"
+           , "LDMIA " ++ show iValue ++ ", {" ++ intercalate "," (map show (sort iSavedContext)) ++ "}"
            , "SUB " ++ show iValue ++ ", " ++ show iValue ++ ", #4" ]
 
 genARMInstruction x = error (show x)
