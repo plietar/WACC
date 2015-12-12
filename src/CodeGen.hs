@@ -36,11 +36,16 @@ genYield value = do
   continuationLabel <- allocateLabel
   continuationVar <- allocateTemp
 
-  emit [ IMove { iDest = Reg 0, iValue = GeneratorState }
+  emit [ ILiteral { iDest = continuationVar, iLiteral = LitLabel continuationLabel }
+       , IHeapWrite { iHeapVar = GeneratorState
+                    , iValue = continuationVar
+                    , iOperand = OperandLit 0
+                    , iType = TyInt }
+       , IMove { iDest = Reg 0, iValue = GeneratorState }
        , IMove { iDest = Reg 1, iValue = value }
-       , ILiteral { iDest = continuationVar, iLiteral = LitLabel continuationLabel }
-       , IYield { iSavedRegs = calleeSaveRegs }
-       , ILabel { iLabel = continuationLabel } ]
+       , IYield { iSavedRegs = calleeSaveRegs, iValue = GeneratorState, iSavedContext = [] }
+       , ILabel { iLabel = continuationLabel }
+       , IRestore { iValue = GeneratorState, iSavedContext = [] } ]
 
 -- Functions
 genFunction :: Annotated FuncDef TypeA -> RWS () ([[IR]], Set Feature) [Label] ()
@@ -59,12 +64,7 @@ genFunction (_, FuncDef _ async fname params body) = do
         (regNames, stackNames) = splitAt argRegCount (map snd params)
         argZip = (zip regNames (drop argRegSkip argPassingRegs))
 
-        generation = do
-          emit [ ILabel { iLabel = NamedLabel (show fname) }
-               , IFunctionBegin { iArgs = map snd argZip, iSavedRegs = calleeSaveRegs }
-               , IFrameAllocate { iSize = 0 } ] -- Fixed later once colouring / spilling is done
-
-          {-
+        setupArguments = do
           regArgsMap <- forM argZip $ \(name, r) -> do
             v <- allocateTemp
             emit [ IMove { iDest = v, iValue = r } ]
@@ -77,15 +77,22 @@ genFunction (_, FuncDef _ async fname params body) = do
 
           setupFrame (Map.fromList (regArgsMap ++ stackArgsMap))
 
-          -}
 
+        generation = do
+          emit [ ILabel { iLabel = NamedLabel (show fname) }
+               , IFunctionBegin { iArgs = map snd argZip, iSavedRegs = calleeSaveRegs }
+               , IFrameAllocate { iSize = 0 } ] -- Fixed later once colouring / spilling is done
+
+          {-
           case fname of
             MainFunc -> do
               genCall0 "p_initialise" []
               emitFeature Initialise
             _ -> return ()
+            -}
 
-          when async $ do
+          if async
+          then do
             emit [ IMove { iDest = GeneratorState, iValue = Reg 0 } ]
 
             startLabel <- allocateLabel
@@ -101,15 +108,17 @@ genFunction (_, FuncDef _ async fname params body) = do
 
             emit [ ILabel { iLabel = startLabel } ]
 
+            setupArguments
+
             sizeVar <- allocateTemp
-            emit [ ILiteral { iDest = sizeVar, iLiteral = LitInt 4 } ]
+            emit [ ILiteral { iDest = sizeVar, iLiteral = LitInt 64 } ]
             stateVar <- genCall1 "malloc" [sizeVar]
             emit [ IMove { iDest = GeneratorState, iValue = stateVar } ]
 
             zeroVar <- allocateTemp
             emit [ ILiteral { iDest = zeroVar, iLiteral = LitInt 0 } ]
-
             genYield zeroVar
+          else setupArguments
 
           genBlock body
 

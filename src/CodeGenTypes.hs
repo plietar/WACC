@@ -101,7 +101,11 @@ data IR
   | IPushArg { iValue :: Var }
   | IClearArgs { iSize :: Int }
 
-  | IYield { iSavedRegs :: [Var] }
+  | IYield { iSavedRegs :: [Var]
+           , iSavedContext :: [Var]
+           , iValue :: Var }
+  | IRestore { iSavedContext :: [Var]
+             , iValue :: Var }
 
   deriving Show
 

@@ -136,7 +136,6 @@ irDef IMove{..}          = Set.singleton iDest
 irDef ICall{..}          = Set.fromList (callerSaveRegs)
 irDef IFrameRead{..}     = Set.singleton iDest
 irDef IHeapRead{..}      = Set.singleton iDest
-irDef IYield{..}         = Set.empty
 irDef _                  = Set.empty
 
 irUse :: IR -> Set Var

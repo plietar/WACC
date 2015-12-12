@@ -227,10 +227,22 @@ genARMInstruction IJumpReg{..}
 
 genARMInstruction IYield{..} = do
   let popRegs = map (\x -> if x == lrReg then pcReg else x) iSavedRegs
+
+  unless (null iSavedContext) $
+      emit [ "ADD " ++ show iValue ++ ", " ++ show iValue ++ ", #4"
+           , "STMIA " ++ show iValue ++ ", {" ++ intercalate "," (map show iSavedContext) ++ "}"
+           , "SUB " ++ show iValue ++ ", " ++ show iValue ++ ", #4" ]
+
   unless (null popRegs)
          (emit [ "POP {" ++ intercalate "," (map show popRegs) ++ "}" ])
   unless (elem lrReg iSavedRegs)
          (emit ["BX lr"])
+
+genARMInstruction IRestore{..} = do
+  unless (null iSavedContext) $
+      emit [ "ADD " ++ show iValue ++ ", " ++ show iValue ++ ", #4"
+           , "LDMIA " ++ show iValue ++ ", {" ++ intercalate "," (map show iSavedContext) ++ "}"
+           , "SUB " ++ show iValue ++ ", " ++ show iValue ++ ", #4" ]
 
 genARMInstruction x = error (show x)
 

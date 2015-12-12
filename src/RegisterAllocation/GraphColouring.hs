@@ -110,9 +110,9 @@ allocateRegisters allVars cfg rig moves = maybe (codegenError "Graph Colouring f
       savedRegs = filter (`Set.member` usedRegs) calleeSaveRegs
       saveSize = 4 * length savedRegs
 
-      fixSavedRegisters IFunctionBegin{..} = IFunctionBegin { iArgs = iArgs, iSavedRegs = savedRegs }
-      fixSavedRegisters IReturn{..}        = IReturn { iArgs = iArgs, iSavedRegs = savedRegs }
-      fixSavedRegisters IYield{..}         = IYield { iSavedRegs = savedRegs }
+      fixSavedRegisters ir@IFunctionBegin{..} = ir { iSavedRegs = savedRegs }
+      fixSavedRegisters ir@IReturn{..}        = ir { iSavedRegs = savedRegs }
+      fixSavedRegisters ir@IYield{..}         = ir { iSavedRegs = savedRegs }
       fixSavedRegisters ir = ir
 
       fixFrameSize ir@IFrameAllocate{..} = ir { iSize   = iSize + frameSize }
@@ -121,12 +121,17 @@ allocateRegisters allVars cfg rig moves = maybe (codegenError "Graph Colouring f
       fixFrameSize ir@IFrameWrite{..}    = ir { iOffset = iOffset + frameSize + saveSize }
       fixFrameSize ir = ir
 
+      fixYield (ir@IYield{..}, (lI, lO))   = (ir { iSavedContext = Set.elems (Set.delete GeneratorState lO) }, (lI, lO))
+      fixYield (ir@IRestore{..}, (lI, lO))   = (ir { iSavedContext = Set.elems (Set.delete GeneratorState lI) }, (lI, lO))
+      fixYield irl = irl
+
   return (Graph.nmap ( simplifyMoves .
                       applyColouring colouring .
                       addLoadStoreSpilled spilledOffsets .
                       map fixFrameSize .
                       map fixSavedRegisters .
-                      map fst) cfg', colouring)
+                      map fst .
+                      map fixYield) cfg', colouring)
   where
 
 -- Merge nodes X and Y, using X's label
@@ -347,6 +352,15 @@ mapIR colouring ICompare{..}
 
 mapIR colouring IJumpReg{..}
   = IJumpReg { iValue = colouring iValue }
+
+mapIR colouring IYield{..}
+  = IYield { iSavedRegs = iSavedRegs
+           , iValue = colouring iValue
+           , iSavedContext = map colouring iSavedContext }
+
+mapIR colouring IRestore{..}
+  = IRestore { iValue = colouring iValue
+             , iSavedContext = map colouring iSavedContext }
 
 -- Base Case
 mapIR colouring x = x
