@@ -9,9 +9,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <errno.h>
 
 uint32_t wacc_socket() {
-    return socket(AF_INET, SOCK_STREAM, 0);
+    return socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
 }
 
 void wacc_bind(uint32_t fd, uint32_t port) {
@@ -37,14 +38,25 @@ void wacc_listen(uint32_t fd) {
 }
 
 uint64_t wacc_accept(uint32_t state, uint32_t fd) {
-    int ret = accept(fd, NULL, NULL);
-
-    if (ret < 0) {
-        perror("accept");
-        exit(1);
+    if (state != 0) {
+        fd = state;
     }
 
-    EXIT(ret);
+    for (;;) {
+        int ret = accept4(fd, NULL, NULL, SOCK_NONBLOCK);
+        if (ret < 0) {
+            if (errno == EINTR) {
+                continue;
+            } else if (errno == EAGAIN) {
+                YIELD(CMD_POLL_READ, fd, fd);
+            } else {
+                perror("accept");
+                exit(1);
+            }
+        }
+
+        EXIT(ret);
+    }
 }
 
 struct recv_state {
@@ -63,21 +75,27 @@ uint64_t wacc_recv(uint32_t s, uint32_t fd) {
         state = (struct recv_state*)s;
     }
 
-    char c;
-    int ret = recv(state->fd, (void*)&c, 1, 0);
+    for (;;) {
+        char c;
+        int ret = recv(state->fd, (void*)&c, 1, 0);
 
-    if (ret < 0) {
-        perror("recv");
-        exit(1);
-    } else if (ret == 0 || c == '\n') {
-        wacc_string *ret = state->buffer;
-        free(state);
-        EXIT(ret);
-    } else {
-        state->buffer->data[state->buffer->length] = c;
-        state->buffer->length ++;
-
-        YIELD(CMD_YIELD, 0, state);
+        if (ret < 0) {
+            if (errno == EINTR) {
+                continue;
+            } else if (errno == EAGAIN) {
+                YIELD(CMD_POLL_READ, fd, state);
+            } else {
+                perror("recv");
+                exit(1);
+            }
+        } else if (ret == 0 || c == '\n') {
+            wacc_string *ret = state->buffer;
+            free(state);
+            EXIT(ret);
+        } else {
+            state->buffer->data[state->buffer->length] = c;
+            state->buffer->length ++;
+        }
     }
 }
 

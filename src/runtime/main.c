@@ -1,5 +1,3 @@
-#define _POSIX_C_SOURCE 199309L
-
 #include "list.h"
 #include "task.h"
 #include "wacc.h"
@@ -53,6 +51,13 @@ int main() {
                         task->wakeup_time = millis() + data;
                         list_remove(&ready_tasks, task);
                         list_insert(&sleep_tasks, task);
+                        break;
+
+                    // TODO: use epoll to wait for the fd to be ready
+                    case CMD_POLL_READ:
+                        break;
+
+                    case CMD_POLL_WRITE:
                         break;
                 }
             }

@@ -16,6 +16,8 @@
 enum {
     CMD_YIELD,
     CMD_SLEEP,
+    CMD_POLL_READ,
+    CMD_POLL_WRITE
 };
 
 #endif

@@ -9,7 +9,7 @@ RUNTIME="src/runtime/main.c src/runtime/list.c src/runtime/task.c src/runtime/ne
 
 ./compile ${1}
 arm-linux-gnueabi-gcc -std=c99 -mcpu=arm1176jzf-s -mtune=arm1176jzf-s \
-  -o $name ${name}.s ${RUNTIME}
+  -o $name ${name}.s ${RUNTIME} -D_GNU_SOURCE
 qemu-arm -L /usr/arm-linux-gnueabi/ $name
 
 
