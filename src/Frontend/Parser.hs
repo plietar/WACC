@@ -250,15 +250,15 @@ scopeStmt = spanned $ do
 
 printStmt :: Parser (Annotated Stmt SpanA)
 printStmt = spanned $ do
-  _ <- keyword "print"
-  e <- expr
-  return (StmtPrint e False)
+  keyword "print"
+  args <- sepBy1 expr comma
+  return (StmtPrint args False)
 
 printlnStmt :: Parser (Annotated Stmt SpanA)
 printlnStmt = spanned $ do
-  _ <- keyword "println"
-  e <- expr
-  return (StmtPrint e True)
+  keyword "println"
+  args <- sepBy1 expr comma
+  return (StmtPrint args True)
 
 assignStmt :: Parser (Annotated Stmt SpanA)
 assignStmt = spanned $ do

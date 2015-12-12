@@ -105,10 +105,10 @@ showStmt (_, StmtExit e) = do
   tell [ (tabs indent) ++ "- StmtExti" ]
   local (+ 1) (showExpr e)
 
-showStmt (_, StmtPrint e b) = do
+showStmt (_, StmtPrint exprs b) = do
   indent <- ask
   tell [ (tabs indent) ++ "- StmtPrint" ++ line ]
-  local (+ 1) (showExpr e)
+  local (+ 1) (mapM_ showExpr exprs)
   where
     line = if b then "ln" else ""
 

@@ -378,10 +378,10 @@ checkStmt (_, StmtExit expr) = do
        (lift (semanticError ("Expected int in exit statement, got " ++ show exprType)))
   return (True, StmtExit expr')
 
-checkStmt (_, StmtPrint expr ln) = do
+checkStmt (_, StmtPrint exprs ln) = do
   context <- get
-  expr' <- lift $ checkExpr expr context
-  return (False, StmtPrint expr' ln)
+  exprs' <- lift $ mapM (\e -> checkExpr e context) exprs
+  return (False, StmtPrint exprs' ln)
 
 checkStmt (_, StmtIf predicate b1 b2) = do
   context <- get

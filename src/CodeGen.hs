@@ -473,17 +473,18 @@ genStmt (_, StmtExit expr) = do
   v <- genExpr expr
   genCall0 "exit" [v]
 
-genStmt (_, StmtPrint expr@(ty, _) newline) = do
-  v <- genExpr expr
-  let (fname, feat) = case ty of
-        TyInt  -> ("p_print_int", Just PrintInt)
-        TyBool -> ("p_print_bool", Just PrintBool)
-        TyChar -> ("putchar", Nothing)
-        TyArray TyChar -> ("p_print_string", Just PrintString)
-        _      -> ("p_print_reference", Just PrintReference)
+genStmt (_, StmtPrint exprs newline) = do
+  forM exprs $ \expr@(ty, _) -> do
+      v <- genExpr expr
+      let (fname, feat) = case ty of
+            TyInt  -> ("p_print_int", Just PrintInt)
+            TyBool -> ("p_print_bool", Just PrintBool)
+            TyChar -> ("putchar", Nothing)
+            TyArray TyChar -> ("p_print_string", Just PrintString)
+            _      -> ("p_print_reference", Just PrintReference)
 
-  maybe (return ()) emitFeature feat
-  genCall0 fname [v]
+      maybe (return ()) emitFeature feat
+      genCall0 fname [v]
 
   when newline (genCall0 "p_print_ln" [] >> emitFeature PrintLine)
 
