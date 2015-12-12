@@ -45,7 +45,7 @@ emitFeature :: Feature -> ARMGen ()
 emitFeature ft = tell (ARMWriter [] [] (Set.singleton ft))
 
 textSegment :: ARMWriter -> [String]
-textSegment w = ".text" : ".global main" : (assembly w)
+textSegment w = ".text" : (assembly w)
 
 dataSegment :: ARMWriter -> [String]
 dataSegment w = ".data" : concatMap genLit (stringLiterals w)
@@ -163,6 +163,9 @@ genARMInstruction (ICall { iLabel = label })
   = emit ["BL " ++ show label ]
 
 --Labels
+genARMInstruction (ILabel { iLabel = NamedLabel name} )
+  = emit [".global " ++ name
+         , name ++ ":"]
 genARMInstruction (ILabel { iLabel = label} )
   = emit [show label ++ ":"]
 
