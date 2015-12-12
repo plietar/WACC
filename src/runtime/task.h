@@ -16,11 +16,6 @@ typedef struct wacc_task {
     struct wacc_task *prev;
 } wacc_task;
 
-enum {
-    CMD_YIELD,
-    CMD_SLEEP,
-};
-
 wacc_task *task_create(const char *name, task_entry entry, uint32_t argument);
 void task_destroy(wacc_task *task);
 uint32_t task_execute(wacc_task *task);

@@ -2,6 +2,8 @@
 
 #include "list.h"
 #include "task.h"
+#include "wacc.h"
+#include "async.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -9,11 +11,6 @@
 #include <stdlib.h>
 
 extern uint64_t wacc_main(uint32_t, uint32_t);
-
-struct wacc_string {
-    uint32_t length;
-    char data[];
-};
 
 wacc_task *ready_tasks = NULL;
 wacc_task *sleep_tasks = NULL;
@@ -29,33 +26,7 @@ void start_task(const char *name, task_entry entry, uint32_t argument) {
     list_insert(&ready_tasks, task);
 }
 
-#define YIELD(cmd, data, state) \
-    do { \
-        return ((uint64_t)(cmd) << 48 | (uint64_t)(data) << 32 | (state)); \
-    } while (0)
-
-#define EXIT(data) \
-    do { \
-        return ((uint64_t)(data) << 32); \
-    } while (0)
-
-uint64_t wacc_yield(uint32_t state) {
-    if (state == 0) {
-        YIELD(CMD_YIELD, 0, 1);
-    } else {
-        EXIT(0);
-    }
-}
-
-uint64_t wacc_sleep_ms(uint32_t state, uint32_t delay) {
-    if (state == 0) {
-        YIELD(CMD_SLEEP, delay, 1);
-    } else {
-        EXIT(0);
-    }
-}
-
-void wacc_fire(task_entry entry, struct wacc_string *name, uint32_t argument) {
+void wacc_fire(task_entry entry, wacc_string *name, uint32_t argument) {
     start_task(name->data, entry, argument);
 }
 
