@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-typedef struct {
+typedef struct wacc_string {
     uint32_t length;
     char data[];
 } wacc_string;

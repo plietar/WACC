@@ -91,7 +91,7 @@ struct recv_state {
 uint64_t wacc_recv(uint32_t _state, wacc_sock *sock) {
     struct recv_state *state;
     if (_state == 0) {
-        state = malloc(sizeof(struct recv_state));
+        state = malloc(sizeof *state);
         state->sock = sock;
         state->buffer = malloc(sizeof(wacc_string) + 128);
         state->buffer->length = 0;
@@ -115,13 +115,68 @@ uint64_t wacc_recv(uint32_t _state, wacc_sock *sock) {
                 perror("recv");
                 exit(1);
             }
-        } else if (ret == 0 || c == '\n') {
+        } else if (ret == 0) {
             wacc_string *ret = state->buffer;
             free(state);
             EXIT(ret);
         } else {
             state->buffer->data[state->buffer->length] = c;
             state->buffer->length ++;
+
+            if (c == '\n') {
+                wacc_string *ret = state->buffer;
+                free(state);
+                EXIT(ret);
+            }
+        }
+    }
+}
+
+struct send_state {
+    wacc_sock *sock;
+    wacc_string *buffer;
+    size_t total;
+};
+
+uint64_t wacc_send(uint32_t _state, wacc_sock *sock, wacc_string *buffer) {
+    struct send_state *state;
+    if (_state == 0) {
+        state = malloc(sizeof *state);
+        state->sock = sock;
+        state->buffer = buffer;
+        state->total = 0;
+    } else {
+        state = (struct send_state*)_state;
+    }
+
+    for (;;) {
+        ssize_t ret = send(state->sock->fd,
+                           state->buffer->data   + state->total,
+                           state->buffer->length - state->total,
+                           0);
+
+        if (ret < 0) {
+            if (errno == EINTR) {
+                continue;
+            } else if (errno == EAGAIN) {
+                yield_cmd *cmd = malloc(sizeof *cmd);
+                cmd->type = CMD_POLL_WRITE;
+                cmd->sock = sock;
+                YIELD(cmd, state);
+            } else {
+                perror("recv");
+                exit(1);
+            }
+        } else {
+            state->total += ret;
+            if (state->total < state->buffer->length) {
+                yield_cmd *cmd = malloc(sizeof *cmd);
+                cmd->type = CMD_POLL_WRITE;
+                cmd->sock = sock;
+                YIELD(cmd, state);
+            } else {
+                EXIT(0);
+            }
         }
     }
 }
