@@ -10,80 +10,107 @@
 #include <string.h>
 #include <stdio.h>
 #include <errno.h>
+#include <sys/epoll.h>
 
-uint32_t wacc_socket() {
-    return socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+void register_socket(wacc_sock *sock);
+
+static wacc_sock *create_socket(int fd) {
+    wacc_sock *sock = malloc(sizeof *sock);
+    sock->fd = fd;
+    sock->recv_list = NULL;
+    sock->send_list = NULL;
+
+    register_socket(sock);
+    return sock;
+}
+wacc_sock *wacc_socket() {
+    int fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    if (fd < 0) {
+        perror("socket");
+        exit(1);
+    }
+
+    int flag = 1;
+    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(int));
+
+    return create_socket(fd);
 }
 
-void wacc_bind(uint32_t fd, uint32_t port) {
+void wacc_bind(wacc_sock *sock, uint32_t port) {
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
     addr.sin_addr.s_addr = INADDR_ANY;
 
-    int ret = bind(fd, (struct sockaddr *)&addr, sizeof(addr));
+    int ret = bind(sock->fd, (struct sockaddr *)&addr, sizeof(addr));
     if (ret < 0) {
         perror("bind");
         exit(1);
     }
 }
 
-void wacc_listen(uint32_t fd) {
-    int ret = listen(fd, 5);
+void wacc_listen(wacc_sock *sock) {
+    int ret = listen(sock->fd, 5);
     if (ret < 0) {
         perror("bind");
         exit(1);
     }
 }
 
-uint64_t wacc_accept(uint32_t state, uint32_t fd) {
-    if (state != 0) {
-        fd = state;
+uint64_t wacc_accept(uint32_t _state, wacc_sock *sock) {
+    if (_state != 0) {
+        sock = (wacc_sock*)_state;
     }
 
     for (;;) {
-        int ret = accept4(fd, NULL, NULL, SOCK_NONBLOCK);
+        int ret = accept4(sock->fd, NULL, NULL, SOCK_NONBLOCK);
         if (ret < 0) {
             if (errno == EINTR) {
                 continue;
             } else if (errno == EAGAIN) {
-                YIELD(CMD_POLL_READ, fd, fd);
+                yield_cmd *cmd = malloc(sizeof *cmd);
+                cmd->type = CMD_POLL_READ;
+                cmd->sock = sock;
+                YIELD(cmd, sock);
             } else {
                 perror("accept");
                 exit(1);
             }
         }
 
-        EXIT(ret);
+        EXIT(create_socket(ret));
     }
 }
 
 struct recv_state {
-    uint32_t fd;
+    wacc_sock *sock;
     wacc_string *buffer;
 };
 
-uint64_t wacc_recv(uint32_t s, uint32_t fd) {
+uint64_t wacc_recv(uint32_t _state, wacc_sock *sock) {
     struct recv_state *state;
-    if (s == 0) {
+    if (_state == 0) {
         state = malloc(sizeof(struct recv_state));
-        state->fd = fd;
+        state->sock = sock;
         state->buffer = malloc(sizeof(wacc_string) + 128);
         state->buffer->length = 0;
     } else {
-        state = (struct recv_state*)s;
+        state = (struct recv_state*)_state;
     }
 
     for (;;) {
         char c;
-        int ret = recv(state->fd, (void*)&c, 1, 0);
+        int ret = recv(state->sock->fd, (void*)&c, 1, 0);
 
         if (ret < 0) {
             if (errno == EINTR) {
                 continue;
             } else if (errno == EAGAIN) {
-                YIELD(CMD_POLL_READ, fd, state);
+                yield_cmd *cmd = malloc(sizeof *cmd);
+                cmd->type = CMD_POLL_READ;
+                cmd->sock = sock;
+                YIELD(cmd, state);
             } else {
                 perror("recv");
                 exit(1);

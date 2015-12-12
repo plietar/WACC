@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+typedef struct yield_cmd yield_cmd;
+
 typedef uint64_t (*task_entry)(uint32_t state, uint32_t argument);
 
 typedef struct wacc_task {
@@ -18,6 +20,6 @@ typedef struct wacc_task {
 
 wacc_task *task_create(const char *name, task_entry entry, uint32_t argument);
 void task_destroy(wacc_task *task);
-uint32_t task_execute(wacc_task *task);
+yield_cmd *task_execute(wacc_task *task);
 
 #endif

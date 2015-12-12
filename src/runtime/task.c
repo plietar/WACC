@@ -1,4 +1,5 @@
 #include "task.h"
+#include "async.h"
 
 #include <stdlib.h>
 
@@ -14,7 +15,7 @@ void task_destroy(wacc_task *task) {
     free(task);
 }
 
-uint32_t task_execute(wacc_task *task) {
+yield_cmd *task_execute(wacc_task *task) {
     uint32_t argument = task->argument;
     if (task->state == 0) {
         task->argument = 0;
@@ -22,6 +23,6 @@ uint32_t task_execute(wacc_task *task) {
 
     uint64_t ret = task->entry(task->state, argument);
     task->state = ret & 0xFFFFFFFF;
-    return (ret >> 32) & 0xFFFFFFFF;
+    return (yield_cmd *)(uint32_t)((ret >> 32) & 0xFFFFFFFF);
 }
 
