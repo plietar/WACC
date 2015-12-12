@@ -12,7 +12,6 @@ typedef struct wacc_task {
     const char *name;
     uint32_t state;
     uint32_t argument;
-    uint64_t wakeup_time;
 
     struct wacc_task *next;
     struct wacc_task *prev;

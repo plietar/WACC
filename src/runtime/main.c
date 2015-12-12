@@ -3,6 +3,7 @@
 #include "wacc.h"
 #include "async.h"
 #include "network.h"
+#include "heap.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -13,7 +14,7 @@
 extern uint64_t wacc_main(uint32_t, uint32_t);
 
 wacc_task *ready_tasks = NULL;
-wacc_task *sleep_tasks = NULL;
+heap *sleep_tasks;
 int epoll_fd;
 
 uint64_t millis() {
@@ -65,8 +66,10 @@ int main() {
     start_task("main", wacc_main, 0);
 
     epoll_fd = epoll_create(1);
+    sleep_tasks = heap_create();
 
     while (1) {
+        while (ready_tasks != NULL) {
         for (wacc_task *task = ready_tasks; task != NULL; ) {
             yield_cmd *cmd = task_execute(task);
 
@@ -81,9 +84,8 @@ int main() {
                         break;
 
                     case CMD_SLEEP:
-                        task->wakeup_time = millis() + cmd->wakeup_time;
                         list_remove(&ready_tasks, task);
-                        list_insert(&sleep_tasks, task);
+                        heap_insert(sleep_tasks, cmd->wakeup_time, task);
                         break;
 
                     case CMD_POLL_READ:
@@ -102,9 +104,21 @@ int main() {
 
             task = next;
         }
+        }
+
+        int timeout = -1;
+        uint64_t next_wakeup;
+        if (heap_peek(sleep_tasks, &next_wakeup, NULL)) {
+            uint64_t now = millis();
+            if (next_wakeup > now) {
+                timeout = next_wakeup - now;
+            } else {
+                timeout = 0;
+            }
+        }
 
         struct epoll_event evs[8];
-        int nev = epoll_wait(epoll_fd, evs, 8, 100);
+        int nev = epoll_wait(epoll_fd, evs, 8, timeout);
         for (int i = 0; i < nev; i++) {
             wacc_sock *sock = evs[i].data.ptr;
 
@@ -131,15 +145,11 @@ int main() {
             }
         }
 
-        for (wacc_task *task = sleep_tasks; task != NULL;) {
-            wacc_task *next = task->next;
-
-            if (task->wakeup_time < millis()) {
-                list_remove(&sleep_tasks, task);
-                list_insert(&ready_tasks, task);
-            }
-
-            task = next;
+        uint64_t now = millis();
+        while (heap_peek(sleep_tasks, &next_wakeup, NULL) && next_wakeup <= now) {
+            wacc_task *task;
+            heap_pop(sleep_tasks, NULL, &task);
+            list_insert(&ready_tasks, task);
         }
     }
 }
