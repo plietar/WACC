@@ -534,6 +534,15 @@ genStmt (_, StmtAwait name exprs) = do
   genAwait name argVars
   return ()
 
+genStmt (_, StmtFire name exprs) = do
+  funcVar <- allocateTemp
+  nameVar <- allocateTemp
+  emit [ ILiteral { iDest = funcVar, iLiteral = LitLabel (NamedLabel name) } ]
+  emit [ ILiteral { iDest = nameVar, iLiteral = LitString name } ]
+
+  argVars <- mapM genExpr exprs
+  genCall0 "wacc_fire" (funcVar : nameVar : argVars)
+
 -- Block code generation
 genBlock :: Annotated Block TypeA -> CodeGen ()
 genBlock ((_, locals), Block stmts)

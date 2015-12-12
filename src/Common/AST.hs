@@ -33,6 +33,7 @@ data Stmt a
   | StmtScope  (Annotated Block a)
   | StmtCall   Identifier [Annotated Expr a]
   | StmtAwait  Identifier [Annotated Expr a]
+  | StmtFire   Identifier [Annotated Expr a]
 
 data AssignLHS a
   = LHSVar       Identifier

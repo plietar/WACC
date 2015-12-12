@@ -5,20 +5,24 @@
 #include <time.h>
 #include <stdlib.h>
 
-uint64_t wacc_main(uint32_t state);
-uint64_t f_taskA(uint32_t state);
-uint64_t f_taskB(uint32_t state);
+extern uint64_t wacc_main(uint32_t, uint32_t);
 
-typedef uint64_t (*generator)(uint32_t);
+typedef uint64_t (*generator)(uint32_t, uint32_t);
 
 struct coroutine {
     generator entry;
     const char *name;
     uint32_t state;
+    uint32_t argument;
     uint64_t wakeup_time;
 
     struct coroutine *next;
     struct coroutine *prev;
+};
+
+struct wacc_string {
+    uint32_t length;
+    char data[];
 };
 
 enum {
@@ -57,11 +61,12 @@ void list_remove(struct coroutine **list, struct coroutine *task) {
     task->prev = NULL;
 }
 
-void start_task(const char *name, generator entry, uint32_t state) {
+void start_task(const char *name, generator entry, uint32_t argument) {
     struct coroutine *task = malloc(sizeof(struct coroutine));
     task->name = name;
     task->entry = entry;
-    task->state = state;
+    task->state = 0;
+    task->argument = argument;
     task->wakeup_time = 0;
 
     list_insert(&ready_tasks, task);
@@ -95,6 +100,10 @@ uint64_t wacc_yield(uint32_t state) {
     }
 }
 
+void wacc_fire(generator entry, struct wacc_string *name, uint32_t argument) {
+    start_task(name->data, entry, argument);
+}
+
 uint64_t wacc_sleep_ms(uint32_t state, uint32_t delay) {
     if (state == 0) {
         YIELD(CMD_SLEEP, delay, 1);
@@ -104,14 +113,18 @@ uint64_t wacc_sleep_ms(uint32_t state, uint32_t delay) {
 }
 
 int main() {
-    start_task("taskA", f_taskA, 0);
-    start_task("taskB", f_taskB, 0);
+    start_task("main", wacc_main, 0);
 
     while (1) {
         struct coroutine *task = ready_tasks;
 
         while (task != NULL) {
-            uint64_t ret = task->entry(task->state);
+            uint32_t argument = task->argument;
+            if (task->state == 0) {
+                task->argument = 0;
+            }
+
+            uint64_t ret = task->entry(task->state, argument);
 
             uint16_t cmd   = (ret >> 48) & 0xFFFF;
             uint16_t data  = (ret >> 32) & 0xFFFF;
@@ -131,7 +144,6 @@ int main() {
 
                     case CMD_SLEEP:
                         task->wakeup_time = millis() + data;
-                        //printf("Sleep task %s %d\n", task->name, data);
                         list_remove(&ready_tasks, task);
                         list_insert(&sleep_tasks, task);
                         break;
@@ -145,7 +157,6 @@ int main() {
         while (task != NULL) {
             struct coroutine *next = task->next;
             if (task->wakeup_time < millis()) {
-                //printf("Wakeup task %s\n", task->name);
                 list_remove(&sleep_tasks, task);
                 list_insert(&ready_tasks, task);
             }

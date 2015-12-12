@@ -305,6 +305,13 @@ awaitStmt = spanned $ do
   args <- parens (sepBy expr comma)
   return (StmtAwait name args)
 
+fireStmt :: Parser (Annotated Stmt SpanA)
+fireStmt = spanned $ do
+  _ <- keyword "fire"
+  name <- identifier
+  args <- parens (sepBy expr comma)
+  return (StmtFire name args)
+
 stmt :: Parser (Annotated Stmt SpanA)
 stmt = skipStmt    <|>
        whileStmt   <|>
@@ -320,7 +327,8 @@ stmt = skipStmt    <|>
        letStmt     <|>
        varStmt     <|>
        callStmt    <|>
-       awaitStmt   <?> "statement"
+       awaitStmt   <|>
+       fireStmt    <?> "statement"
 
 block :: Parser (Annotated Block SpanA)
 block = spanned $ Block <$> sepBy1 stmt semi

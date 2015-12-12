@@ -43,7 +43,7 @@ tokens :-
   begin | end | is | skip | read | free | return | exit | print | println | if
     | then | else | fi | while | do | done | newpair | call | fst | snd | int
     | bool | char | string | pair | len | ord | chr | null | let | ffi | func | void
-    | async | await
+    | async | await | fire
                        { \(AlexPn _ line column) s-> ((line, column), TokKeyword s) }
  
   -- Operators

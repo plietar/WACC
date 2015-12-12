@@ -296,6 +296,17 @@ checkAwait fname args context = do
 
   return (symbolName, args', returnType)
 
+checkFire :: Identifier -> [Annotated Expr SpanA] -> Context -> WACCResult (Identifier, [Annotated Expr TypeA], Type)
+checkFire fname args context = do
+  (symbolName, async, expectedArgsType, returnType) <- getFunction fname context
+  unless async (semanticError ("Cannot fire synchronous function " ++ fname))
+  when (length args > 1) (semanticError ("Function " ++ fname ++ " with more than one argument cannot be fired"))
+
+  args' <- mapM (\e -> checkExpr e context) args
+  checkArgs expectedArgsType (map fst args')
+
+  return (symbolName, args', returnType)
+
 checkBlock :: Annotated Block SpanA -> Context -> WACCResult (Annotated Block TypeA)
 checkBlock (_, Block stmts) parent = do
   let context = newContext parent
@@ -406,6 +417,11 @@ checkStmt (_, StmtAwait fname args) = do
   context <- get
   (symbolName, args', _) <- lift $ checkAwait fname args context
   return (False, StmtAwait symbolName args')
+
+checkStmt (_, StmtFire fname args) = do
+  context <- get
+  (symbolName, args', _) <- lift $ checkFire fname args context
+  return (False, StmtFire symbolName args')
 
 checkFunction :: Annotated FuncDef SpanA -> Context -> WACCResult (Annotated FuncDef TypeA)
 checkFunction (_, FuncDef expectedReturnType async name args block) globalContext
