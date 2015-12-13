@@ -336,37 +336,36 @@ block = spanned $ Block <$> sepBy1 stmt semi
 param :: Parser (Type, Identifier)
 param = (,) <$> parseType <*> identifier
 
-function :: Parser (Annotated FuncDef SpanA)
-function = spanned $ do
-  (returnType, async, functionName) <- P.try $ do
-    a <- option False (keyword "async" >> return True)
+function :: Parser (Annotated Decl SpanA)
+function = wrapSpan DeclFunc <$> (spanned $ do
+  async <- option False (keyword "async" >> return True)
+  (returnType, functionName) <- P.try $ do
     t <- parseType <|> voidType
     i <- identifier
     lookAhead (token TokLParen)
-    return (t, a, i)
+    return (t, i)
 
   args <- parens (sepBy param comma)
-  _ <- keyword "is"
+  keyword "is"
   body <- block
-  _ <- keyword "end"
-  return (FuncDef returnType async (FuncName functionName) args body)
+  keyword "end"
+  return (FuncDef returnType async (FuncName functionName) args body))
 
-newFunction :: Parser (Annotated Decl SpanA)
-newFunction = wrapSpan DeclFFIFunc <$> (spanned $ do
-  keyword "func"
+ffiFunction :: Parser (Annotated Decl SpanA)
+ffiFunction = wrapSpan DeclFFIFunc <$> (spanned $ do
   keyword "ffi"
   async <- option False (keyword "async" >> return True)
+  returnType <- (parseType <|> voidType)
   functionName <- identifier
   args <- parens (sepBy parseType comma)
-  returnType <- (colon >> (parseType <|> voidType)) <|> return TyVoid
   symbolName <- (equal >> identifier) <|> return functionName
   semi
 
   return (FFIFunc returnType async functionName args symbolName))
 
 decl :: Parser (Annotated Decl SpanA)
-decl = (wrapSpan DeclFuncDef <$> function) <|>
-       newFunction
+decl = function <|>
+       ffiFunction
 
 mainFunc :: Parser (Annotated FuncDef SpanA)
 mainFunc = spanned $ do
@@ -379,7 +378,7 @@ program = spanned $ do
   f <- many decl
   m <- mainFunc
   _ <- keyword "end"
-  return (Program ((wrapSpan DeclFuncDef m):f))
+  return (Program ((wrapSpan DeclFunc m):f))
 
 waccParser :: String -> [(Pos, Token)] -> WACCResult (Annotated Program SpanA)
 waccParser fname tokens

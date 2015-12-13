@@ -444,7 +444,7 @@ checkFFIFunc (_, FFIFunc returnType async name args symbolName) ctx
   = return ((), FFIFunc returnType async name args symbolName)
 
 checkDecl :: Annotated Decl SpanA -> Context -> WACCResult (Annotated Decl TypeA)
-checkDecl (_, DeclFuncDef f) ctx = ((),) <$> DeclFuncDef <$> checkFunction f ctx
+checkDecl (_, DeclFunc f) ctx = ((),) <$> DeclFunc <$> checkFunction f ctx
 checkDecl (_, DeclFFIFunc f) ctx = ((),) <$> DeclFFIFunc <$> checkFFIFunc f ctx
 
 defineFunction :: Annotated FuncDef SpanA -> ContextState ()
@@ -457,7 +457,7 @@ defineFFIFunc (_, FFIFunc returnType async name args symbolName)
   = addFunction name (symbolName, async, args, returnType)
 
 defineDecl :: Annotated Decl SpanA -> ContextState ()
-defineDecl (_, DeclFuncDef f) = defineFunction f
+defineDecl (_, DeclFunc f) = defineFunction f
 defineDecl (_, DeclFFIFunc f) = defineFFIFunc f
 
 checkProgram :: Annotated Program SpanA -> WACCResult (Annotated Program TypeA)

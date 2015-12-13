@@ -55,7 +55,7 @@ showProgram (_, Program fs) = do
   return ()
 
 showDecl :: (Annotated Decl TypeA) -> PrintAST ()
-showDecl (_, DeclFuncDef f) = showFuncDef f
+showDecl (_, DeclFunc f) = showFuncDef f
 showDecl (_, DeclFFIFunc f) = tell [show f]
 
 showFuncDef :: (Annotated FuncDef TypeA) -> PrintAST ()

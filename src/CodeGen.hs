@@ -28,7 +28,7 @@ genProgram (_, Program fs)
   = snd $ evalRWS (mapM genDecl fs) () (map UnnamedLabel [0..]) 
 
 genDecl :: Annotated Decl TypeA -> RWS () ([[IR]], Set Feature) [Label] ()
-genDecl (_, DeclFuncDef f) = genFunction f
+genDecl (_, DeclFunc f) = genFunction f
 genDecl (_, DeclFFIFunc f) = return ()
 
 -- Functions

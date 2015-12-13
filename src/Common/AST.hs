@@ -11,7 +11,7 @@ import Common.Span
 data FuncName = FuncName Identifier | MainFunc
 
 data Program a = Program [Annotated Decl a]
-data Decl a = DeclFuncDef (Annotated FuncDef a)
+data Decl a = DeclFunc (Annotated FuncDef a)
             | DeclFFIFunc (Annotated FFIFunc a)
 
 data FFIFunc a = FFIFunc Type Bool Identifier [Type] Identifier
