@@ -69,7 +69,7 @@ data Label = NamedLabel String | UnnamedLabel Int
   deriving (Ord, Eq)
 
 instance Show Label where
-  show (UnnamedLabel i) = "L" ++ show i
+  show (UnnamedLabel i) = ".L" ++ show i
   show (NamedLabel   n) = n
 
 data Literal = LitInt Integer
