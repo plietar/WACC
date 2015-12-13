@@ -268,6 +268,8 @@ genIndexingWrite (TyArray elemTy) writeIndexExpr subIndexVar valueVar = do
                     , iType     = elemTy } ]
 
 genIndexingWrite (TyTuple ts) (_, ExprLit (LitInt x)) subIndexVar valueVar = 
+  emitFeature CheckNullPointer
+  genCall0 "p_check_null_pointer" [subIndexVar]
   emit [ IHeapWrite { iHeapVar = subIndexVar 
                     , iValue  = valueVar
                     , iOperand = OperandLit (4 * fromInteger x)
