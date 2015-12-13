@@ -1,0 +1,51 @@
+begin
+  ffi type socket;
+
+  ffi async void   sleep_ms(int)     = wacc_sleep_ms;
+  ffi async void   yield()           = wacc_yield;
+
+  ffi       socket socket()             = wacc_socket;
+  ffi       void   bind(socket, int)    = wacc_bind;
+  ffi       void   listen(socket)       = wacc_listen;
+  ffi async socket accept(socket)       = wacc_accept;
+  ffi async string recv(socket)         = wacc_recv;
+  ffi async bool   send(socket, string) = wacc_send;
+
+  async void count() is
+    let x = 0;
+    while true do
+      println x;
+      x = x + 1;
+      await sleep_ms(1000)
+    done
+  end
+
+  async void handle(socket connection) is
+    println "New connection.";
+    await send(connection, "Welcome !\r\n");
+
+    await send(connection, "> ");
+    let msg = await recv(connection);
+
+    while len msg > 0 do
+      await send(connection, msg);
+      await send(connection, "> ");
+      msg = await recv(connection)
+    done;
+
+    println "Connection closed."
+  end
+
+  fire count();
+
+  socket fd = call socket();
+  call bind(fd, 5050);
+  call listen(fd);
+
+  println "Waiting for connections";
+
+  while true do
+    let connection = await accept(fd);
+    fire handle(connection)
+  done
+end

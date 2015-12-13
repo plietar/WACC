@@ -1,0 +1,19 @@
+begin
+  ffi async void sleep_ms(int) = wacc_sleep_ms;
+  ffi async void yield() = wacc_yield;
+
+  async void task(int delay) is
+    let i = 0;
+    while true do
+      println "Task ", delay, " ", i, " ", i * delay;
+      i = i + 1;
+      await sleep_ms(delay * 1000)
+    done
+  end
+
+  int i = 5;
+  while i > 0 do
+      fire task(i);
+      i = i - 1
+  done
+end
