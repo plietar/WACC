@@ -7,7 +7,7 @@ import Common.Span
 import Common.WACCResult
 import Frontend.Tokens
 
-import Control.Applicative
+import Control.Applicative 
 import Data.Int
 import Text.Parsec.Combinator
 import Text.Parsec.Expr
@@ -76,18 +76,19 @@ literal = (lit >>= check) <?> "literal"
 
     check :: Literal -> Parser Literal
     check x@(LitInt l) = if l > toInteger( maxBound :: Int32 )
-                         then (fail "Integer litteral too large")
+                         then (fail "Integer literal too large")
                          else return x
     check x = return x
 
 semi :: Parser Token
 semi = token TokSemiColon
-colon :: Parser Token
-colon = token TokColon
 comma :: Parser Token
 comma = token TokComma
 equal :: Parser Token
 equal = token TokEqual
+colon :: Parser Token
+colon = token TokColon
+
 
 parens :: Parser p -> Parser p
 parens = between (token TokLParen) (token TokRParen)
@@ -100,7 +101,7 @@ expr = buildExpressionParser exprTable term <?> "expression"
   where
     term = parens expr
            <|> spanned (ExprLit <$> literal)
-           <|> spanned (ExprArrayElem <$> arrayElem)
+           <|> spanned (ExprIndexingElem <$> indexingElem)
            <|> spanned (ExprVar <$> identifier)
            <?> "term"
 
@@ -121,15 +122,15 @@ expr = buildExpressionParser exprTable term <?> "expression"
     exprTable = [ [ prefix (op "!") UnOpNot, prefix (op "-") UnOpNeg
                   , prefix (keyword "len") UnOpLen, prefix (keyword "ord") UnOpOrd
                   , prefix (keyword "chr") UnOpChr ]
-                , [ left (op "*") BinOpMul, left (op "/") BinOpDiv, left (op "%") BinOpRem]
-                , [ left (op "+") BinOpAdd, left (op "-") BinOpSub ]
-                , [ nonassoc (op ">")  BinOpGT ]
-                , [ nonassoc (op ">=") BinOpGE ]
-                , [ nonassoc (op "<")  BinOpLT ]
-                , [ nonassoc (op "<=") BinOpLE ]
-                , [ nonassoc (op "==") BinOpEQ, nonassoc (op "!=") BinOpNE ]
-                , [ left (op "&&") BinOpAnd ]
-                , [ left (op "||") BinOpOr ]
+                  , [ left (op "*") BinOpMul, left (op "/") BinOpDiv, left (op "%") BinOpRem]
+                  , [ left (op "+") BinOpAdd, left (op "-") BinOpSub ]
+                  , [ nonassoc (op ">")  BinOpGT ]
+                  , [ nonassoc (op ">=") BinOpGE ]
+                  , [ nonassoc (op "<")  BinOpLT ]
+                  , [ nonassoc (op "<=") BinOpLE ]
+                  , [ nonassoc (op "==") BinOpEQ, nonassoc (op "!=") BinOpNE ]
+                  , [ left (op "&&") BinOpAnd ]
+                  , [ left (op "||") BinOpOr ]
                 ]
 
 parseType :: Parser Type
@@ -139,7 +140,7 @@ parseType = (do
   return (arr t)
   ) <?> "type"
   where
-    notArrayType = baseType <|> pairType <|> chanType
+    notArrayType = baseType <|> pairType <|> tupleType <|> chanType
     baseType = (keyword "int"    $> TyInt) <|>
                (keyword "bool"   $> TyBool) <|>
                (keyword "char"   $> TyChar) <|>
@@ -148,35 +149,35 @@ parseType = (do
 
     pairType = do
       _ <- P.try (keyword "pair" <* P.lookAhead (token TokLParen))
-      parens (TyPair <$> pairElemType <* comma <*> pairElemType)
-    pairElemType = parseType <|> (keyword "pair" $> TyPair TyAny TyAny)
+      parens (TyTuple <$> (sepBy pairElemType comma))
+    pairElemType = parseType <|> (keyword "pair" $> TyTuple [TyAny, TyAny])
+    tupleType = do
+      _ <- P.try (keyword "tuple")
+      parens (TyTuple <$> (sepBy parseType comma))
 
     chanType = keyword "chan" >> (TyChan <$> parens parseType)
 
 voidType :: Parser Type
 voidType = keyword "void" $> TyVoid
 
-pairElem :: Parser (Annotated PairElem SpanA)
+pairElem :: Parser (Annotated IndexingElem SpanA)
 pairElem = spanned $ do
-  side <- pairSide
-  e <- expr
-  return (PairElem side e)
-  where
-    pairSide = (keyword "fst" $> PairFst) <|>
-               (keyword "snd" $> PairSnd)
+  index <- spanned $ ExprLit <$> LitInt <$> ((keyword "fst" $> 0) <|> (keyword "snd" $> 1))
+  i    <- identifier
+  return (IndexingElem i [index])
 
-arrayElem :: Parser (Annotated ArrayElem SpanA)
-arrayElem = spanned $ do
+indexingElem :: Parser (Annotated IndexingElem SpanA)
+indexingElem = spanned $ do
   i <- P.try (identifier <* P.lookAhead (token TokLBracket))
-  a <- many1 arrayIndex
-  return (ArrayElem i a)
+  a <- many1 index
+  return (IndexingElem i a)
   where
-    arrayIndex = brackets expr
+    index = brackets expr
 
 assignLHS :: Parser (Annotated AssignLHS SpanA)
 assignLHS
-  = spanned $ LHSArrayElem <$> arrayElem <|>
-              LHSPairElem <$> pairElem <|>
+  = spanned $ LHSIndexingElem <$> indexingElem <|>
+              LHSIndexingElem <$> pairElem <|>
               LHSVar <$> identifier
 
 assignRHS :: Parser (Annotated AssignRHS SpanA)
@@ -187,18 +188,22 @@ assignRHS
               rhsCall <|>
               rhsAwait <|>
               rhsNewPair <|>
+              rhsNewTuple <|>
               rhsNewChan <|>
               rhsChanRecv
     where
       rhsExpr     = RHSExpr <$> expr
       rhsArrayLit = RHSArrayLit <$> brackets (sepBy expr comma) <?> "array literal"
-      rhsPairElem = RHSPairElem <$> pairElem
-      rhsNewPair = keyword "newpair" *> parens (RHSNewPair <$> expr <* comma <*> expr)
+      rhsPairElem = RHSExpr <$> wrapSpan ExprIndexingElem <$> pairElem
+      rhsNewPair  = keyword "newpair" *> parens (RHSNewTuple <$> ((\a b -> [a,b]) <$> expr <* comma <*> expr))
+      rhsNewTuple = keyword "newtuple" *> parens (RHSNewTuple <$> (sepBy expr comma))
+
       rhsCall = do
-        _  <- keyword "call"
-        i  <- identifier
-        es <- parens (sepBy expr comma)
-        return (RHSCall i es)
+        keyword "call"
+        name  <- identifier
+        args <- parens (sepBy expr comma)
+        return (RHSCall name args)
+
       rhsAwait = do
         keyword "await"
         name <- identifier
@@ -254,10 +259,26 @@ ifStmt = spanned $ do
   i <- expr
   _ <- keyword "then"
   t <- block
-  _ <- keyword "else"
-  e <- block
+  e <- optionMaybe (keyword "else" >> block)
   _ <- keyword "fi"
   return (StmtIf i t e)
+
+
+switchStmt :: Parser (Annotated Stmt SpanA)
+switchStmt = spanned $ do
+  _ <- keyword "switch"
+  e <- expr
+  cs <- many1 caseArm
+  _ <- keyword "end"
+  return (StmtSwitch e cs)
+
+caseArm :: Parser (Annotated CaseArm SpanA)
+caseArm = spanned $ do
+  _ <- keyword "case"
+  i <- literal
+  _ <- colon
+  b <- block 
+  return (CaseArm i b)
 
 scopeStmt :: Parser (Annotated Stmt SpanA)
 scopeStmt = spanned $ do
@@ -340,6 +361,7 @@ stmt :: Parser (Annotated Stmt SpanA)
 stmt = skipStmt    <|>
        whileStmt   <|>
        ifStmt      <|>
+       switchStmt  <|>
        scopeStmt   <|>
        printStmt   <|>
        printlnStmt <|>

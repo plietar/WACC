@@ -65,7 +65,7 @@ genARMInstruction (ILiteral { iDest = dest, iLiteral = LitBool True } )
   = emit ["MOV " ++ show dest ++ ", #1"]
 genARMInstruction (ILiteral { iDest = dest, iLiteral = LitBool False } )
   = emit ["MOV " ++ show dest ++ ", #0"]
-genARMInstruction (ILiteral { iDest = dest, iLiteral = LitChar chr } ) 
+genARMInstruction (ILiteral { iDest = dest, iLiteral = LitChar chr } )
   = emit ["MOV " ++ show dest ++ ", #" ++ (show (ord chr))]
 genARMInstruction (ILiteral { iDest = dest, iLiteral = LitString str } ) = do
   message <- emitLiteral str
@@ -76,19 +76,19 @@ genARMInstruction (ILiteral { iDest = dest, iLiteral = LitLabel lab } ) = do
 --BinOp
 genARMInstruction (IBinOp { iBinOp = op, iDest = dest,
         iLeft  = left, iRight = right } )
-  = case op of  
+  = case op of
       BinOpAdd -> do
                   emit [ "ADDS " ++ show dest ++
                          ", " ++ show left ++
                          ", " ++ show right
                        , "BLVS p_throw_overflow_error"]
-                  emitFeature ThrowOverflowError 
+                  emitFeature ThrowOverflowError
       BinOpSub -> do
                   emit [ "SUBS " ++ show dest ++
                          ", " ++ show left ++
                          ", " ++ show right
                        , "BLVS p_throw_overflow_error"]
-                  emitFeature ThrowOverflowError 
+                  emitFeature ThrowOverflowError
       BinOpGT  -> emit ["CMP " ++ show left ++ ", " ++ (show right),
                         "MOVGT " ++ show dest ++ ", #1",
                         "MOVLE " ++ show dest ++ ", #0"]
@@ -131,7 +131,7 @@ genARMInstruction IUnOp { iUnOp = op, iDest = dest,
       UnOpNeg -> do
         emit ["RSBS " ++ show dest ++ ", " ++ show value ++ ", #0"
              , "BLVS p_throw_overflow_error"]
-        emitFeature ThrowOverflowError 
+        emitFeature ThrowOverflowError
       UnOpLen -> emit ["LDR " ++ show dest ++ ", [" ++ show value ++ "]"]
 
 genARMInstruction IMove { iDest = dest, iValue = value }
@@ -172,8 +172,8 @@ genARMInstruction (ILabel { iLabel = label} )
 --Frame
 genARMInstruction (IFrameAllocate { iSize = 0 }) = return ()
 genARMInstruction (IFrameAllocate { iSize = size }) = do
-  if size <= offsetLimitARM 
-  then 
+  if size <= offsetLimitARM
+  then
     emit ["SUB sp, sp, #" ++ show size]
   else do
     emit ["SUB sp, sp, #" ++ show offsetLimitARM ]
@@ -182,8 +182,8 @@ genARMInstruction (IFrameAllocate { iSize = size }) = do
 
 genARMInstruction (IFrameFree { iSize = 0 }) = return ()
 genARMInstruction (IFrameFree { iSize = size }) = do
-  if size <= offsetLimitARM 
-  then 
+  if size <= offsetLimitARM
+  then
     emit ["ADD sp, sp, #" ++ show size]
   else do
     emit ["ADD sp, sp, #" ++ show offsetLimitARM ]
@@ -204,11 +204,11 @@ genARMInstruction (IHeapRead { iHeapVar = heapVar, iDest = dest, iOperand = Oper
 
 -- Heap Write (i.e Pairs and Arrays)
 genARMInstruction (IHeapWrite { iHeapVar = heapVar, iValue = value, iOperand = OperandVar offset shift, iType = ty })
-  = emit [strInstr ty ++ " " ++ show value ++ ", [" ++ show heapVar ++ ", " ++ show offset ++ scaling ++ "]"] 
+  = emit [strInstr ty ++ " " ++ show value ++ ", [" ++ show heapVar ++ ", " ++ show offset ++ scaling ++ "]"]
     where scaling = if shift /= 0 then ", lsl #" ++ show shift else ""
 genARMInstruction (IHeapWrite { iHeapVar = heapVar, iValue = value, iOperand = OperandLit offset, iType = ty })
-  = emit [strInstr ty ++ " " ++ show value ++ ", [" ++ show heapVar ++ ", #" ++ show offset ++ "]"] 
- 
+  = emit [strInstr ty ++ " " ++ show value ++ ", [" ++ show heapVar ++ ", #" ++ show offset ++ "]"]
+
 -- Function
 genARMInstruction IFunctionBegin {..}
   = unless (null iSavedRegs)
@@ -243,8 +243,6 @@ genARMInstruction IRestore{..} = do
       emit [ "ADD " ++ show iValue ++ ", " ++ show iValue ++ ", #4"
            , "LDMIA " ++ show iValue ++ ", {" ++ intercalate "," (map show (sort iSavedContext)) ++ "}"
            , "SUB " ++ show iValue ++ ", " ++ show iValue ++ ", #4" ]
-
-genARMInstruction x = error (show x)
 
 strInstr :: Type -> String
 strInstr TyBool = "STRB"

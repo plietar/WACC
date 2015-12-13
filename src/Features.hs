@@ -18,7 +18,6 @@ data Feature = CheckDivideByZero
               | ThrowDoubleFreeError
               | ThrowRuntimeError
               | ThrowOverflowError
-              | FreePair
               deriving (Show, Eq, Ord, Enum)
 
 genFeatures :: Set Feature -> ([String], [String])

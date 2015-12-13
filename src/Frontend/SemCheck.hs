@@ -80,20 +80,24 @@ mergeTypes t1 TyAny = OK t1
 mergeTypes TyAny t2 = OK t2
 mergeTypes (TyArray t1) (TyArray t2)
   = TyArray <$> mergeTypes t1 t2
-mergeTypes (TyPair f1 s1) (TyPair f2 s2)
-  = TyPair <$> mergeTypes f1 f2 <*> mergeTypes s1 s2
+mergeTypes (TyTuple ts1) (TyTuple ts2)
+  = TyTuple <$> sequence (zipWith mergeTypes ts1 ts2)
 mergeTypes (TyChan t1) (TyChan t2)
   = TyChan <$> mergeTypes t1 t2
+mergeTypes TyNull (TyTuple tys)
+  = return (TyTuple tys)
+mergeTypes (TyTuple tys) TyNull
+  = return (TyTuple tys)
 mergeTypes t1 t2
   | t1 == t2  = OK t1
   | otherwise = semanticError ("Types " ++ show t1 ++ " and " ++ 
-                                      show t2 ++ " are not compatible")
+                                           show t2 ++ " are not compatible")
 
 checkType :: Context -> Type -> WACCResult Type
 checkType ctx (TyArray elemTy)
   = TyArray <$> checkType ctx elemTy
-checkType ctx (TyPair fstTy sndTy)
-  = TyPair <$> checkType ctx fstTy <*> checkType ctx sndTy
+checkType ctx (TyTuple elemTys)
+  = TyTuple <$> mapM (checkType ctx) elemTys
 checkType ctx (TyChan elemTy)
   = TyChan <$> checkType ctx elemTy
 checkType ctx (TyName name)
@@ -107,7 +111,7 @@ isArrayType TyAny       = True
 isArrayType _           = False
 
 isHeapType :: Type -> Bool
-isHeapType (TyPair _ _) = True
+isHeapType (TyTuple _ ) = True
 isHeapType (TyArray _)  = True
 isHeapType TyAny        = True
 isHeapType _            = False
@@ -126,24 +130,60 @@ isReadableType TyAny  = True
 isReadableType _      = False
 
 isAbstractType :: Type -> Bool
-isAbstractType TyAny          = True
-isAbstractType TyVoid         = True
-isAbstractType (TyPair ta tb) = isAbstractType ta || isAbstractType tb
-isAbstractType (TyArray ty)   = isAbstractType ty
-isAbstractType _              = False
+isAbstractType TyAny         = True
+isAbstractType TyVoid        = True
+isAbstractType (TyTuple tys) = any isAbstractType tys
+isAbstractType (TyArray ty)  = isAbstractType ty
+isAbstractType _             = False
 
 isVoidType :: Type -> Bool
 isVoidType TyVoid = True
 isVoidType _      = False
-
 
 checkLiteral :: Literal -> Type
 checkLiteral (LitInt _)    = TyInt
 checkLiteral (LitBool _)   = TyBool
 checkLiteral (LitChar _)   = TyChar
 checkLiteral (LitString _) = TyArray TyChar
-checkLiteral  LitNull      = TyPair TyAny TyAny
+checkLiteral  LitNull      = TyNull
 
+checkIndexingElem :: Annotated IndexingElem SpanA -> Context -> WACCResult (Annotated IndexingElem TypeA)
+checkIndexingElem (_, IndexingElem varname exprs) context = do
+  baseTy <- getVariable varname context
+  exprs' <- mapM (\e -> checkExpr e context) exprs
+  ty <- checkIndexingElem' baseTy exprs'
+  return (ty, IndexingElem varname exprs')
+
+checkIndexingElem' :: Type -> [Annotated Expr TypeA] -> WACCResult (Type, [Type])
+checkIndexingElem' baseType@(TyTuple ts) exprs@((ty, e):es) 
+  | compatible && literal && bounded = do
+      (elemType, baseTypes) <- checkIndexingElem' (ts !! exprLitToInt e) es 
+      return (elemType, baseType : baseTypes)
+  | compatible && literal            = semanticError("Cannot index " 
+                                         ++ show (exprLitToInt e) ++ " out of bounds in tuple.")
+  | otherwise                        = semanticError("Cannot index a variable of type " ++ show ty) 
+    where
+      compatible = compatibleType TyInt ty
+      literal    = checkIfExprIsLiteralInt e
+      bounded    = -1 < exprLitToInt e && exprLitToInt e < length ts
+
+checkIndexingElem' baseType@(TyArray t) exprs@((ty, e):es)
+  | compatible   = do 
+     (elemType, baseTypes) <- checkIndexingElem' t es
+     return (elemType, baseType : baseTypes)
+  | otherwise    = semanticError ("Cannot index a variable with variable of type " ++ show ty)
+    where 
+      compatible = compatibleType TyInt ty
+      
+checkIndexingElem' t [] = OK (t, [])
+checkIndexingElem' t _  = semanticError("Type " ++ show t ++ " not indexable")
+ 
+checkIfExprIsLiteralInt :: Expr a -> Bool
+checkIfExprIsLiteralInt (ExprLit (LitInt _)) = True
+checkIfExprIsLiteralInt _ = False
+
+exprLitToInt :: Expr a -> Int
+exprLitToInt (ExprLit (LitInt n)) = fromInteger n
 
 checkExpr :: Annotated Expr SpanA -> Context -> WACCResult (Annotated Expr TypeA)
 checkExpr (_, ExprLit lit) _ = return (checkLiteral lit, ExprLit lit)
@@ -152,9 +192,9 @@ checkExpr (_, ExprVar varname) context = do
   ty <- getVariable varname context
   return (ty, ExprVar varname)
 
-checkExpr (_, ExprArrayElem arrayElem) context = do
-  arrayElem'@(ty, _) <- checkArrayElem arrayElem context
-  return (ty, ExprArrayElem arrayElem')
+checkExpr (_, ExprIndexingElem indexElem) context = do
+  indexElem'@((t, tys), ts) <- checkIndexingElem indexElem context
+  return (t, ExprIndexingElem indexElem')
 
 checkExpr (_, ExprUnOp op expr) context = do
   expr'@(t1, _) <- checkExpr expr context
@@ -219,50 +259,14 @@ checkBinOp op t1 t2
        else semanticError ("Cannot apply binary operator " ++ show op 
                         ++ " to types " ++ show t1 ++ " and " ++ show t2)
 
-
-checkArrayElem :: Annotated ArrayElem SpanA -> Context -> WACCResult (Annotated ArrayElem TypeA)
-checkArrayElem (_, ArrayElem varname exprs) context = do
-  baseTy <- getVariable varname context
-  exprs' <- mapM (\e -> checkExpr e context) exprs
-  ty <- checkArrayIndexing baseTy (map fst exprs') context
-  return (ty, ArrayElem varname exprs')
-
-checkArrayIndexing :: Type -> [Type] -> Context -> WACCResult Type
-checkArrayIndexing (TyArray innerType) (indexType : tys) context = do
-  if compatibleType TyInt indexType
-  then checkArrayIndexing innerType tys context
-  else semanticError ("Cannot index array with type " ++ show indexType)
-checkArrayIndexing TyAny _ _ = OK TyAny
-checkArrayIndexing t [] _    = OK t
-checkArrayIndexing t _ _     = semanticError ("Cannot index variable of type " ++ show t)
-
-
-checkPairElem :: Annotated PairElem SpanA -> Context -> WACCResult (Annotated PairElem TypeA)
-checkPairElem (_, PairElem side expr) context = do
-  expr'@(outerType, _) <- checkExpr expr context
-  outerType' <- checkType context outerType
-  innerType <- case (side, outerType') of
-    (PairFst, TyPair f _) -> return f
-    (PairSnd, TyPair _ s) -> return s
-    (_, TyAny           ) -> return TyAny
-    (_, _               ) -> semanticError ("Type " ++ show outerType ++ " is not pair")
-  innerType' <- checkType context innerType
-  return ((innerType', outerType'), PairElem side expr')
-
-
 checkAssignLHS :: Annotated AssignLHS SpanA -> Context -> WACCResult (Annotated AssignLHS TypeA)
 checkAssignLHS (_, LHSVar varname) context = do
   ty <- getVariable varname context
   return (ty, LHSVar varname)
 
-checkAssignLHS (_, LHSPairElem pairElem) context = do
-  pairElem'@((ty, _), _) <- checkPairElem pairElem context
-  return (ty, LHSPairElem pairElem')
-
-checkAssignLHS (_, LHSArrayElem arrayElem) context = do
-  arrayElem'@(ty, _) <- checkArrayElem arrayElem context
-  return (ty, LHSArrayElem arrayElem')
-
+checkAssignLHS (_, LHSIndexingElem indexElem) context = do
+  indexElem'@((ty, tys), _) <- checkIndexingElem indexElem context
+  return (ty, LHSIndexingElem indexElem')
 
 checkAssignRHS :: Annotated AssignRHS SpanA -> Context -> WACCResult (Annotated AssignRHS TypeA)
 checkAssignRHS (_, RHSExpr expr) context = do
@@ -274,14 +278,9 @@ checkAssignRHS (_, RHSArrayLit exprs) context = do
   innerType <- foldM mergeTypes TyAny (map fst exprs')
   return (TyArray innerType, RHSArrayLit exprs')
 
-checkAssignRHS (_, RHSNewPair e1 e2) context = do
-  e1'@(t1,_) <- checkExpr e1 context
-  e2'@(t2,_) <- checkExpr e2 context
-  return (TyPair t1 t2, RHSNewPair e1' e2')
-
-checkAssignRHS (_, RHSPairElem pairElem) context = do
-  pairElem'@((ty, _), _) <- checkPairElem pairElem context
-  return (ty, RHSPairElem pairElem')
+checkAssignRHS (_, RHSNewTuple exprs) context = do
+  exprs' <- mapM (\e -> checkExpr e context) exprs
+  return (TyTuple (map fst exprs'), RHSNewTuple exprs')
 
 checkAssignRHS (_, RHSCall fname args) context = do
   (symbolName, args', returnType) <- checkCall fname args context
@@ -356,6 +355,13 @@ checkBlock (_, Block stmts) parent = do
 
   return ((alwaysReturns, locals), Block stmts')
 
+checkCaseArm :: Type -> Annotated CaseArm SpanA -> Context -> WACCResult (Annotated CaseArm TypeA)
+checkCaseArm expectedType (_,  CaseArm l b) parent = do
+  b' <- checkBlock b parent
+  let litType = checkLiteral l
+  when (not (compatibleType expectedType litType))
+       ((semanticError ("Wrong type")))
+  return (litType, CaseArm l b')
 
 checkPosStmt :: Annotated Stmt SpanA -> ContextState (Annotated Stmt TypeA)
 checkPosStmt stmt@(((line,column,fname),_), _)
@@ -423,16 +429,27 @@ checkStmt (_, StmtPrint exprs ln) = do
   exprs' <- lift $ mapM (\e -> checkExpr e context) exprs
   return (False, StmtPrint exprs' ln)
 
-checkStmt (_, StmtIf predicate b1 b2) = do
+checkStmt (_, StmtIf predicate b1 maybeB2) = do
   context <- get
   predicate'@(predicateType, _) <- lift $ checkExpr predicate context
   when (not (compatibleType TyBool predicateType))
        (lift (semanticError ("Condition cannot be of type " ++ show predicateType)))
-  b1'@((al1,_),_) <- lift $ checkBlock b1 context
-  b2'@((al2,_),_) <- lift $ checkBlock b2 context
+  case maybeB2 of 
+    Just b2 -> do
+      b1'@((al1,_),_) <- lift $ checkBlock b1 context
+      b2'@((al2,_),_) <- lift $ checkBlock b2 context
+      let al = al1 && al2
+      return (al, StmtIf predicate' b1' (Just b2'))
 
-  let al = al1 && al2
-  return (al, StmtIf predicate' b1' b2')
+    Nothing -> do
+      b <- lift $ checkBlock b1 context
+      return (False, StmtIf predicate' b Nothing)
+
+checkStmt (_, StmtSwitch value cs) = do
+  context <- get
+  value'@(valueType, _) <- lift $ checkExpr value context
+  cs' <- lift $ mapM (\c -> checkCaseArm valueType c context) cs
+  return (False, StmtSwitch value' cs')
 
 checkStmt (_, StmtWhile predicate block) = do
   context <- get

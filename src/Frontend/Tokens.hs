@@ -1,20 +1,20 @@
 module Frontend.Tokens where
 
 data Token =
-    TokKeyword String | 
-    TokOp String      | 
-    TokLParen         | 
-    TokRParen         | 
-    TokComma          | 
-    TokEqual          | 
-    TokLBracket       | 
-    TokRBracket       | 
-    TokSemiColon      | 
+    TokKeyword String |
+    TokOp String      |
+    TokLParen         |
+    TokRParen         |
+    TokComma          |
+    TokEqual          |
+    TokLBracket       |
+    TokRBracket       |
+    TokSemiColon      |
     TokColon          |
-    TokIdent String   | 
-    TokBoolLit Bool   | 
-    TokStrLit String  | 
-    TokCharLit Char   | 
+    TokIdent String   |
+    TokBoolLit Bool   |
+    TokStrLit String  |
+    TokCharLit Char   |
     TokIntLit Integer
     deriving (Eq)
 

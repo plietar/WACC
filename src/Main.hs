@@ -98,7 +98,7 @@ main = do
             else writeFile outFile
 
   contents <- readFile filename
-  
+
   let result = compile filename contents (outputType args)
   case result of
     OK output -> out (unlines output)

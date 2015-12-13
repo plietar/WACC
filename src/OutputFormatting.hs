@@ -113,15 +113,18 @@ showStmt (_, StmtPrint exprs b) = do
   where
     line = if b then "ln" else ""
 
-showStmt (_, StmtIf cond b1 b2) = do
+showStmt (_, StmtIf cond b1 maybeB2) = do
   indent <- ask
   tell [ (tabs indent) ++ "- StmtIf" ]
   tell [ (tabs (indent + 1)) ++ "- COND" ]
   local (+ 2) (showExpr cond)
   tell [ (tabs (indent + 1)) ++ "- THEN" ]
   local (+ 2) (showBlock b1)
-  tell [ (tabs (indent + 1)) ++ "- ELSE" ]
-  local (+ 2) (showBlock b2)
+  case maybeB2 of 
+    Just b2 -> do
+      tell [ (tabs (indent + 1)) ++ "- ELSE" ]
+      local (+ 2) (showBlock b2)
+    Nothing -> return ()
 
 showStmt (_, StmtWhile cond b) = do
   indent <- ask
@@ -154,7 +157,7 @@ showExpr (_, ExprVar v) = do
   indent <- ask
   tell [ (tabs indent) ++ "- ExprVar " ++ show v ]
 
-showExpr (_, ExprArrayElem elem) = showArrayElem elem
+showExpr (_, ExprIndexingElem elem) = showIndexingElem elem
 
 showExpr (_, ExprUnOp op e) = do
   indent <- ask
@@ -167,24 +170,15 @@ showExpr (_, ExprBinOp op e1 e2) = do
   local (+ 1) (showExpr e1)
   local (+ 1) (showExpr e2)
 
-
-
-
 showAssignLHS :: (Annotated AssignLHS TypeA) -> PrintAST ()
 showAssignLHS (_, LHSVar id) = do
   indent <- ask  
   tell [ (tabs indent) ++ "- AssignLHSVar " ++ show id ]
 
-showAssignLHS (_, LHSPairElem elem) = do
+showAssignLHS (_, LHSIndexingElem elem) = do
   indent <- ask  
-  tell [ (tabs indent) ++ "- AssignLhsPairElem" ]
-  local (+ 1) (showPairElem elem)
-
-showAssignLHS (_, LHSArrayElem elem) = do
-  indent <- ask  
-  tell [ (tabs indent) ++ "- AssignLhsArrayElem" ]
-  local (+ 1) (showArrayElem elem)
-
+  tell [ (tabs indent) ++ "- AssignLhsIndexingElem" ]
+  local (+ 1) (showIndexingElem elem)
 
 
 showAssignRHS :: (Annotated AssignRHS TypeA) -> PrintAST ()
@@ -196,29 +190,22 @@ showAssignRHS (_, RHSArrayLit es) = do
   indent <- ask  
   tell [ (tabs indent) ++ "- AssignRhsArrayLit" ]
   mapM_ showExpr es 
-showAssignRHS (_, RHSNewPair e1 e2) = do
-  indent <- ask
-  tell [ (tabs indent) ++ "- AssignRhsNewPair" ]
-  local (+ 1) (showExpr e1)
-  local (+ 1) (showExpr e2)
 
-showAssignRHS (_, RHSPairElem e) = showPairElem e
+showAssignRHS (_, RHSNewTuple es) = do
+  indent <- ask
+  tell [ (tabs indent) ++ "- AssignRhsNewTuple" ]
+  mapM_ (\e -> local (+ 1) (showExpr e)) es
+
 showAssignRHS (_, RHSCall id es) = do
   indent <- ask
   tell [ (tabs indent) ++ "- AssignRhsCall" ++ show id]
   mapM_ (\e -> local (+ 1) (showExpr e)) es
 
-showArrayElem :: (Annotated ArrayElem TypeA) -> PrintAST ()
-showArrayElem (_, ArrayElem id es) = do
+showIndexingElem :: (Annotated IndexingElem TypeA) -> PrintAST ()
+showIndexingElem (_, IndexingElem id es) = do
   indent <- ask
-  tell [ (tabs indent) ++ "- ArrayElem" ]
+  tell [ (tabs indent) ++ "- IndexingElem " ++ id  ]
   mapM_ (\e -> local (+ 1) (showExpr e)) es
-showPairElem :: (Annotated PairElem TypeA) -> PrintAST ()
-showPairElem (_, PairElem side e) = do
-  indent <- ask
-  tell [ (tabs indent) ++ "- PairElem" ]
-  tell [ (tabs (indent + 1)) ++ "- " ++ show side ]
-  local (+ 2) (showExpr e)
 
 showIR :: [IR] -> [String]
 showIR = map show
