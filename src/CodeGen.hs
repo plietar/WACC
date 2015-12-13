@@ -267,7 +267,8 @@ genIndexingWrite (TyArray elemTy) writeIndexExpr subIndexVar valueVar = do
                     , iOperand  = OperandVar writeIndexVar (typeShift elemTy)
                     , iType     = elemTy } ]
 
-genIndexingWrite (TyTuple ts) (_, ExprLit (LitInt x)) subIndexVar valueVar = 
+genIndexingWrite (TyTuple ts) (_, ExprLit (LitInt x)) subIndexVar valueVar = do
+  
   emitFeature CheckNullPointer
   genCall0 "p_check_null_pointer" [subIndexVar]
   emit [ IHeapWrite { iHeapVar = subIndexVar 
