@@ -228,6 +228,8 @@ genIndexingRead arrayVar ((TyArray elemTy), indexExpr) = do
   return outVar
 
 genIndexingRead tupleVar (elemTy@(TyTuple ts), (_, ExprLit (LitInt x))) = do
+  emitFeature CheckNullPointer
+  genCall0 "p_check_null_pointer" [tupleVar]
   outVar   <- allocateTemp
   emit [ IHeapRead { iHeapVar = tupleVar 
                    , iDest    = outVar
