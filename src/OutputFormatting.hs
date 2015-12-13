@@ -57,6 +57,7 @@ showProgram (_, Program fs) = do
 showDecl :: (Annotated Decl TypeA) -> PrintAST ()
 showDecl (_, DeclFunc f) = showFuncDef f
 showDecl (_, DeclFFIFunc f) = tell [show f]
+showDecl (_, DeclType t) = tell [show t]
 
 showFuncDef :: (Annotated FuncDef TypeA) -> PrintAST ()
 showFuncDef (_, FuncDef t _ n args block) = do
@@ -134,6 +135,8 @@ showStmt (_, StmtScope b) = do
   indent <- ask
   tell [ (tabs indent) ++ "- StmtScope"]
   local (+ 1) (showBlock b)
+
+showStmt (_, s) = tell [show s]
 
 showBlock :: (Annotated Block TypeA) -> PrintAST ()
 showBlock ((b, xs), Block stmts) = do

@@ -143,7 +143,9 @@ parseType = (do
     baseType = (keyword "int"    $> TyInt) <|>
                (keyword "bool"   $> TyBool) <|>
                (keyword "char"   $> TyChar) <|>
-               (keyword "string" $> TyArray TyChar)
+               (keyword "string" $> TyArray TyChar) <|>
+               (TyName <$> identifier)
+
     pairType = do
       _ <- P.try (keyword "pair" <* P.lookAhead (token TokLParen))
       parens (TyPair <$> pairElemType <* comma <*> pairElemType)
@@ -215,11 +217,13 @@ letStmt = spanned $ do
 
 varStmt :: Parser (Annotated Stmt SpanA)
 varStmt = spanned $ do
-  t <- parseType
-  i <- identifier
-  _ <- token TokEqual
-  r <- assignRHS
-  return (StmtVar t i r)
+  (varType, varName) <- P.try $ do
+    t <- parseType
+    i <- identifier
+    _ <- token TokEqual
+    return (t,i)
+  rhs <- assignRHS
+  return (StmtVar varType varName rhs)
 
 whileStmt :: Parser (Annotated Stmt SpanA)
 whileStmt = spanned $ do
@@ -319,13 +323,13 @@ stmt = skipStmt    <|>
        scopeStmt   <|>
        printStmt   <|>
        printlnStmt <|>
+       varStmt     <|>
        assignStmt  <|>
        readStmt    <|>
        freeStmt    <|>
        exitStmt    <|>
        returnStmt  <|>
        letStmt     <|>
-       varStmt     <|>
        callStmt    <|>
        awaitStmt   <|>
        fireStmt    <?> "statement"
@@ -351,11 +355,21 @@ function = wrapSpan DeclFunc <$> (spanned $ do
   keyword "end"
   return (FuncDef returnType async (FuncName functionName) args body))
 
+typeDecl :: Parser (Annotated Decl SpanA)
+typeDecl = wrapSpan DeclType <$> (spanned $ do
+  keyword "type"
+  typeName <- identifier
+  equal
+  typeAlias <- parseType
+  semi
+
+  return (TypeDef typeName typeAlias))
+
 ffiFunction :: Parser (Annotated Decl SpanA)
 ffiFunction = wrapSpan DeclFFIFunc <$> (spanned $ do
   keyword "ffi"
   async <- option False (keyword "async" >> return True)
-  returnType <- (parseType <|> voidType)
+  returnType <- parseType <|> voidType
   functionName <- identifier
   args <- parens (sepBy parseType comma)
   symbolName <- (equal >> identifier) <|> return functionName
@@ -365,6 +379,7 @@ ffiFunction = wrapSpan DeclFFIFunc <$> (spanned $ do
 
 decl :: Parser (Annotated Decl SpanA)
 decl = function <|>
+       typeDecl <|>
        ffiFunction
 
 mainFunc :: Parser (Annotated FuncDef SpanA)

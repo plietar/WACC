@@ -29,6 +29,7 @@ genProgram (_, Program fs)
 
 genDecl :: Annotated Decl TypeA -> RWS () ([[IR]], Set Feature) [Label] ()
 genDecl (_, DeclFunc f) = genFunction f
+genDecl (_, DeclType f) = return ()
 genDecl (_, DeclFFIFunc f) = return ()
 
 -- Functions

@@ -12,10 +12,12 @@ data FuncName = FuncName Identifier | MainFunc
 
 data Program a = Program [Annotated Decl a]
 data Decl a = DeclFunc (Annotated FuncDef a)
+            | DeclType (Annotated TypeDef a)
             | DeclFFIFunc (Annotated FFIFunc a)
 
 data FFIFunc a = FFIFunc Type Bool Identifier [Type] Identifier
 data FuncDef a = FuncDef Type Bool FuncName [(Type, Identifier)] (Annotated Block a)
+data TypeDef a = TypeDef Identifier Type
 
 data Block a = Block [Annotated Stmt a]
 
@@ -105,6 +107,7 @@ data Type = TyInt
           | TyChar
           | TyPair Type Type
           | TyArray Type
+          | TyName Identifier
           | TyAny
           | TyVoid
     deriving (Eq)
@@ -137,6 +140,7 @@ instance Show Type where
   show TyChar       = "char"
   show (TyPair f s) = "pair(" ++ show f ++ "," ++ show s ++ ")"
   show (TyArray t)  = show t ++ "[]"
+  show (TyName n)   = show n
   show TyAny        = "any"
   show TyVoid       = "void"
 
@@ -152,6 +156,7 @@ instance Show FuncName where
 class ( Show (Ann a Program)
       , Show (Ann a Decl)
       , Show (Ann a FuncDef)
+      , Show (Ann a TypeDef)
       , Show (Ann a FFIFunc)
       , Show (Ann a Block)
       , Show (Ann a Stmt)
@@ -166,6 +171,7 @@ class ( Show (Ann a Program)
 deriving instance Annotation a => Show (Program a)
 deriving instance Annotation a => Show (Decl a)
 deriving instance Annotation a => Show (FuncDef a)
+deriving instance Annotation a => Show (TypeDef a)
 deriving instance Annotation a => Show (FFIFunc a)
 deriving instance Annotation a => Show (Block a)
 deriving instance Annotation a => Show (Stmt a)
@@ -187,6 +193,7 @@ instance Annotation TypeA where
   type Ann TypeA Program = ()
   type Ann TypeA Decl = ()
   type Ann TypeA FuncDef = ()
+  type Ann TypeA TypeDef = ()
   type Ann TypeA FFIFunc = ()
   type Ann TypeA Block = (Bool, [(String, Type)])
   type Ann TypeA Stmt = Bool
