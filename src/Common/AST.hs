@@ -108,6 +108,7 @@ data Type = TyInt
           | TyPair Type Type
           | TyArray Type
           | TyName Identifier
+          | TyFFI Identifier
           | TyAny
           | TyVoid
     deriving (Eq)
@@ -141,6 +142,7 @@ instance Show Type where
   show (TyPair f s) = "pair(" ++ show f ++ "," ++ show s ++ ")"
   show (TyArray t)  = show t ++ "[]"
   show (TyName n)   = show n
+  show (TyFFI n)    = n
   show TyAny        = "any"
   show TyVoid       = "void"
 

@@ -367,7 +367,6 @@ typeDecl = wrapSpan DeclType <$> (spanned $ do
 
 ffiFunction :: Parser (Annotated Decl SpanA)
 ffiFunction = wrapSpan DeclFFIFunc <$> (spanned $ do
-  keyword "ffi"
   async <- option False (keyword "async" >> return True)
   returnType <- parseType <|> voidType
   functionName <- identifier
@@ -377,10 +376,18 @@ ffiFunction = wrapSpan DeclFFIFunc <$> (spanned $ do
 
   return (FFIFunc returnType async functionName args symbolName))
 
+ffiType :: Parser (Annotated Decl SpanA)
+ffiType = wrapSpan DeclType <$> (spanned $ do
+  keyword "type"
+  name <- identifier
+  semi
+
+  return (TypeDef name (TyFFI name)))
+
 decl :: Parser (Annotated Decl SpanA)
 decl = function <|>
        typeDecl <|>
-       ffiFunction
+       (keyword "ffi" *> (ffiFunction <|> ffiType))
 
 mainFunc :: Parser (Annotated FuncDef SpanA)
 mainFunc = spanned $ do
