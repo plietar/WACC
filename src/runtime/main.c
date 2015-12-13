@@ -13,6 +13,7 @@
 
 extern uint64_t wacc_main(uint32_t, uint32_t);
 
+uint32_t task_count = 0;
 wacc_task *ready_tasks = NULL;
 heap *sleep_tasks;
 int epoll_fd;
@@ -26,6 +27,8 @@ uint64_t millis() {
 void start_task(const char *name, task_entry entry, uint32_t argument) {
     wacc_task *task = task_create(name, entry, argument);
     list_insert(&ready_tasks, task);
+
+    task_count += 1;
 }
 
 void wacc_fire(task_entry entry, wacc_string *name, uint32_t argument) {
@@ -68,7 +71,7 @@ int main() {
     epoll_fd = epoll_create(1);
     sleep_tasks = heap_create();
 
-    while (1) {
+    for (;;) {
         for (wacc_task *task = ready_tasks; task != NULL; ) {
             yield_cmd *cmd = task_execute(task);
 
@@ -77,6 +80,7 @@ int main() {
             if (task->state == 0) {
                 list_remove(&ready_tasks, task);
                 task_destroy(task);
+                task_count -= 1;
             } else {
                 switch (cmd->type) {
                     case CMD_YIELD:
@@ -102,6 +106,10 @@ int main() {
             }
 
             task = next;
+        }
+
+        if (task_count == 0) {
+            break;
         }
 
         int timeout = 0;

@@ -109,7 +109,7 @@ uint64_t wacc_recv(uint32_t _state, wacc_sock *sock) {
             } else if (errno == EAGAIN) {
                 yield_cmd *cmd = malloc(sizeof *cmd);
                 cmd->type = CMD_POLL_READ;
-                cmd->sock = sock;
+                cmd->sock = state->sock;
                 YIELD(cmd, state);
             } else {
                 perror("recv");
