@@ -14,18 +14,21 @@
     } while (0)
 
 typedef struct wacc_sock wacc_sock;
+typedef struct wacc_task wacc_task;
 
 typedef struct yield_cmd {
     enum {
         CMD_YIELD,
         CMD_SLEEP,
+        CMD_WAIT,
         CMD_POLL_READ,
-        CMD_POLL_WRITE
+        CMD_POLL_WRITE,
     } type;
 
     union {
         uint64_t wakeup_time;
         wacc_sock *sock;
+        wacc_task **wait_list;
     };
 } yield_cmd;
 

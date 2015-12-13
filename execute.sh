@@ -15,7 +15,7 @@ if $debug; then
     CFLAGS="$CFLAGS -g"
 fi
 
-RUNTIME="src/runtime/main.c src/runtime/list.c src/runtime/task.c src/runtime/network.c src/runtime/async.c src/runtime/heap.c"
+RUNTIME="src/runtime/main.c src/runtime/list.c src/runtime/task.c src/runtime/network.c src/runtime/async.c src/runtime/heap.c src/runtime/channel.c"
 
 ./compile ${1}
 arm-linux-gnueabi-gcc $CFLAGS \

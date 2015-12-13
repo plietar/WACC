@@ -35,6 +35,11 @@ void wacc_fire(task_entry entry, wacc_string *name, uint32_t argument) {
     start_task(name->data, entry, argument);
 }
 
+void task_wakeup(wacc_task *task, wacc_task **task_list) {
+    list_remove(task_list, task);
+    list_insert(&ready_tasks, task);
+}
+
 void register_socket(wacc_sock *sock) {
     struct epoll_event ev;
     ev.events = 0;
@@ -91,6 +96,11 @@ int main() {
                         heap_insert(sleep_tasks, cmd->wakeup_time, task);
                         break;
 
+                    case CMD_WAIT:
+                        list_remove(&ready_tasks, task);
+                        list_insert(cmd->wait_list, task);
+                        break;
+
                     case CMD_POLL_READ:
                         list_remove(&ready_tasks, task);
                         list_insert(&cmd->sock->recv_list, task);
@@ -135,9 +145,7 @@ int main() {
             if (evs[i].events & EPOLLIN) {
                 for (wacc_task *task = sock->recv_list; task != NULL;) {
                     wacc_task *next = task->next;
-
-                    list_remove(&sock->recv_list, task);
-                    list_insert(&ready_tasks, task);
+                    task_wakeup(task, &sock->recv_list);
 
                     task = next;
                 }
@@ -146,9 +154,7 @@ int main() {
             if (evs[i].events & EPOLLOUT) {
                 for (wacc_task *task = sock->send_list; task != NULL;) {
                     wacc_task *next = task->next;
-
-                    list_remove(&sock->send_list, task);
-                    list_insert(&ready_tasks, task);
+                    task_wakeup(task, &sock->send_list);
 
                     task = next;
                 }

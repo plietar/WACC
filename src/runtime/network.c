@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <sys/epoll.h>
+#include <stdbool.h>
 
 void register_socket(wacc_sock *sock);
 
@@ -88,11 +89,11 @@ struct recv_state {
     wacc_string *buffer;
 };
 
-uint64_t wacc_recv(uint32_t _state, wacc_sock *sock) {
+uint64_t wacc_recv(uint32_t _state, wacc_sock *_sock) {
     struct recv_state *state;
     if (_state == 0) {
         state = malloc(sizeof *state);
-        state->sock = sock;
+        state->sock = _sock;
         state->buffer = malloc(sizeof(wacc_string) + 128);
         state->buffer->length = 0;
     } else {
@@ -153,7 +154,7 @@ uint64_t wacc_send(uint32_t _state, wacc_sock *sock, wacc_string *buffer) {
         ssize_t ret = send(state->sock->fd,
                            state->buffer->data   + state->total,
                            state->buffer->length - state->total,
-                           0);
+                           MSG_NOSIGNAL);
 
         if (ret < 0) {
             if (errno == EINTR) {
@@ -163,6 +164,8 @@ uint64_t wacc_send(uint32_t _state, wacc_sock *sock, wacc_string *buffer) {
                 cmd->type = CMD_POLL_WRITE;
                 cmd->sock = sock;
                 YIELD(cmd, state);
+            } else if (errno == EPIPE) {
+                EXIT(false);
             } else {
                 perror("recv");
                 exit(1);
@@ -175,7 +178,7 @@ uint64_t wacc_send(uint32_t _state, wacc_sock *sock, wacc_string *buffer) {
                 cmd->sock = sock;
                 YIELD(cmd, state);
             } else {
-                EXIT(0);
+                EXIT(true);
             }
         }
     }
