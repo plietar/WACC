@@ -36,6 +36,7 @@ data Stmt a
   | StmtCall   Identifier [Annotated Expr a]
   | StmtAwait  Identifier [Annotated Expr a]
   | StmtFire   Identifier [Annotated Expr a]
+  | StmtChanSend Identifier (Annotated AssignRHS a)
 
 data AssignLHS a
   = LHSVar       Identifier
@@ -49,6 +50,8 @@ data AssignRHS a
   | RHSPairElem (Annotated PairElem a)
   | RHSCall     Identifier [Annotated Expr a]
   | RHSAwait    Identifier [Annotated Expr a]
+  | RHSNewChan
+  | RHSChanRecv Identifier
 
 data Expr a
   = ExprLit       Literal
@@ -107,6 +110,7 @@ data Type = TyInt
           | TyChar
           | TyPair Type Type
           | TyArray Type
+          | TyChan Type
           | TyName Identifier
           | TyFFI Identifier
           | TyAny
@@ -141,6 +145,7 @@ instance Show Type where
   show TyChar       = "char"
   show (TyPair f s) = "pair(" ++ show f ++ "," ++ show s ++ ")"
   show (TyArray t)  = show t ++ "[]"
+  show (TyChan t)   = "chan(" ++ show t ++ ")"
   show (TyName n)   = show n
   show (TyFFI n)    = n
   show TyAny        = "any"

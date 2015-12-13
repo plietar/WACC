@@ -139,7 +139,7 @@ parseType = (do
   return (arr t)
   ) <?> "type"
   where
-    notArrayType = baseType <|> pairType
+    notArrayType = baseType <|> pairType <|> chanType
     baseType = (keyword "int"    $> TyInt) <|>
                (keyword "bool"   $> TyBool) <|>
                (keyword "char"   $> TyChar) <|>
@@ -150,6 +150,8 @@ parseType = (do
       _ <- P.try (keyword "pair" <* P.lookAhead (token TokLParen))
       parens (TyPair <$> pairElemType <* comma <*> pairElemType)
     pairElemType = parseType <|> (keyword "pair" $> TyPair TyAny TyAny)
+
+    chanType = keyword "chan" >> (TyChan <$> parens parseType)
 
 voidType :: Parser Type
 voidType = keyword "void" $> TyVoid
@@ -184,7 +186,9 @@ assignRHS
               rhsPairElem <|>
               rhsCall <|>
               rhsAwait <|>
-              rhsNewPair
+              rhsNewPair <|>
+              rhsNewChan <|>
+              rhsChanRecv
     where
       rhsExpr     = RHSExpr <$> expr
       rhsArrayLit = RHSArrayLit <$> brackets (sepBy expr comma) <?> "array literal"
@@ -200,6 +204,16 @@ assignRHS
         name <- identifier
         args <- parens (sepBy expr comma)
         return (RHSAwait name args)
+
+      rhsNewChan = do
+        keyword "chan"
+        parens (return ())
+        return RHSNewChan
+
+      rhsChanRecv = do
+        op "<-"
+        name <- identifier
+        return (RHSChanRecv name)
 
 skipStmt :: Parser (Annotated Stmt SpanA)
 skipStmt = spanned $ do
@@ -316,6 +330,12 @@ fireStmt = spanned $ do
   args <- parens (sepBy expr comma)
   return (StmtFire name args)
 
+chanSendStmt :: Parser (Annotated Stmt SpanA)
+chanSendStmt = spanned $ do
+  channel <- P.try (identifier <* op "<-")
+  rhs <- assignRHS
+  return (StmtChanSend channel rhs)
+
 stmt :: Parser (Annotated Stmt SpanA)
 stmt = skipStmt    <|>
        whileStmt   <|>
@@ -323,8 +343,6 @@ stmt = skipStmt    <|>
        scopeStmt   <|>
        printStmt   <|>
        printlnStmt <|>
-       varStmt     <|>
-       assignStmt  <|>
        readStmt    <|>
        freeStmt    <|>
        exitStmt    <|>
@@ -332,7 +350,10 @@ stmt = skipStmt    <|>
        letStmt     <|>
        callStmt    <|>
        awaitStmt   <|>
-       fireStmt    <?> "statement"
+       fireStmt    <|>
+       chanSendStmt <|>
+       varStmt     <|>
+       assignStmt  <?> "statement"
 
 block :: Parser (Annotated Block SpanA)
 block = spanned $ Block <$> sepBy1 stmt semi

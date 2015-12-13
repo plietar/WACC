@@ -43,12 +43,12 @@ tokens :-
   begin | end | is | skip | read | free | return | exit | print | println | if
     | then | else | fi | while | do | done | newpair | call | fst | snd | int
     | bool | char | string | pair | len | ord | chr | null | let | ffi | void
-    | async | await | fire | type
+    | async | await | fire | type | chan
                        { \(AlexPn _ line column) s-> ((line, column), TokKeyword s) }
  
   -- Operators
   "!" | "*" | "/" | "%" | "+" | "-" | ">" | ">=" | "<" | "<="
-    | "==" | "!=" | "&&" | "||"
+    | "==" | "!=" | "&&" | "||" | "<-"
                        { \(AlexPn _ line column) s-> ((line, column), TokOp s) }
 
   -- Assign Operator

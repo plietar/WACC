@@ -443,6 +443,12 @@ genRHS (_, RHSAwait name exprs) = do
   argVars <- mapM genExpr exprs
   genAwait name argVars
 
+genRHS (_, RHSNewChan) = genCall1 "wacc_channel_create" []
+
+genRHS (_, RHSChanRecv chanName) = do
+  chanVar <- genFrameRead (TyChan TyAny) chanName
+  genAwait "wacc_channel_receive" [chanVar]
+
 genStmt :: Annotated Stmt TypeA -> CodeGen ()
 genStmt (_, StmtSkip) = return ()
 
@@ -544,6 +550,14 @@ genStmt (_, StmtFire name exprs) = do
 
   argVars <- mapM genExpr exprs
   genCall0 "wacc_fire" (funcVar : nameVar : argVars)
+
+genStmt (_, StmtChanSend chanName elemRHS) = do
+  chanVar <- genFrameRead (TyChan TyAny) chanName
+  elemVar <- genRHS elemRHS
+
+  genAwait "wacc_channel_send" [chanVar, elemVar]
+  return ()
+
 
 -- Block code generation
 genBlock :: Annotated Block TypeA -> CodeGen ()

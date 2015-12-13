@@ -82,6 +82,8 @@ mergeTypes (TyArray t1) (TyArray t2)
   = TyArray <$> mergeTypes t1 t2
 mergeTypes (TyPair f1 s1) (TyPair f2 s2)
   = TyPair <$> mergeTypes f1 f2 <*> mergeTypes s1 s2
+mergeTypes (TyChan t1) (TyChan t2)
+  = TyChan <$> mergeTypes t1 t2
 mergeTypes t1 t2
   | t1 == t2  = OK t1
   | otherwise = semanticError ("Types " ++ show t1 ++ " and " ++ 
@@ -92,6 +94,8 @@ checkType ctx (TyArray elemTy)
   = TyArray <$> checkType ctx elemTy
 checkType ctx (TyPair fstTy sndTy)
   = TyPair <$> checkType ctx fstTy <*> checkType ctx sndTy
+checkType ctx (TyChan elemTy)
+  = TyChan <$> checkType ctx elemTy
 checkType ctx (TyName name)
   = getTypeAlias name ctx
 checkType _ ty = return ty
@@ -287,6 +291,15 @@ checkAssignRHS (_, RHSAwait fname args) context = do
   (symbolName, args', returnType) <- checkAwait fname args context
   return (returnType, RHSAwait symbolName args')
 
+checkAssignRHS (_, RHSNewChan) context = return (TyChan TyAny, RHSNewChan)
+
+checkAssignRHS (_, RHSChanRecv chanName) context = do
+  chanTy <- getVariable chanName context
+  elemTy <- case chanTy of
+    TyChan ty -> return ty
+    _         -> semanticError ("Cannot receive from non-channel type " ++ show chanTy)
+  return (elemTy, RHSChanRecv chanName)
+
 checkArgs :: Context -> [Type] -> [Type] -> WACCResult ()
 checkArgs ctx actual expected = checkArgs' 0 actual expected 
   where
@@ -449,6 +462,17 @@ checkStmt (_, StmtFire fname args) = do
   context <- get
   (symbolName, args', _) <- lift $ checkFire fname args context
   return (False, StmtFire symbolName args')
+
+checkStmt (_, StmtChanSend chanName rhs) = do
+  context <- get
+  chanTy <- lift $ getVariable chanName context
+  rhs'@(rhsTy, _) <- lift $ checkAssignRHS rhs context
+
+  lift $ case chanTy of
+    TyChan ty -> mergeTypes ty rhsTy
+    _         -> semanticError ("Cannot send to non-channel type " ++ show chanTy)
+
+  return (False, StmtChanSend chanName rhs')
 
 checkFunction :: Annotated FuncDef SpanA -> Context -> WACCResult (Annotated FuncDef TypeA)
 checkFunction (_, FuncDef expectedReturnType async name args block) globalContext
