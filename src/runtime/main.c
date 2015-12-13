@@ -69,7 +69,6 @@ int main() {
     sleep_tasks = heap_create();
 
     while (1) {
-        while (ready_tasks != NULL) {
         for (wacc_task *task = ready_tasks; task != NULL; ) {
             yield_cmd *cmd = task_execute(task);
 
@@ -104,16 +103,19 @@ int main() {
 
             task = next;
         }
-        }
 
-        int timeout = -1;
-        uint64_t next_wakeup;
-        if (heap_peek(sleep_tasks, &next_wakeup, NULL)) {
-            uint64_t now = millis();
-            if (next_wakeup > now) {
-                timeout = next_wakeup - now;
+        int timeout = 0;
+        if (list_empty(ready_tasks)) {
+            uint64_t next_wakeup;
+            if (heap_peek(sleep_tasks, &next_wakeup, NULL)) {
+                uint64_t now = millis();
+                if (next_wakeup > now) {
+                    timeout = next_wakeup - now;
+                } else {
+                    timeout = 0;
+                }
             } else {
-                timeout = 0;
+                timeout = -1;
             }
         }
 
@@ -146,6 +148,7 @@ int main() {
         }
 
         uint64_t now = millis();
+        uint64_t next_wakeup;
         while (heap_peek(sleep_tasks, &next_wakeup, NULL) && next_wakeup <= now) {
             wacc_task *task;
             heap_pop(sleep_tasks, NULL, &task);

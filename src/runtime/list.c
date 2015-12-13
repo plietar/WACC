@@ -3,6 +3,10 @@
 
 #include <stddef.h>
 
+bool list_empty(wacc_task *list) {
+    return list == NULL;
+}
+
 void list_insert(wacc_task **list, wacc_task *task) {
     task->next = *list;
     task->prev = NULL;
