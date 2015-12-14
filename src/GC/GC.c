@@ -52,105 +52,173 @@ typedef struct object_header {
 } object_header;
 
 typedef struct Heap {
-  // All heaps have the same size HEAP_SIZE_WORDS
+  // All heaps have the same size PAGE_WORDS * NUMBER_PAGES_TO_ALLOCATE
   uint32_t *start;
   struct Heap *next;
 } Heap;
 
 // Variables
-uint32_t *top_stack;
-
+uint32_t *top_stack = NULL;
+uint allocated_pages = 0;
+uint total_pages_handled = 0;
+uint GC_Alloc_calls = 0;
 // Memory
-Page *FREE_PAGES;
-Page *BLACK_PAGES;
-Page *GREY_PAGES;
-Page *WHITE_PAGES;
-Heap *HEAPS; // List of heaps
+Page *FREE_PAGES = NULL;
+Page *BLACK_PAGES = NULL;
+Page *GREY_PAGES = NULL;
+Page *WHITE_PAGES = NULL;
+Heap *HEAPS = NULL; // List of heaps
 
 // Functions
-void GCInit(uint *sp);
+void GCInternalInit(uint *sp);
 void removePage(Page *page);
-void insert(Page *p, Page *list);
+void insert(Page *p, Page **list);
 void forwardHeapPointers(Page *page);
 void promote(Page *page, colour c);
 void allocateHeap(void);
 void GCCollect(uint32_t *sp);
-void moveReference(uint32_t **ref);
+uint32_t *moveReference(uint32_t *ref);
 uint32_t *GCInternalAlloc(uint byte_size, type_info *type_information, uint32_t *bottom_stack);
 uint32_t *copy(uint32_t *heapObjPointer, Page *oldPage, object_header *oldHeader);
-uint32_t *allocateWordsNoGC(uint objWords, Page *list, colour colour);
+uint32_t *allocateWordsNoGC(uint objWords, Page **list, colour colour);
 uint *allocateManyPages();  // Unimplemented
 Page *getPage(uint32_t *ptr);
-Page *getValidPage(Page *list, uint words);
+Page *getValidPage(Page **list, uint words);
 uint getFreeWords(Page *page);
 bool isAmbiguousRoot(uint32_t *ptr);
- 
 void GCAlloc(void) __attribute__ ( ( naked ) );
+void GCInit(void) __attribute__ ( ( naked ) );
+void GCFree();
 
 
-void GCInit(uint32_t *sp) {
-  allocateHeap();
+// Test functions
+void printHeader(object_header *header);
+void printTypeInfo(type_info *type);
+void printPageLists();
+void printHeap();
+
+void printHeap(void) {
+}
+
+void GCInternalInit(uint32_t *sp) {
   top_stack = sp;
-  return;
+  allocateHeap();
 }
 
 
 void GCAlloc() {
-  __asm__ ("push {r4-r12, lr};"
+  __asm__ ( "push {r4-r12,lr};"
             "mov r2, sp;"
             "bl GCInternalAlloc;"
-            "add sp, #36;"
+            "add sp, sp, #36;"
             "pop {pc};"
             );
 }
 
+void GCInit() {
+   __asm__ ( "push {lr};"
+             "mov r0, sp;"
+             "bl GCInternalInit;"
+             "pop {pc};" );
+}
+
+void GCFree() {
+  Heap *heap = HEAPS;
+  while (heap) {
+    Heap *tmp = heap->next;
+    free((void *) heap);
+    heap = tmp;
+  }
+}
+void printPageLists() {
+  printf("Page status\n");
+  Page *p = BLACK_PAGES;
+  printf("Black pages:\n");
+  while (p) {
+    printf("Page %#010x of colour %d should be 0\n", p, p->space);
+    p = p->next;
+  }
+
+  p = GREY_PAGES;
+  printf("Grey pages:\n");
+  while (p) {
+    printf("Page %#010x of colour %d should be 1\n", p, p->space);
+    p = p->next;
+  }
+
+  p = WHITE_PAGES;
+  printf("White pages:\n");
+  while (p) {
+    printf("Page %#010x of colour %d should be 2\n", p, p->space);
+    p = p->next;
+  }
+
+}
+
 void GCCollect(uint32_t *bottom_stack) {
+//  printf("GCCollect called\n");
+  
+//  printPageLists();
+
   // Make all pages WHITE
+  Page *toWhite = BLACK_PAGES;
+  while (toWhite) {
+    promote(toWhite, WHITE);
+    toWhite = toWhite->next;
+  }
+
   WHITE_PAGES = BLACK_PAGES;
   BLACK_PAGES = NULL;
 
-  for (uint32_t *ptr = top_stack; top_stack < bottom_stack; ptr++) {
-    // TODO: check all heaps
+//  printf("Top_stack: %#010x\n", top_stack);
+//  printf("Bottom_stack: %#010x\n", bottom_stack);
+  for (uint32_t *ptr = top_stack; ptr >= bottom_stack; ptr--) {
     if (isAmbiguousRoot((uint32_t *) *ptr)) {
       Page *refPage = getPage((uint32_t *) *ptr);
       if (refPage->space == WHITE) {
         removePage(refPage);
-        insert(refPage, GREY_PAGES);
+        insert(refPage, &GREY_PAGES);
         promote(refPage, GREY);
       }
     }
   }
 
   // Trace all gray pages
+  printf("Trace\n");
   Page *greyPage = GREY_PAGES;
   while (greyPage) {
-    GREY_PAGES = greyPage->next;
+    removePage(greyPage);
     forwardHeapPointers(greyPage);
     promote(greyPage, BLACK);
-    greyPage->space = BLACK;
-    greyPage = greyPage->next;
+    insert(greyPage, &BLACK_PAGES);
+    greyPage = GREY_PAGES;
   }
 
   Page *whitePage = WHITE_PAGES;
   while (whitePage) {
-    whitePage->usedWords = 0;
-    whitePage->space = BLACK;
-
-    Page *next = whitePage->next;
+    printf("freeing page %#010x that has %d used words.\n", whitePage, whitePage->usedWords);
     removePage(whitePage);
-    insert(whitePage, FREE_PAGES);
-    whitePage = next;
+    whitePage->usedWords = 0;
+    promote(whitePage, BLACK);
+    insert(whitePage, &FREE_PAGES);
+    whitePage = WHITE_PAGES;
+    allocated_pages--;
+  }
+  if (allocated_pages >= total_pages_handled / 2) {
+    printf("Allocating more heap to avoid calling GCCollect two times in a row\n");
+    allocateHeap();
   }
   return;
 }
 
 
-// TODO: Do we care about the colour of the page we are allocating?
 uint32_t *GCInternalAlloc(uint byte_size, type_info *type_information, uint32_t *bottom_stack) {
-  if (FREE_PAGES == NULL && BLACK_PAGES != NULL) {
+  GC_Alloc_calls++;
+  printf("%d call to GCInternal Allocator\n", GC_Alloc_calls);
+  printf("nElem: %d\n", type_information->nElem);
+  if (allocated_pages >= total_pages_handled / 2) {
     GCCollect(bottom_stack);
   }
-
 
   // Allocate multiple pages for large objects
   if (byte_size > PAGE_WORDS * WORD_SIZE) {
@@ -158,35 +226,67 @@ uint32_t *GCInternalAlloc(uint byte_size, type_info *type_information, uint32_t 
   }
 
   // Size of the object data
-  uint objWords = (byte_size + sizeof(object_header)) / 4;
+  uint objWords = (byte_size + sizeof(object_header) + 3) / 4;
 
 
   // This guarantees space for my object at objPtr position in
   // a BLACK page. The header of the object is empty
-  uint32_t *objPtr = allocateWordsNoGC(objWords, BLACK_PAGES, BLACK);
-
-  object_header *header = (object_header *) OBJECT_DATA_START(objPtr);
+  uint32_t *objPtr = allocateWordsNoGC(objWords, &BLACK_PAGES, BLACK);
+  object_header *header = (object_header *) OBJECT_HEADER_START(objPtr);
   header->objWords = objWords;
   header->typeInfo = type_information;
   header->forwardReference = NULL;
+//  printHeader(header);  // TESTING try before changing it too
   return objPtr;
+}
+
+void printHeader(object_header *header) {
+  if (header != NULL) {
+    printf("Header at %#010x\n", header); 
+    printf("\tobjWords: %d\n", header->objWords);
+    printf("\tforwardRef: %#010x\n", header->forwardReference);
+    printTypeInfo(header->typeInfo);
+  } else {
+    printf("Null header\n");
+  }
+}
+
+void printTypeInfo(type_info *type) {
+  if (type != NULL) {
+    printf("TypeInfo\n"); 
+    printf("\tisArray: %d\n", type->isArray); 
+    printf("\tnElem: %d\n", type->nElem); 
+    for (int i = 0; i < type->nElem; i++) {
+      printf("\telemIsPtr[%d] = %d\n", i, type->elemIsPtr[i]);
+    }
+  } else {
+    printf("Null typeInfo\n");
+  }
 }
 
 // Return: Address of the object data.
 //         Empty header at OBJECT_HEADER_START(address)
-uint32_t *allocateWordsNoGC(uint objWords, Page *list, colour colour) {
+uint32_t *allocateWordsNoGC(uint objWords, Page **list, colour colour) {
+
+//  printf("Allocate words no GC\n");
   Page *page = getValidPage(list, objWords);
   page->space = colour;
-  page->usedWords += objWords;
   uint32_t *objHeaderAddress = PAGE_DATA_START(page) + page->usedWords;
+
+  printf("Allocating in header: %#010x, of page: %#010x\n", objHeaderAddress,page);
+  page->usedWords += objWords;
   return OBJECT_DATA_START(objHeaderAddress);
 }
 
+
 // Copy object to a new page and return the new address
 uint32_t *copy(uint32_t *heapObjPointer, Page *oldPage, object_header *oldHeader) {
-  uint32_t *newLoc = allocateWordsNoGC(oldHeader->objWords, GREY_PAGES, GREY);
+  printf("Copy function!!\n\n\n\n\n\n");
+  uint32_t *newLoc = allocateWordsNoGC(oldHeader->objWords, &GREY_PAGES, GREY);
   object_header *newHeader = OBJECT_HEADER_START(newLoc);
-  memcpy((void *) newLoc, (const void*) heapObjPointer, oldHeader->objWords * 4);
+  uint32_t dataSize = (oldHeader->objWords - (sizeof(object_header) / 4) ) * 4;
+  memcpy((void *) newLoc, (const void*) heapObjPointer, dataSize);
+  printHeader(newHeader);
   newHeader->typeInfo = oldHeader->typeInfo;
   newHeader->objWords = oldHeader->objWords;
   newHeader->forwardReference = NULL;
@@ -194,11 +294,14 @@ uint32_t *copy(uint32_t *heapObjPointer, Page *oldPage, object_header *oldHeader
 }
 
 
-// Get a page from the list of pages that enough free space to fit
+
+// Get a page from the list of pages with enough free space to fit
 // 'words' words
-Page *getValidPage(Page *list, uint words) {
-  Page *current = list;
+Page *getValidPage(Page **list, uint words) {
+//  printf("Get Valid Page\n");
+  Page *current = *list;
   uint freeWords = getFreeWords(current);
+
   while (current != NULL && freeWords < words) {
     current = current->next;
     freeWords = getFreeWords(current);
@@ -208,11 +311,10 @@ Page *getValidPage(Page *list, uint words) {
     if (FREE_PAGES == NULL) {
       allocateHeap();
     }
-    Page *tmpFree = FREE_PAGES->next;
     current = FREE_PAGES;
     removePage(FREE_PAGES);
-    FREE_PAGES = tmpFree;
     insert(current, list);
+    allocated_pages++;
   }
   return current;
 }
@@ -229,10 +331,13 @@ Page *getPage(uint32_t *pointer) {
 bool isAmbiguousRoot(uint32_t *ptr) {
   Heap *curr = HEAPS;
   while (curr) {
-    if (ptr > curr->start && ptr < (curr->start + HEAP_SIZE_WORDS)) {
+    if (ptr >= curr->start && ptr <= (curr->start + PAGE_WORDS * NUMBER_PAGES_TO_ALLOCATE)) {
+//      printf("Ambiguous root: %#010x\n", ptr);
       return true;
     }
+    curr = curr->next;
   }
+//  printf("Not ambiguous root: %#010x\n", ptr);
   return false;
 }
 
@@ -244,42 +349,74 @@ void promote(Page *page, colour c) {
 // CHECK this function
 // ref is a pointer to where a pointer to the heap is stored
 // Move a live reference that is in a white page to a grey page
-void moveReference(uint32_t **ref) {
-  uint32_t *heapPointer = *ref;
+uint32_t *moveReference(uint32_t *ref) {
+  printf("Move reference\n");
+  
+  printf("%#010x, %d, %d, %d\n",ref, *ref, *(ref + 1), *(ref + 2));
+  uint32_t *heapPointer = ref;
   Page *pagePointed = getPage(heapPointer);
   if (pagePointed->space == WHITE) {
+    printf("WHITEPAGE !\n");
     object_header *header = OBJECT_HEADER_START(heapPointer);
     if (header->forwardReference == NULL) {
+      printf("YEYYYY\n");
       header->forwardReference = copy(heapPointer, pagePointed, header);
       header->typeInfo = NULL;
       // Same header->size, so the page can still be iterated through
       Page *destinationPage = getPage(header->forwardReference);
       destinationPage->space = GREY;
       removePage(destinationPage);
-      insert(destinationPage, GREY_PAGES);
+      insert(destinationPage, &GREY_PAGES);
     }
-    *ref = header->forwardReference;
+    return header->forwardReference;
+//    *ref = header->forwardReference;
   }
+  return heapPointer;
 }
 
+// TODO: objects in the heap with no type information. Treat
+// all words as possible pointers. For async part.
 // Move all the references in a given page to new pages in the
 // GREY set
 void forwardHeapPointers(Page *page) {
+  assert(page->space == GREY);
+
+  printf("Forward Heap Pointers\n");
   uint32_t *start = PAGE_DATA_START(page);
-  uint32_t *end = ((uint32_t *) page) + PAGE_WORDS;
+  uint32_t *end = start + page->usedWords;
+  printf("From: %#010x\n",start);
+  printf("To: %#010x\n",end);
   object_header *header = (object_header *) start;
 
-  while ((uint32_t *) header < end) {
+    while ((uint32_t *) header < end) {
+//    printf("Currently at : %#010x\n",header);
     if (header->typeInfo != NULL) {
       type_info *typeInfo = header->typeInfo;
       uint32_t *data = OBJECT_DATA_START(header);
       if (typeInfo->isArray) {
-        data++; // Skip size field
-      }
+        printf("Header of the array\n");
+        printHeader(header);
 
-      for (int i = 0; i < typeInfo->nElem; i++) {
-        if (typeInfo->elemIsPtr[i]) {
-          moveReference((uint32_t **) (data + i));
+
+        uint32_t arraySize = *data;
+        data++; // Skip size field
+        for (int i = 0; i < arraySize; i++) {
+          if (typeInfo->elemIsPtr[0]) {
+            *(data + i) = moveReference((uint32_t *) *(data + i));
+          } 
+        }
+      } else {
+        printf("Header of the pair\n");
+        printHeader(header);
+
+        for (int i = 0; i < typeInfo->nElem; i++) {
+          if (typeInfo->elemIsPtr[i]) {
+            printf("Is Array? : %d\n", typeInfo->isArray);
+            printf("nElem: %d\n", typeInfo->nElem);
+            uint32_t *pair = *(data + i);
+            printf("Pair: %#010x, %#010x, %#010x, %#010x \n", pair, *(data + 1), (data + 0), (data + 1));
+            *(data + i) = moveReference(pair);
+          }
         }
       }
     }
@@ -302,20 +439,26 @@ uint getFreeWords(Page *page) {
 // Allocate a new heap from the operating system, initialise all the pages
 // in it and add them to the list of free pages
 void allocateHeap(void) {
+//  printf("Allocate a heap\n");
   uint32_t* heapAddr = NULL;
-  int res = posix_memalign((void**) &heapAddr, PAGE_WORDS * 4, NUMBER_PAGES_TO_ALLOCATE * PAGE_WORDS * 4);
-
+  uint wordSize = NUMBER_PAGES_TO_ALLOCATE * PAGE_WORDS;
+  int res = posix_memalign((void**) &heapAddr, PAGE_WORDS * 4, wordSize * 4);
+//  printf("My heap goes from %#010x to %#010x\n ", heapAddr, heapAddr + NUMBER_PAGES_TO_ALLOCATE * PAGE_WORDS);
   // Build list of free pages
-  for (uint32_t *ptr = heapAddr; ptr < heapAddr + NUMBER_PAGES_TO_ALLOCATE * PAGE_WORDS;
+  for (uint32_t *ptr = heapAddr; ptr < heapAddr + wordSize;
        ptr += PAGE_WORDS) {
+
     Page *p = (Page *) ptr;
     p->space = BLACK;
     p->usedWords = 0;
-    insert(p, FREE_PAGES);
+    insert(p, &FREE_PAGES);
+    total_pages_handled++;
+//    printf("My page number %d is at %#010x, with %d free words\n", total_pages_handled, p, getFreeWords(p));
   }
   Heap *newHeap = (Heap *) malloc(sizeof(Heap));
   newHeap->start = heapAddr;
   newHeap->next = HEAPS;
+  HEAPS = newHeap;
   return;
 }
 
@@ -328,6 +471,15 @@ uint *allocateManyPages(void) {
 void removePage(Page* page) {
   if (page == NULL) {
     return;
+  }
+  if (page == FREE_PAGES) {
+    FREE_PAGES = page->next;
+  } else if (page == BLACK_PAGES) {
+    BLACK_PAGES = page->next;
+  } else if (page == WHITE_PAGES) {
+    WHITE_PAGES = page->next;
+  } else if (page == GREY_PAGES) {
+    GREY_PAGES = page->next;
   }
 
   Page *prev = page->previous;
@@ -345,10 +497,12 @@ void removePage(Page* page) {
 }
 
 // Insert a page at the front of a list of pages
-void insert(Page *p, Page *list) {
-  p->next = list;
-  list->previous = p;
-  list = p;
+void insert(Page *p, Page **list) {
+  p->next = *list;
+  if (*list != NULL) {
+    (*list)->previous = p;
+  }
+  *list = p;
 }
 
 
