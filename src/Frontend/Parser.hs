@@ -86,7 +86,6 @@ equal = token TokEqual
 colon :: Parser Token
 colon = token TokColon
 
-
 parens :: Parser p -> Parser p
 parens = between (token TokLParen) (token TokRParen)
 
@@ -210,13 +209,15 @@ whileStmt = spanned $ do
   _ <- keyword "done"
   return (StmtWhile e b)
 
---ifNoElseStmt :: Parser (Annotated Stmt SpanA)
---ifNoElseStmt = spanned $ do
---  _ <- keyword "if"
---  i <- expr
---  t <- block
---  _ <- keyword "fi"
---  return (StmtIfNoElse i t)
+forStmt :: Parser (Annotated Stmt SpanA)
+forStmt = spanned $ do
+  _ <- keyword "for"
+  i <- expr
+  _ <- semi
+  c <- expr
+  e <- expr
+  b <- block
+  return (StmtFor i c e b)  
 
 ifStmt :: Parser (Annotated Stmt SpanA)
 ifStmt = spanned $ do
@@ -227,7 +228,6 @@ ifStmt = spanned $ do
   e <- optionMaybe (keyword "else" >> block)
   _ <- keyword "fi"
   return (StmtIf i t e)
-
 
 switchStmt :: Parser (Annotated Stmt SpanA)
 switchStmt = spanned $ do

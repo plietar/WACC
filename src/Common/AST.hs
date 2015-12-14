@@ -41,10 +41,10 @@ data Stmt a
   | StmtExit   (Annotated Expr a)
   | StmtPrint  (Annotated Expr a) Bool
   | StmtIf     (Annotated Expr a) (Annotated Block a) (Maybe (Annotated Block a))
-  | StmtIfNoElse (Annotated Expr a) (Annotated Block a)
   | StmtWhile  (Annotated Expr a) (Annotated Block a)
   | StmtScope  (Annotated Block a)
   | StmtSwitch (Annotated Expr a) [Annotated CaseArm a]
+  | StmtFor    (Annotated Expr a) (Annotated Expr a) (Annotated Expr a) (Annotated Block a)
 
 data AssignLHS a
   = LHSVar       Identifier

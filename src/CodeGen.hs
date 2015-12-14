@@ -393,18 +393,6 @@ genStmt (_, StmtRead lhs@(ty, _)) = do
   v <- genCall1 fname []
   genAssign lhs v
 
---genStmt (_, StmtIfNoElse condition thenBlock) = do
---  endLabel <- allocateLabel
---  thenLabel <- allocateLabel
-
---  condVar <- genExpr condition
-
---  emit [ICondJump { iLabel = thenLabel, iValue = condVar }
---       , ILabel { iLabel = thenLabel }
---       , IJump { iLabel = endLabel }]
---  genBlock thenBlock
---  emit [ILabel { iLabel = endLabel }]
-
 genStmt (_, StmtIf condition thenBlock elseBlock) = do
   thenLabel <- allocateLabel
   endLabel <- allocateLabel
@@ -442,6 +430,29 @@ genStmt (_, StmtSwitch expr cs) = do
   emit [ILabel {iLabel = endLabel }] 
 
 genStmt (_, StmtScope block) = genBlock block
+
+genStmt (_m, StmtFor i c e b ) = do
+  startLabel = allocateLabel
+  endLabel = allocateLabel
+
+  initialisation <- genExpr i
+
+  emit [ILabel { iLabel = startLabel }]
+  genBlock b
+
+  cond <- genExpr c
+  expr <- genExpr e
+
+  emit [ICondJump { iLabel = startLabel, iValue = cond }]
+ 
+  
+
+  emit [IJump { iLabel = startLabel }]
+  
+  emit [ICondJump {}]
+
+  emit [ILabel {iLabel = endLabel }] 
+
 
 genCaseArm :: Label -> Var -> Annotated CaseArm TypeA -> CodeGen ()
 genCaseArm endLabel e (_, CaseArm l b) = do
