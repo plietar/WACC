@@ -334,9 +334,9 @@ genRHS (t@(TyArray elemTy), RHSArrayLit exprs) = do
                  else 0
       elemSize = typeSize elemTy
 
-genRHS (TyTuple types, RHSNewTuple exprs) = do
+genRHS (baseTy@(TyTuple types), RHSNewTuple exprs) = do
   sizeVar <- allocateTemp
-  typeInfoVar <- genGCTypeInfo t
+  typeInfoVar <- genGCTypeInfo baseTy
   emit [ ILiteral { iDest = sizeVar, iLiteral = LitInt (toInteger (length exprs * 4)) }]
   tupleVar <- genCall1 "GCAlloc" [sizeVar, typeInfoVar]
   forM (zip exprs [0..]) $ \(expr, index) -> do
@@ -372,7 +372,7 @@ genStmt (_, StmtFree expr@(ty, _)) = do
       genCall0 "p_check_null_pointer" [v]
       emitFeature CheckNullPointer
     _ -> return ()
-  genCall0 "free" [v]
+--  genCall0 "free" [v]
 
 genStmt (_, StmtReturn expr) = do
   v <- genExpr expr

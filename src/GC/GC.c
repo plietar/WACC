@@ -41,6 +41,7 @@ typedef struct Page {
 // NOTE: Compiler must do it this way.
 typedef struct type_info {
   uint8_t isArray;
+  uint32_t *typeName;
   uint32_t nElem;
   uint8_t elemIsPtr[];
 } __attribute__((packed)) type_info ;

@@ -211,27 +211,31 @@ genFeature Initialise = ([],
                          , "POP {pc}"])
 genFeature (GCTypeInformation t) = ([(mangle t) ++ ":" ] ++ (typeInfo t), [])
 
-
 -- Garbage Collection Methods
 typeInfo :: Type -> [String]
-typeInfo (TyArray t)
+typeInfo baseTy@(TyArray elemTy)
   = [ ".byte 1"   -- isArray
+    , ".word " ++ "string" ++ mangled
     , ".word 0"   -- length (unnecessary for arrays)
-    , ".byte " ++ isPointer t ] -- isPointer
-typeInfo (TyPair t1 t2)
+    , ".byte " ++ isPointer elemTy  -- isPointer
+    , "string" ++ mangled ++ ":"
+    , ".ascii \"" ++ show baseTy ++ "\\0\"" ] 
+    where
+      mangled = mangle baseTy 
+typeInfo baseTy@(TyTuple elemTys)
   = [ ".byte 0"
-    , ".word " ++ show 2
-    , ".byte " ++ (isPointer t1)
-    , ".byte " ++ (isPointer t2) ]
-
---typeInfo (TyTuple ts)
---  = [ ".byte 0", ".word " ++ show (length ts)]
---    ++ (zipWith (++) (repeat ".byte ") (map isPointer ts))
+    , ".word " ++ "string" ++ mangled
+    , ".word " ++ show (length elemTys)]
+    ++ pointerInfo ++
+    [ "string" ++ mangled ++ ":"
+    , ".ascii \"" ++ show baseTy ++ "\\0\"" ]
+    where
+      mangled = mangle baseTy
+      pointerInfo = (zipWith (++) (repeat ".byte ") (map isPointer elemTys
 
 isPointer :: Type -> String
 isPointer (TyArray _) = "1"
-isPointer (TyPair _ _) = "1"
---isPointer (TyTuple _) = "1" -- Waiting for nacho
+isPointer (TyTuple _) = "1"
 isPointer _ = "0"
 
 mangle :: Type -> String
@@ -242,9 +246,10 @@ mangleName :: Type -> String
 mangleName TyInt = "int"
 mangleName TyChar = "char"
 mangleName (TyArray t) = "A" ++ mangleName t
-mangleName (TyPair t1 t2) = "P" ++ mangleName t1 ++ mangleName t2
---mangleName (TyTuple ts) = "T" ++ concatMap mangleName ts
+mangleName (TyTuple ts) = "T" ++ concatMap mangleName ts
 mangleName TyBool = "bool"
+mangleName TyVoid = "void"
+mangleName TyNull = "null"
 mangleName TyAny = "any"
 
 
