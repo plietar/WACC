@@ -1,17 +1,23 @@
+#include <errno.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <malloc.h>
+#include <assert.h>
 
-#define HEAP_SIZE_WORDS 250000 // 1MB
-#define PAGE_WORDS 1000
+//#define HEAP_SIZE_WORDS 250000 // 1MB
+//#define PAGE_WORDS 1024 //REAL
+#define PAGE_WORDS 32 
 #define WORD_SIZE 4 // Bytes
-#define NUMBER_PAGES_TO_ALLOCATE 250
+//#define NUMBER_PAGES_TO_ALLOCATE 250 // REAL
+#define NUMBER_PAGES_TO_ALLOCATE 4
 
-#define PAGE_DATA_START(x) ((uint32_t *) (4 * ((uint32_t) x + sizeof(Page) + 3) / 4))
-#define OBJECT_DATA_START(x) ((uint32_t *) (4 * ((uint32_t) x + sizeof(object_header) + 3) / 4))
+#define PAGE_DATA_START(x) ((uint32_t *) (4 * (((uint32_t) x + sizeof(Page) + 3) / 4)))
+#define OBJECT_DATA_START(x) ((uint32_t *) (4 * (((uint32_t) x + sizeof(object_header) + 3) / 4)))
 // CHECK: get header from pointer to the object data
-#define OBJECT_HEADER_START(x) ((object_header *) (4 * ((uint32_t) x - sizeof(object_header) + 3) / 4))
+#define OBJECT_HEADER_START(x) ((object_header *) (4 * (((uint32_t) x - sizeof(object_header) + 3) / 4)))
 
 
 // Data Types
@@ -36,8 +42,8 @@ typedef struct Page {
 typedef struct type_info {
   uint8_t isArray;
   uint32_t nElem;
-  bool elemIsPtr[];
-} type_info __attribute__((packed)) ;
+  uint8_t elemIsPtr[];
+} __attribute__((packed)) type_info ;
 
 typedef struct object_header {
   uint objWords;
