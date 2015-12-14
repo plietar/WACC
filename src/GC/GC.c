@@ -63,6 +63,9 @@ uint32_t *top_stack = NULL;
 uint allocated_pages = 0;
 uint total_pages_handled = 0;
 uint GC_Alloc_calls = 0;
+uint GC_Alloc_Calls = 0;
+uint GC_Last_Calls = 0;
+uint callsToCopy = 0;
 // Memory
 Page *FREE_PAGES = NULL;
 Page *BLACK_PAGES = NULL;
@@ -97,6 +100,7 @@ void printHeader(object_header *header);
 void printTypeInfo(type_info *type);
 void printPageLists();
 void printHeap();
+void printMemoryUsage();
 
 void printHeap(void) {
 }
@@ -210,6 +214,16 @@ void GCCollect(uint32_t *bottom_stack) {
     allocateHeap();
   }
   return;
+}
+
+void printMemoryUsage() {
+  printf("-------------------------Memory Usage Summary-----------------------\n");
+  printf("Total Memory from OS: \t%d bytes\n", total_pages_handled * PAGE_WORDS * 4);
+  printf("Total pages handled: \t%d\n", total_pages_handled);
+  printf("Free pages: \t\t%d\n", total_pages_handled - allocated_pages);
+  printf("Page lists: \n");
+  printf("Calls to copy: %d\n", callsToCopy);
+  printf("Calls to alloc: %d\n", GC_Alloc_Calls);
 }
 
 
