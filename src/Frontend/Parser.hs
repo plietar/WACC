@@ -97,7 +97,7 @@ expr = buildExpressionParser exprTable term <?> "expression"
   where
     term = parens expr
            <|> spanned (ExprLit <$> literal)
-           <|> spanned (ExprArrayElem <$> arrayElem)
+           <|> spanned (ExprIndexingElem <$> indexingElem)
            <|> spanned (ExprVar <$> identifier)
            <?> "term"
 
@@ -118,15 +118,15 @@ expr = buildExpressionParser exprTable term <?> "expression"
     exprTable = [ [ prefix (op "!") UnOpNot, prefix (op "-") UnOpNeg
                   , prefix (keyword "len") UnOpLen, prefix (keyword "ord") UnOpOrd
                   , prefix (keyword "chr") UnOpChr ]
-                , [ left (op "*") BinOpMul, left (op "/") BinOpDiv, left (op "%") BinOpRem]
-                , [ left (op "+") BinOpAdd, left (op "-") BinOpSub ]
-                , [ nonassoc (op ">")  BinOpGT ]
-                , [ nonassoc (op ">=") BinOpGE ]
-                , [ nonassoc (op "<")  BinOpLT ]
-                , [ nonassoc (op "<=") BinOpLE ]
-                , [ nonassoc (op "==") BinOpEQ, nonassoc (op "!=") BinOpNE ]
-                , [ left (op "&&") BinOpAnd ]
-                , [ left (op "||") BinOpOr ]
+                  , [ left (op "*") BinOpMul, left (op "/") BinOpDiv, left (op "%") BinOpRem]
+                  , [ left (op "+") BinOpAdd, left (op "-") BinOpSub ]
+                  , [ nonassoc (op ">")  BinOpGT ]
+                  , [ nonassoc (op ">=") BinOpGE ]
+                  , [ nonassoc (op "<")  BinOpLT ]
+                  , [ nonassoc (op "<=") BinOpLE ]
+                  , [ nonassoc (op "==") BinOpEQ, nonassoc (op "!=") BinOpNE ]
+                  , [ left (op "&&") BinOpAnd ]
+                  , [ left (op "||") BinOpOr ]
                 ]
 
 parseType :: Parser Type
@@ -136,37 +136,40 @@ parseType = (do
   return (arr t)
   ) <?> "type"
   where
-    notArrayType = baseType <|> pairType
+    notArrayType = baseType <|> pairType <|> tupleType
     baseType = (keyword "int"    $> TyInt) <|>
                (keyword "bool"   $> TyBool) <|>
                (keyword "char"   $> TyChar) <|>
                (keyword "string" $> TyArray TyChar)
     pairType = do
       _ <- P.try (keyword "pair" <* P.lookAhead (token TokLParen))
-      parens (TyPair <$> pairElemType <* comma <*> pairElemType)
-    pairElemType = parseType <|> (keyword "pair" $> TyPair TyAny TyAny)
+      parens (TyTuple <$> (sepBy pairElemType comma))
+    pairElemType = parseType <|> (keyword "pair" $> TyTuple [TyAny, TyAny])
+    tupleType = do
+      _ <- P.try (keyword "tuple")
+      parens (TyTuple <$> (sepBy parseType comma))
 
-pairElem :: Parser (Annotated PairElem SpanA)
+pairElem :: Parser (Annotated IndexingElem SpanA)
 pairElem = spanned $ do
-  side <- pairSide
-  e <- expr
-  return (PairElem side e)
-  where
-    pairSide = (keyword "fst" $> PairFst) <|>
-               (keyword "snd" $> PairSnd)
+  index <- spanned $ ExprLit <$> LitInt <$> ((keyword "fst" $> 0) <|> (keyword "snd" $> 1))
+  i    <- identifier
+  return (IndexingElem i [index])
 
-arrayElem :: Parser (Annotated ArrayElem SpanA)
-arrayElem = spanned $ do
+indexingElem :: Parser (Annotated IndexingElem SpanA)
+indexingElem = spanned $ do
   i <- P.try (identifier <* P.lookAhead (token TokLBracket))
-  a <- many1 arrayIndex
-  return (ArrayElem i a)
+  a <- many1 index
+  return (IndexingElem i a)
   where
-    arrayIndex = brackets expr
+    index = brackets expr
+
+wrapSpan :: (Annotated a SpanA -> b SpanA) -> Annotated a SpanA -> Annotated b SpanA
+wrapSpan f x@(sp, _) = (sp, f x)
 
 assignLHS :: Parser (Annotated AssignLHS SpanA)
 assignLHS
-  = spanned $ LHSArrayElem <$> arrayElem <|>
-              LHSPairElem <$> pairElem <|>
+  = spanned $ LHSIndexingElem <$> indexingElem <|>
+              LHSIndexingElem <$> pairElem <|>
               LHSVar <$> identifier
 
 assignRHS :: Parser (Annotated AssignRHS SpanA)
@@ -175,17 +178,19 @@ assignRHS
               rhsArrayLit <|>
               rhsPairElem <|>
               rhsCall <|>
-              rhsNewPair
+              rhsNewPair <|>
+              rhsNewTuple
     where
-      rhsExpr     = RHSExpr <$> expr
-      rhsArrayLit = RHSArrayLit <$> brackets (sepBy expr comma) <?> "array literal"
-      rhsPairElem = RHSPairElem <$> pairElem
-      rhsNewPair = keyword "newpair" *> parens (RHSNewPair <$> expr <* comma <*> expr)
-      rhsCall = do
-        _  <- keyword "call"
-        i  <- identifier
-        es <- parens (sepBy expr comma)
-        return (RHSCall i es)
+      rhsExpr      = RHSExpr <$> expr
+      rhsArrayLit  = RHSArrayLit <$> brackets (sepBy expr comma) <?> "array literal"
+      rhsPairElem  = RHSExpr <$> wrapSpan ExprIndexingElem <$> pairElem
+      rhsNewPair   = keyword "newpair" *> parens (RHSNewTuple <$> ((\a b -> [a,b]) <$> expr <* comma <*> expr))
+      rhsCall      = do
+                     _  <- keyword "call"
+                     i  <- identifier
+                     es <- parens (sepBy expr comma)
+                     return (RHSCall i es)
+      rhsNewTuple  = keyword "newtuple" *> parens (RHSNewTuple <$> (sepBy expr comma))
 
 skipStmt :: Parser (Annotated Stmt SpanA)
 skipStmt = spanned $ do
