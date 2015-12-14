@@ -7,7 +7,7 @@ import Common.Span
 import Common.WACCResult
 import Frontend.Tokens
 
-import Control.Applicative 
+import Control.Applicative
 import Data.Int
 import Text.Parsec.Combinator
 import Text.Parsec.Expr
@@ -277,7 +277,7 @@ caseArm = spanned $ do
   _ <- keyword "case"
   i <- literal
   _ <- colon
-  b <- block 
+  b <- block
   return (CaseArm i b)
 
 scopeStmt :: Parser (Annotated Stmt SpanA)

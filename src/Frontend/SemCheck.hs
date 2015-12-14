@@ -90,7 +90,7 @@ mergeTypes (TyTuple tys) TyNull
   = return (TyTuple tys)
 mergeTypes t1 t2
   | t1 == t2  = OK t1
-  | otherwise = semanticError ("Types " ++ show t1 ++ " and " ++ 
+  | otherwise = semanticError ("Types " ++ show t1 ++ " and " ++
                                            show t2 ++ " are not compatible")
 
 checkType :: Context -> Type -> WACCResult Type
@@ -155,29 +155,29 @@ checkIndexingElem (_, IndexingElem varname exprs) context = do
   return (ty, IndexingElem varname exprs')
 
 checkIndexingElem' :: Type -> [Annotated Expr TypeA] -> WACCResult (Type, [Type])
-checkIndexingElem' baseType@(TyTuple ts) exprs@((ty, e):es) 
+checkIndexingElem' baseType@(TyTuple ts) exprs@((ty, e):es)
   | compatible && literal && bounded = do
-      (elemType, baseTypes) <- checkIndexingElem' (ts !! exprLitToInt e) es 
+      (elemType, baseTypes) <- checkIndexingElem' (ts !! exprLitToInt e) es
       return (elemType, baseType : baseTypes)
-  | compatible && literal            = semanticError("Cannot index " 
+  | compatible && literal            = semanticError("Cannot index "
                                          ++ show (exprLitToInt e) ++ " out of bounds in tuple.")
-  | otherwise                        = semanticError("Cannot index a variable of type " ++ show ty) 
+  | otherwise                        = semanticError("Cannot index a variable of type " ++ show ty)
     where
       compatible = compatibleType TyInt ty
       literal    = checkIfExprIsLiteralInt e
       bounded    = -1 < exprLitToInt e && exprLitToInt e < length ts
 
 checkIndexingElem' baseType@(TyArray t) exprs@((ty, e):es)
-  | compatible   = do 
+  | compatible   = do
      (elemType, baseTypes) <- checkIndexingElem' t es
      return (elemType, baseType : baseTypes)
   | otherwise    = semanticError ("Cannot index a variable with variable of type " ++ show ty)
-    where 
+    where
       compatible = compatibleType TyInt ty
-      
+
 checkIndexingElem' t [] = OK (t, [])
 checkIndexingElem' t _  = semanticError("Type " ++ show t ++ " not indexable")
- 
+
 checkIfExprIsLiteralInt :: Expr a -> Bool
 checkIfExprIsLiteralInt (ExprLit (LitInt _)) = True
 checkIfExprIsLiteralInt _ = False
@@ -239,14 +239,14 @@ binOpType op = case op of
   BinOpAnd -> booleanOp
   BinOpOr  -> booleanOp
   where
-    arithmeticOp = (\t1 t2 -> compatibleType TyInt t1 
+    arithmeticOp = (\t1 t2 -> compatibleType TyInt t1
                            && compatibleType TyInt t2
                            , TyInt)
-    booleanOp    = (\t1 t2 -> compatibleType TyBool t1 
+    booleanOp    = (\t1 t2 -> compatibleType TyBool t1
                            && compatibleType TyBool t2
                            , TyBool)
     orderOp      = (\t1 t2 -> compatibleType t1 t2
-                           && isOrderedType t1 
+                           && isOrderedType t1
                            && isOrderedType t2
                            , TyBool)
     equalityOp   = (compatibleType, TyBool)
@@ -256,7 +256,7 @@ checkBinOp op t1 t2
   = let (predicate, result) = binOpType op
     in if predicate t1 t2
        then OK result
-       else semanticError ("Cannot apply binary operator " ++ show op 
+       else semanticError ("Cannot apply binary operator " ++ show op
                         ++ " to types " ++ show t1 ++ " and " ++ show t2)
 
 checkAssignLHS :: Annotated AssignLHS SpanA -> Context -> WACCResult (Annotated AssignLHS TypeA)
@@ -300,14 +300,14 @@ checkAssignRHS (_, RHSChanRecv chanName) context = do
   return (elemTy, RHSChanRecv chanName)
 
 checkArgs :: Context -> [Type] -> [Type] -> WACCResult ()
-checkArgs ctx actual expected = checkArgs' 0 actual expected 
+checkArgs ctx actual expected = checkArgs' 0 actual expected
   where
     checkArgs' :: Int -> [Type] -> [Type] -> WACCResult ()
     checkArgs' _ [] [] = OK ()
     checkArgs' n (a1:as1) (a2:as2)
       | compatibleType a1 a2 = checkArgs' (n+1) as1 as2
-      | otherwise = semanticError ("Expected type " ++ show a2 
-                                ++ " but got type " ++ show a1 
+      | otherwise = semanticError ("Expected type " ++ show a2
+                                ++ " but got type " ++ show a1
                                 ++ " for argument " ++ show (n + 1))
     checkArgs' n _ _
       = semanticError ("Wrong number of arguments."
@@ -400,7 +400,7 @@ checkStmt (_, StmtRead lhs) = do
   context <- get
   lhs'@(lhsType, _) <- lift $ checkAssignLHS lhs context
   when (not (isReadableType lhsType))
-       (lift (semanticError ("Cannot read variable of type " 
+       (lift (semanticError ("Cannot read variable of type "
                                                              ++ show lhsType)))
   return (False, StmtRead lhs')
 
@@ -434,7 +434,7 @@ checkStmt (_, StmtIf predicate b1 maybeB2) = do
   predicate'@(predicateType, _) <- lift $ checkExpr predicate context
   when (not (compatibleType TyBool predicateType))
        (lift (semanticError ("Condition cannot be of type " ++ show predicateType)))
-  case maybeB2 of 
+  case maybeB2 of
     Just b2 -> do
       b1'@((al1,_),_) <- lift $ checkBlock b1 context
       b2'@((al2,_),_) <- lift $ checkBlock b2 context
@@ -502,7 +502,7 @@ checkFunction (_, FuncDef expectedReturnType async name args block) globalContex
                              asyncContext = async })
            forM_ args' (\(argType, argName) -> addVariable argName argType)
 
-      context <- execStateT setupContext globalContext 
+      context <- execStateT setupContext globalContext
       block'@((alwaysReturns, _), _) <- checkBlock block context
 
       unless (isVoidType expectedReturnType' || alwaysReturns)

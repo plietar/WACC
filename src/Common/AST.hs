@@ -110,7 +110,7 @@ data Type = TyInt
           | TyFFI Identifier
           | TyAny
           | TyVoid
-          | TyNull 
+          | TyNull
     deriving (Eq)
 
 instance Show BinOp where
