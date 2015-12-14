@@ -61,28 +61,45 @@
 
 \section{Product}
 Analysis and critical evaluation of the quality of WACC.
+Our WACC compiler has been written in Haskell. This has allowed us to use powerful pattern matching and monads to write our compiler. Being extremely critical, we think we have built a fantastic compiler; it passes all the test cases, it has some great extensions and most importantly it does it fundamental job of preserving the meaning of the program being compiled whilst converting it into WACC.
+
+The layout of our WACC compiler is very clear and concise, within our source folder you can easily see what is required for the Frontend, the Backend and the extension. Each file has one meaningful purpose e.g. our Parser.hs parses input, our SemCheck.hs carries out semantic checking. 
+
+The fact that our compiler is well formatted means that it is quite easily extendible if you wanted to add to the WACC language. Adding additional statements would not cause any conflicts with the existing program; all you need to do is add it to the parser, add the correct semantic check and then add how you want the code to be generated using the IR (Intermediate Representation) we have already defined. 
+
+We changed the register allocation in our extension to produce better code. This, however, means that our final register allocation is a bit slower than what we initially committed for the backend. This slowdown actually causes LabTS to timeout on one of our test cases so this is definitely something we would need to address if rebuilding the compiler.  
 
 \section{Project Management}
+
 \subsection{Organisation}
+The way our group kept organised throughout this project was through Git and WhatsApp. 
+
 The organisation of our group got better and smoother as the project advanced. At the beginning the division of the Frontend was between the three parts: lexer, 
 parser, and semantic checker. However, we weren't fully aware that each were not equivalent in terms of work, so for example the team members that worked on the parser worked harder than the ones that worked on the lexer. However we changed that on the Backend. Although inevitably we couldn't all contribute to the Backend in the same degree (as the expertise of some team members were far beyond others), we did know how to push each of the team members to work their hardest on each assignment. By the start of the extension, we were all on the same page and very organised. We decided to part ways on the extension and assigned a particular extension to each team member according to our level. This made the extension part of the project very pleasant to work on, as each team member had 
 free room to play around but forced to learn more from the code written by others, since most extensions need the team member to modify many files. Hence Paul worked on concurrency and register spilling, Jaime worked on garbage collection, Ignacio worked on extending pairs to tuples, and Leanne improved the if statements, adding a switch statement. 
+
 \subsection{Use of Git}
-As our organisation, our use of git got better as the project advanced. Paul's  knowledge of git helped the other team members become very fluent with git, which helped the project get very smooth. We branched the project accordingly to the necessary division at each milestone. Finally, for the extension we created four branches so that each team member could experiment. Without doubt this project has helped become much more acquainted with Git than any other small lab project.
+Our use of git definitely improved as the project advanced. We tried our best to always have meaningful commit messages and we would also include the initials of anyone that helped with that commit. For each milestone of the compiler we had several different branches. For example, our Frontend had separate branches for the parser, lexer and semantic checker, our backend had separate branches for code generation and ARM generation and for our extension we had separate branches for each individual extension. This made it very easy to keep track of what everyone had done and it also meant that our master branch would always successfully build since we did not push to master until our respective branches behaved correctly. Paul's invaluable knowledge and experience with git helped the other team members become very much more fluent in it and we have all undoubtedly become much more acquainted with Git than we did with any other small lab project.
 
 \subsection{Communication}
-The communication in our group was excellent from the beginning to the end. The use of chat groups on our phone was enough to have details of the project, meeting times, divide tasks, and help each other out whenever was necessary.  
+The communication in our group was excellent from the beginning to the end. With the aid of WhatsApp we were able to organise our meetings and at each meeting we would generally all work beside each other but on different parts. This was useful in that if anyone had any issues they could easily seek help from another teammate. 
+
+\subsection{Group Structure}
+Our group lacked a rigid structure in that someone would just decide to do something and work on it by themselves rather than coordinating the task between a couple group members. However, throughout the project, the distribution of work did improve so that one or two people were not doing the majority of the work.
+
+\subsection{What we would do differently}
+If we were to do this lab again we would try and decide earlier on a more even distribution of work taking in to account each person's different programming ability. We also think it would be important to have a distinct team leader to delegate tasks.
 
 \section{Design Choices}
 Design patterns used and design choices made throughout the project.
-
-
 
 \section{Extensions}
 \subsection{Register Spilling}
 \subsection{Concurrency}
 \subsection{Garbage Collection}
 \subsection{Improving If Statements}
+We decided to extend the WACC language with additional conditional branching statements; `if' statements without an `else' branch and `switch' statements. Initially to implement the `if' statements without an `else' branch we defined a new data type called `StmtIfNoElse' which had only the condition and the `then' branch associated with it but this added a lot of repetitive code as it was extremely similar to our `StmtIf'. To overcome this problem, we made use of Haskell's Maybe monad to  define `if' statements to have a Maybe block. We then had to change Parser.hs to allow this new syntax and then we had to add the new semantics to SemCheck.hs. The difference in semantic checking between an `if' statement with an `else' branch and one without was that in the case where the `else' block was empty we had to show that the `if' statement never necessarily returns a value.  Finally we had to ensure the correct assembly code was generated which meant changing CodeGen.hs to have a case expression to deal with if the block contained a value (Just b) or was empty (Nothing).
+For `switch' statements we had to define new keywords in lexer.x for `switch' and `case'. Then, similarly we had to add switch statements to our semantic checker and parser and edit how the assembly code is generated.
 \subsection{Extending Pairs to Tuples}
 One limited feature of WACC was the ability to deal with pairs instead of arbitrarily sized tuples. So a nice extension was to expand WACC to support tuples. The first step in this extension was to control the would-be redundancy if we kept all the code handling pairs and creating new code for tuples. So what was done was to naturally consider pairs as a subset of tuples. The only difference in code then would be on the lexer and the parser, but from the parser on we considered pairs as tuples and we only wrote code regarding tuples. The only problem then was accessing a pair with \texttt{fst} and \texttt{snd}. We made the decision that tuples were to be accesed in the same manner as arrays (i.e. \texttt{a[1]}), so then it  was an easy fix as we just considered \texttt{fst p = p[0]} and \texttt{snd p = p[1]}.
 
