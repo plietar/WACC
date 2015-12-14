@@ -134,7 +134,7 @@ exprWeight (_, ExprBinOp _ e1 e2)
     in min (max w1 (w2 + 1))
            (max (w1 + 1) w2)
 exprWeight (_, ExprVar _) = 1
-exprWeight (_, ExprArrayElem (_, ArrayElem _ exprs))
+exprWeight (_, ExprIndexingElem (_, IndexingElem _ exprs))
   = 1 + maximum (map exprWeight exprs)
 
 genExpr2 :: Annotated Expr TypeA -> Annotated Expr TypeA -> CodeGen (Var, Var)
@@ -198,35 +198,28 @@ genExpr (_ , ExprBinOp operator expr1 expr2) = do
   return outVar
 
 -- Variable
-genExpr (ty, ExprVar ident) = genFrameRead ty ident
+genExpr (ty, ExprVar ident) = genFrameRead ident
 
--- ArrayElem
-genExpr (elemTy, ExprArrayElem (_, ArrayElem ident exprs)) = do
-  let initIndexExprs = init exprs
-      lastIndexExpr  = last exprs
+genExpr (_, ExprIndexingElem ((t, ts), IndexingElem ident exprs)) = do
 
-  -- Here we don't care / know what's inside the arrays
-  -- The type is only used to determine the type of instruction (LDR vs LDRB)
-  arrayVar <- genFrameRead (TyArray TyAny) ident
-  subArrayVar <- foldM (genArrayRead (TyArray TyAny)) arrayVar initIndexExprs
-
-  outVar <- genArrayRead elemTy subArrayVar lastIndexExpr
-
+  indexVar    <- genFrameRead ident
+  outVar      <- foldM genIndexingRead indexVar (zip ts exprs)
   return outVar
 
 -- Read from Frame
-genFrameRead :: Type -> String -> CodeGen Var
-genFrameRead ty ident = gets (getFrameLocal ident . frame)
+genFrameRead :: String -> CodeGen Var
+genFrameRead ident = gets (getFrameLocal ident . frame)
 
--- Read from Array
-genArrayRead :: Type -> Var -> Annotated Expr TypeA -> CodeGen Var
-genArrayRead elemTy arrayVar indexExpr = do
+-- Read from Tuple/Array
+genIndexingRead :: Var -> (Type, Annotated Expr TypeA) -> CodeGen Var
+genIndexingRead arrayVar ((TyArray elemTy), indexExpr) = do
+  
+  
   emitFeature CheckArrayBounds
-
-  outVar <- allocateTemp
+  outVar         <- allocateTemp
   arrayOffsetVar <- allocateTemp 
-  offsetedArray <- allocateTemp
-  indexVar <- genExpr indexExpr
+  offsetedArray  <- allocateTemp
+  indexVar       <- genExpr indexExpr
 
   genCall0 "p_check_array_bounds" [indexVar, arrayVar]
   emit [ ILiteral { iDest    = arrayOffsetVar
@@ -241,54 +234,62 @@ genArrayRead elemTy arrayVar indexExpr = do
                    , iType    = elemTy } ]
   return outVar
 
+genIndexingRead tupleVar (elemTy@(TyTuple ts), (_, ExprLit (LitInt x))) = do
+  emitFeature CheckNullPointer
+  genCall0 "p_check_null_pointer" [tupleVar]
+  outVar   <- allocateTemp
+  emit [ IHeapRead { iHeapVar = tupleVar 
+                   , iDest    = outVar
+                   , iOperand = OperandLit (4 * fromInteger x)
+                   , iType    = elemTy } ]
+  return outVar
+
 -- LHS Assign
 genAssign :: Annotated AssignLHS TypeA -> Var -> CodeGen ()
 genAssign (ty, LHSVar ident) valueVar = do
   localVar <- gets (getFrameLocal ident . frame)
   emit [ IMove { iDest = localVar, iValue = valueVar } ]
 
--- LHS Pair 
-genAssign (_, LHSPairElem ((elemTy, pairTy), PairElem side pairExpr)) valueVar = do
-  emitFeature CheckNullPointer
-
-  pairVar <- genExpr pairExpr
-  genCall0 "p_check_null_pointer" [pairVar]
-  emit [ IHeapWrite { iHeapVar = pairVar, iValue = valueVar, iOperand = OperandLit (pairOffset side pairTy), iType = elemTy } ]
-
--- LHS Array Indexing 
-genAssign (elemTy, LHSArrayElem (_, ArrayElem ident exprs)) valueVar = do
-  emitFeature CheckArrayBounds
+genAssign (_, LHSIndexingElem ((elemTy, ts), IndexingElem ident exprs)) valueVar = do
 
   let readIndexExprs  = init exprs
       writeIndexExpr  = last exprs
 
-  -- Here we don't care / know what's inside the arrays
-  -- The type is only used to determine the type of instruction (LDR vs LDRB)
-  arrayVar <- genFrameRead (TyArray TyAny) ident
-  subArrayVar <- foldM (genArrayRead (TyArray TyAny)) arrayVar readIndexExprs
-  offsetedBase <- allocateTemp
+  indexVar   <- genFrameRead ident
+  subIndexVar <- foldM genIndexingRead indexVar (zip ts readIndexExprs)
+  genIndexingWrite (last ts) writeIndexExpr subIndexVar valueVar
 
+genIndexingWrite :: Type -> Annotated Expr TypeA -> Var -> Var -> CodeGen ()
+genIndexingWrite (TyArray elemTy) writeIndexExpr subIndexVar valueVar = do
+  
+  emitFeature CheckArrayBounds
+  offsetedBase <- allocateTemp
   writeIndexVar <- genExpr writeIndexExpr
   arrayOffsetVar <- allocateTemp
-  genCall0 "p_check_array_bounds" [writeIndexVar, subArrayVar]
+
+  genCall0 "p_check_array_bounds" [writeIndexVar, subIndexVar]
   emit [ILiteral { iDest = arrayOffsetVar, iLiteral = LitInt 4 }
        , IBinOp { iBinOp = BinOpAdd, iDest = offsetedBase
-                , iLeft = arrayOffsetVar, iRight = subArrayVar } 
-       , IHeapWrite { iHeapVar = offsetedBase 
+                , iLeft = arrayOffsetVar, iRight = subIndexVar } 
+       , IHeapWrite { iHeapVar  = offsetedBase 
+                    , iValue    = valueVar
+                    , iOperand  = OperandVar writeIndexVar (typeShift elemTy)
+                    , iType     = elemTy } ]
+
+genIndexingWrite (TyTuple ts) (_, ExprLit (LitInt x)) subIndexVar valueVar = do
+  
+  emitFeature CheckNullPointer
+  genCall0 "p_check_null_pointer" [subIndexVar]
+  emit [ IHeapWrite { iHeapVar = subIndexVar 
                     , iValue  = valueVar
-                    , iOperand = OperandVar writeIndexVar (typeShift elemTy)
-                    , iType = elemTy } ]
+                    , iOperand = OperandLit (4 * fromInteger x)
+                    , iType = TyInt } ]
 
 -- Shift depending on size of type
 typeShift :: Type -> Int
 typeShift TyChar = 0
 typeShift TyBool = 0
 typeShift _      = 2
-
--- Offset for a pair 
-pairOffset :: PairSide -> Type -> Int
-pairOffset PairFst (TyPair _ _)= 0
-pairOffset PairSnd (TyPair t _)  = typeSize t
 
 
 -- Garbage Collector Type Information Methods
@@ -333,27 +334,18 @@ genRHS (t@(TyArray elemTy), RHSArrayLit exprs) = do
                  else 0
       elemSize = typeSize elemTy
 
-genRHS (t@(TyPair t1 t2), RHSNewPair fstExpr sndExpr) = do
+genRHS (TyTuple types, RHSNewTuple exprs) = do
   sizeVar <- allocateTemp
   typeInfoVar <- genGCTypeInfo t
-  emit [ ILiteral { iDest = sizeVar, iLiteral = LitInt 8 }]
-  pairVar <- genCall1 "GCAlloc" [sizeVar, typeInfoVar]
-  fstVar <- genExpr fstExpr
-  emit [ IHeapWrite { iHeapVar = pairVar, iValue = fstVar, iOperand = OperandLit (pairOffset PairFst t), iType = t1 } ]
-
-  sndVar <- genExpr sndExpr
-  emit [ IHeapWrite { iHeapVar = pairVar, iValue = sndVar, iOperand = OperandLit (pairOffset PairSnd t), iType = t2 } ]
-
-  return pairVar
-
-genRHS (_, RHSPairElem ((elemTy, pairTy), PairElem side pairExpr)) = do
-  emitFeature CheckNullPointer
-
-  outVar <- allocateTemp
-  pairVar <- genExpr pairExpr
-  genCall1 "p_check_null_pointer" [pairVar]
-  emit [IHeapRead { iHeapVar = pairVar, iDest = outVar, iOperand = OperandLit (pairOffset side pairTy), iType = elemTy } ]
-  return outVar
+  emit [ ILiteral { iDest = sizeVar, iLiteral = LitInt (toInteger (length exprs * 4)) }]
+  tupleVar <- genCall1 "GCAlloc" [sizeVar, typeInfoVar]
+  forM (zip exprs [0..]) $ \(expr, index) -> do
+    elemVar <- genExpr expr  
+    emit [ IHeapWrite  { iHeapVar = tupleVar
+                       , iValue = elemVar
+                       , iOperand = OperandLit (index * 4)
+                       , iType = types !! index } ]
+  return tupleVar
 
 genRHS (_, RHSCall name exprs) = do
   argVars <- mapM genExpr exprs
@@ -376,7 +368,7 @@ genStmt (_, StmtAssign lhs rhs) = do
 genStmt (_, StmtFree expr@(ty, _)) = do
   v <- genExpr expr
   case ty of
-    TyPair _ _ -> do
+    TyTuple _  -> do
       genCall0 "p_check_null_pointer" [v]
       emitFeature CheckNullPointer
     _ -> return ()

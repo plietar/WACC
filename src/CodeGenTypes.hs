@@ -141,13 +141,13 @@ data Frame = Frame
 
 
 typeSize :: Type -> Int
-typeSize TyInt = 4
-typeSize TyBool = 1
-typeSize TyChar = 1
--- Size of a reference to a pair (e.g. in an array)
-typeSize (TyPair _ _) = 4 
-typeSize (TyArray _) = 4
-typeSize t = error (show t)
+typeSize TyInt        = 4
+typeSize TyBool       = 1
+typeSize TyChar       = 1
+typeSize (TyArray _)  = 4
+typeSize (TyTuple _)  = 4
+typeSize TyNull       = 0
+typeSize t = error ("No type size for: " ++ (show t))
 
 emptyFrame :: Frame
 emptyFrame = Frame Nothing Map.empty Set.empty
