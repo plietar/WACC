@@ -422,29 +422,6 @@ genStmt (_, StmtSwitch expr cs) = do
 
 genStmt (_, StmtScope block) = genBlock block
 
-genStmt (_m, StmtFor i c e b ) = do
-  startLabel = allocateLabel
-  endLabel = allocateLabel
-
-  initialisation <- genExpr i
-
-  emit [ILabel { iLabel = startLabel }]
-  genBlock b
-
-  cond <- genExpr c
-  expr <- genExpr e
-
-  emit [ICondJump { iLabel = startLabel, iValue = cond }]
- 
-  
-
-  emit [IJump { iLabel = startLabel }]
-  
-  emit [ICondJump {}]
-
-  emit [ILabel {iLabel = endLabel }] 
-
-
 genCaseArm :: Label -> Var -> Annotated CaseArm TypeA -> CodeGen ()
 genCaseArm endLabel e (_, CaseArm l b) = do
   condVar <- allocateTemp
