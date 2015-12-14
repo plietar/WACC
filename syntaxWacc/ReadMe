@@ -1,0 +1,10 @@
+To set syntax highlighting in Vim for WACC:
+
+1. mkdir ~/.vim/syntax
+2. cd ~/.vim/syntax
+3. Copy waccSyntaxHighlighting.vim to the directory.
+
+4. mkdir ~/.vim/ftdetect
+5. cd ~/.vim/ftdetect
+6. Copy ftdetectwacc.vim to the directory.
+
