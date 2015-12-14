@@ -46,9 +46,12 @@ genFunction (_, FuncDef _ fname params body) = do
         argZip = (zip regNames argPassingRegs)
 
         generation = do
-          emit [ ILabel { iLabel = NamedLabel (show fname) }
-               , IFunctionBegin { iArgs = map snd argZip, iSavedRegs = calleeSaveRegs }
-               , IFrameAllocate { iSize = 0 } ] -- Fixed later once colouring / spilling is done
+          emit [ ILabel { iLabel = NamedLabel (show fname) } ]
+          emit [ IFunctionBegin { iArgs = map snd argZip, iSavedRegs = calleeSaveRegs } ]
+          case fname of
+            MainFunc -> genCall0 "GCInit" []
+            _        -> return ()
+          emit [ IFrameAllocate { iSize = 0 } ] -- Fixed later once colouring / spilling is done
 
           regArgsMap <- forM argZip $ \(name, r) -> do
             v <- allocateTemp
@@ -69,6 +72,10 @@ genFunction (_, FuncDef _ fname params body) = do
           setupFrame (Map.fromList (regArgsMap ++ stackArgsMap))
 
           genBlock body
+
+          case fname of
+            MainFunc -> genCall0 "GCFree" []
+            _ -> return ()
 
           retVal <- allocateTemp
           emit [ ILiteral { iDest = retVal, iLiteral = LitInt 0 } ]

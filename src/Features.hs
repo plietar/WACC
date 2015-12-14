@@ -230,6 +230,7 @@ typeInfo (TyPair t1 t2)
 
 isPointer :: Type -> String
 isPointer (TyArray _) = "1"
+isPointer (TyPair _ _) = "1"
 --isPointer (TyTuple _) = "1" -- Waiting for nacho
 isPointer _ = "0"
 
@@ -244,6 +245,7 @@ mangleName (TyArray t) = "A" ++ mangleName t
 mangleName (TyPair t1 t2) = "P" ++ mangleName t1 ++ mangleName t2
 --mangleName (TyTuple ts) = "T" ++ concatMap mangleName ts
 mangleName TyBool = "bool"
+mangleName TyAny = "any"
 
 
 
