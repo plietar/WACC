@@ -1,5 +1,7 @@
 \documentclass{article}
 \usepackage{graphicx}
+\usepackage{listings}
+\usepackage{color}
 
 \topmargin0.0cm
 \headheight0.0cm
@@ -8,6 +10,26 @@
 \textheight23.0cm
 \textwidth16.5cm
 \footskip1.0cm
+
+\definecolor{dkgreen}{rgb}{0,0.6,0}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{mauve}{rgb}{0.58,0,0.82}
+
+\lstset{frame=tb,
+  aboveskip=3mm,
+  belowskip=3mm,
+  showstringspaces=false,
+  columns=flexible,
+  basicstyle={\small\ttfamily},
+  numbers=none,
+  numberstyle=\tiny\color{gray},
+  keywordstyle=\color{blue},
+  commentstyle=\color{dkgreen},
+  stringstyle=\color{mauve},
+  breaklines=true,
+  breakatwhitespace=true,
+  tabsize=3
+}
 
 \makeatletter
 \def\and{%
@@ -52,5 +74,20 @@ Design patterns used and design choices made throughout the project.
 \subsection{Garbage Collection}
 \subsection{Improving If Statements}
 \subsection{Extending Pairs to Tuples}
+One limited feature of WACC was the ability to deal with pairs instead of arbitrarily sized tuples. So a nice extension was to expand WACC to support tuples. The first step in this extension was to control the would-be redundancy if we kept all the code handling pairs and creating new code for tuples. So what was done was to naturally consider pairs as a subset of tuples. The only difference in code then would be on the lexer and the parser, but from the parser on we considered pairs as tuples and we only wrote code regarding tuples. The only problem then was accessing a pair with \texttt{fst} and \texttt{snd}. We made the decision that tuples were to be accesed in the same manner as arrays (i.e. \texttt{a[1]}), so then it  was an easy fix as we just considered \texttt{fst p = p[0]} and \texttt{snd p = p[1]}.
+
+\begin{lstlisting}
+begin
+  int[] arr = [1,2,4,5];
+  tuple(int, bool, char, int[]) tup = newtuple(1, false, 'c', arr);
+  println tup[0]; # Prints 1.
+  println tup[3][2] # Prints 4.
+end
+\end{lstlisting}
+
+The second problem we encountered was that now arrays and tuples are accessed in the same manner. However, tuples can only be accesed with literal integers (so
+then \texttt{int b = 2; println tup[b]} is ilegal but \texttt{int b = 2; println tup[2]} is legal in our extension) while arrays can be indexed with expressions. So we changed our design of arrays and merged the two into an IndexingElem instead of having TupleElem and ArrayElem. This helped solved the problem because now it was a matter of just pattern matching in the appropiate moment as we always carry around the type of the IndexingElem; either a tuple or an array.
+
+\subsection{Future extensions}
 
 \end{document}
