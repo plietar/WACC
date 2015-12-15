@@ -87,11 +87,11 @@ compile filename contents output = do
     OutputColouring    -> concatMap showColouring <$> colouring
     OutputIRFinal      -> showIR <$> irFinal
     OutputASM          -> asm
-  #if WITH_GRAPHVIZ
+#if WITH_GRAPHVIZ
     OutputDotCFG       -> concatMap showDotCFG <$> cfg
     OutputDotRIG       -> concatMap showDotRIG <$> rig
     OutputDotColouring -> concat <$> (zipWith showDotColouring <$> rig <*> colouring)
-  #endif
+#endif
 
 main :: IO ()
 main = withArguments $ do

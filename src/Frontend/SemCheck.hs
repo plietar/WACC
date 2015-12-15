@@ -90,7 +90,7 @@ compatibleType (TyTuple _) TyNull = return True
 compatibleType (TyArray t1) (TyArray t2)
   = compatibleType t1 t2 
 compatibleType (TyTuple ts1) (TyTuple ts2)
-  = (andM (compatibleType <$> ts1 <*> ts2))
+  = (andM (zipWith compatibleType ts1 ts2))
     <^(&&)
     (length ts1 == length ts2)
 
@@ -155,6 +155,14 @@ isReadableType _      = return False
 isAbstractType :: Type -> SemCheck Bool
 isAbstractType TyAny         = return True
 isAbstractType TyVoid        = return True
+
+-- This is allowed when using nested pairs
+-- It leads to type unsafety, but is unfortunately
+-- allowed by the language
+isAbstractType (TyTuple [TyTuple [TyAny,TyAny], _])
+  = return False
+isAbstractType (TyTuple [_, TyTuple [TyAny,TyAny]])
+  = return False
 isAbstractType (TyTuple tys) = anyM isAbstractType tys
 isAbstractType (TyArray ty)  = isAbstractType ty
 isAbstractType _             = return False
@@ -323,10 +331,8 @@ checkArgs actual expected = checkArgs' 0 actual expected
     checkArgs' :: Int -> [Type] -> [Type] -> SemCheck ()
     checkArgs' _ [] [] = return ()
     checkArgs' n (a1:as1) (a2:as2) = do
-      unlessM (compatibleType a1 a2)
-              (semanticError ("Expected type " ++ show a2
-                           ++ " but got type " ++ show a1
-                           ++ " for argument " ++ show (n + 1)))
+      withErrorContext ("In argument " ++ show (n + 1))
+        (mergeTypes a1 a2)
       checkArgs' (n+1) as1 as2
 
     checkArgs' n _ _
@@ -340,7 +346,8 @@ checkCall fname args = do
   when async (semanticError ("Cannot call asynchronous function " ++ fname))
 
   args' <- mapM checkExpr args
-  checkArgs expectedArgsType (map fst args')
+  withErrorContext ("in call to function " ++ fname)
+    (checkArgs expectedArgsType (map fst args'))
 
   return (symbolName, args', returnType)
 
@@ -517,7 +524,7 @@ checkFunction (_, FuncDef expectedReturnType async name args block)
 
       globalContext <- ask
       context <- lift $ execStateT setupContext globalContext
-      block'@((alwaysReturns, _), _) <- checkBlock block
+      block'@((alwaysReturns, _), _) <- local (const context) (checkBlock block)
 
       unlessM (isVoidType expectedReturnType' <^(||) alwaysReturns)
               (syntaxError ("Function " ++ show name ++ " does not always return"))

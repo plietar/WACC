@@ -79,15 +79,15 @@ newtype WACCResultT m a = WACCResultT { runWACCResultT :: m (WACCResult a) }
 instance Functor m => Functor (WACCResultT m) where
   fmap f = WACCResultT . fmap (fmap f) . runWACCResultT
 
-instance Monad m => Applicative (WACCResultT m) where
-  pure    = WACCResultT . pure . pure
+instance (Applicative m, Monad m) => Applicative (WACCResultT m) where
+  pure    = WACCResultT . pure . OK
   f <*> a = WACCResultT $ do
             f' <- runWACCResultT f
             a' <- runWACCResultT a
             return (f' <*> a')
 
 instance Monad m => Monad (WACCResultT m) where
-  return  = pure
+  return  = WACCResultT . return . OK
   m >>= k = WACCResultT $ do
             a <- runWACCResultT m
             case a of
@@ -95,7 +95,7 @@ instance Monad m => Monad (WACCResultT m) where
               Error k e -> return (Error k e)
 
 instance MonadTrans WACCResultT where
-  lift m = WACCResultT $ OK <$> m
+  lift m = WACCResultT $ liftM OK m
 
 waccResultT :: Monad m => WACCResult a -> WACCResultT m a
 waccResultT = WACCResultT . return

@@ -447,7 +447,7 @@ program = spanned $ do
 
 waccParser :: String -> [(Pos, Token)] -> WACCResultT WACCArguments (Annotated Program SpanA)
 waccParser fname tokens =
-  lift $ P.runParserT (program <* eof) () fname tokens >>= \case
-             --Left e -> syntaxError' (show e)
-             Right p -> undefined
+  (lift $ P.runParserT (program <* eof) () fname tokens) >>= \case
+             Left e -> syntaxError (show e)
+             Right p -> return p
 

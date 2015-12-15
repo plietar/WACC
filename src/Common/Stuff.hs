@@ -1,5 +1,6 @@
 module Common.Stuff where
 import Control.Monad
+import Control.Applicative
 
 ifM :: (Monad m) => m Bool -> m a -> m a -> m a
 ifM p t e = do
@@ -14,7 +15,7 @@ andM (p:ps) = ifM p (andM ps) (return False)
 
 orM :: Monad m => [m Bool] -> m Bool
 orM []     = return False
-orM (p:ps) = ifM p (return False) (orM ps)
+orM (p:ps) = ifM p (return True) (orM ps)
 
 allM :: Monad m => (a -> m Bool) -> [a] -> m Bool
 allM p = andM . map p

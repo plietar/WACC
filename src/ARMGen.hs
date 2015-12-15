@@ -7,6 +7,7 @@ import Common.AST
 import CodeGenTypes
 import Data.Monoid
 import Control.Monad.RWS
+import Control.Applicative
 import Data.Set (Set)
 import Data.Char
 import Data.List (intercalate, sort)
