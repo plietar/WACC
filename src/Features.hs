@@ -197,7 +197,8 @@ genFeature ThrowDoubleFreeError = (["msg_p_throw_double_free:",
                                     "BL p_print_string",
                                     "POP {pc}"])
 genFeature NoRuntime = ([],
-                         [ "p_initialise:"
+                         [ ".global main"
+                         , "main:"
                          , "PUSH {lr}"
                          , "MOV r0, #-5"
                          , "MOV r1, #2"
