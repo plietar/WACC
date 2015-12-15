@@ -1,15 +1,27 @@
 begin
-  type point = struct {
-    int x;
-    int y;
+  type point2d = struct { int x, int y };
+
+  void print_point2d(point2d p) is
+    print "point(", p.x, ", ", p.y, ")"
+  end
+
+  void print_point3d(struct { int x, int y, int z } p) is
+    print "point(", p.x, ", ", p.y, ", ", p.z, ")"
+  end
+
+  let a = struct {
+    x = 4,
+    y = 5
   };
 
-  let a : point = struct {
-    x = 8,
-    y = 3
+  let b = struct {
+    x = 6,
+    y = 7,
+    z = 8
   };
 
-  print a.x;
-  read a.x
+  call print_point2d(a);
+  #call print_point2d(b);
+  #call print_point3d(a);
+  call print_point3d(b)
 end
-

@@ -2,6 +2,7 @@ module Features where
 
 import Data.Monoid
 import Data.Set (Set)
+import Data.List (intercalate)
 import qualified Data.Set as Set
 
 data Feature = CheckDivideByZero
@@ -18,7 +19,8 @@ data Feature = CheckDivideByZero
               | ThrowRuntimeError
               | ThrowOverflowError
               | NoRuntime
-              deriving (Show, Eq, Ord, Enum)
+              | StructVTable String [Int]
+              deriving (Show, Eq, Ord)
 
 genFeatures :: Set Feature -> ([String], [String])
 genFeatures features
@@ -208,4 +210,12 @@ genFeature NoRuntime = ([],
                          , "BL signal"
                          , "POP {lr}"
                          , "B wacc_main" ])
+genFeature (StructVTable lbl offsets)
+ = ([ ".global " ++ lbl
+    , lbl ++ ":" ] ++
+    map (\x -> ".word " ++ show x) offsets, [])
+
+mangleVTableName :: [String] -> String
+mangleVTableName vars
+ = "vtable_" ++ intercalate "_" vars
 

@@ -166,7 +166,7 @@ parseType = (do
     structType = do
       keyword "struct"
       -- FIXME(paul): Check for duplicated fields
-      innerTypes <- braces (endBy (swap <$> ((,) <$> parseType <*> identifier)) semi)
+      innerTypes <- braces (sepEndBy (swap <$> ((,) <$> parseType <*> identifier)) comma)
       return (TyStruct (Map.fromList innerTypes))
 
 voidType :: Parser Type

@@ -470,8 +470,15 @@ genRHS (TyArray elemTy, RHSArrayLit exprs) = do
 
 genRHS (ty, RHSStructLit members) = do
   structVar <- genAlloc (4 + 4 * Map.size members) TyInt
-  -- FIXME(paul) generate the vtable
-  vtableVar <- genLiteral (LitLabel (NamedLabel "vtable"))
+
+  allNames <- asks (Map.keys . vtableOffsets)
+
+  let membersOffsets = Map.fromList (zip (Map.keys members) [4,8..]) :: Map String Int
+  let vtableData = map (fromMaybe 0 . (\x -> Map.lookup x membersOffsets)) allNames
+  let vtableName = mangleVTableName (Map.keys members)
+
+  emitFeature (StructVTable vtableName vtableData)
+  vtableVar <- genLiteral (LitLabel (NamedLabel vtableName))
 
   genHeapWrite structVar (OperandLit 0) vtableVar TyInt
 
