@@ -1,28 +1,15 @@
 begin
-  type foo = struct {
+  type point = struct {
     int x;
+    int y;
   };
 
-  type bar = struct {
-    foo a;
+  let a : point = struct {
+    x = 8,
+    y = 3
   };
 
-  void f(bar a) is
-    print a.a.x
-  end
-
-  let a = struct {
-    x = 8
-  };
-
-  let b = struct {
-    a = a,
-    z = 8
-  };
-
-
-  print b.a.x;
-  a.x = 5;
-  print a.x
+  print a.x;
+  read a.x
 end
 

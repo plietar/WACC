@@ -111,7 +111,8 @@ data IR
   deriving Show
 
 data CodeGenReader = CodeGenReader {
-  asyncContext :: Bool
+  asyncContext :: Bool,
+  vtableOffsets :: Map Identifier Int
 }
 
 data CodeGenState = CodeGenState {
