@@ -2,11 +2,11 @@ begin
   type point2d = struct { int x, int y };
 
   void print_point2d(point2d p) is
-    print "point(", p.x, ", ", p.y, ")"
+    println "point(", p.x, ", ", p.y, ")"
   end
 
   void print_point3d(struct { int x, int y, int z } p) is
-    print "point(", p.x, ", ", p.y, ", ", p.z, ")"
+    println "point(", p.x, ", ", p.y, ", ", p.z, ")"
   end
 
   let a = struct {

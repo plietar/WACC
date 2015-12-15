@@ -8,9 +8,10 @@ import Common.ScopedMap as ScopedMap
 import Common.WACCResult
 import Common.Stuff
 
-import Control.Monad.State
-import Control.Monad.Reader
-import Control.Monad.Writer
+import Prelude hiding (mapM)
+import Control.Monad.State hiding (mapM)
+import Control.Monad.Reader hiding (mapM)
+import Control.Monad.Writer hiding (mapM)
 import Control.Monad.Trans
 import Control.Applicative
 
@@ -18,6 +19,8 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
+
+import Data.Traversable(mapM)
 
 data Context = Context
   { variables    :: ScopedMap String Type
