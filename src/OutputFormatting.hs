@@ -51,11 +51,16 @@ showProgram :: (Annotated Program TypeA) -> PrintAST ()
 showProgram (_, Program fs) = do
   indent <- ask
   tell [ (tabs indent) ++ "Program" ]
-  forM_ fs (\f -> local (+ 1) (showFuncDef f))
+  forM_ fs (\f -> local (+ 1) (showDecl f))
   return ()
 
+showDecl :: (Annotated Decl TypeA) -> PrintAST ()
+showDecl (_, DeclFunc f) = showFuncDef f
+showDecl (_, DeclFFIFunc f) = tell [show f]
+showDecl (_, DeclType t) = tell [show t]
+
 showFuncDef :: (Annotated FuncDef TypeA) -> PrintAST ()
-showFuncDef (_, FuncDef t n args block) = do
+showFuncDef (_, FuncDef t _ n args block) = do
   indent <- ask
   tell [ (tabs indent) ++ "- "
          ++ (show t) ++ " " ++ (show n) ++ "(" ++ showArgs args ++ ")" ]
@@ -68,7 +73,7 @@ showArgs ((t, _) : args)
 showArgs [] = ""
 
 showStmt :: (Annotated Stmt TypeA) -> PrintAST ()
-showStmt (_, StmtSkip) 
+showStmt (_, StmtSkip)
   = return ()
 showStmt (_, StmtVar t id assignrhs) = do
   indent <- ask
@@ -101,10 +106,10 @@ showStmt (_, StmtExit e) = do
   tell [ (tabs indent) ++ "- StmtExti" ]
   local (+ 1) (showExpr e)
 
-showStmt (_, StmtPrint e b) = do
+showStmt (_, StmtPrint exprs b) = do
   indent <- ask
   tell [ (tabs indent) ++ "- StmtPrint" ++ line ]
-  local (+ 1) (showExpr e)
+  local (+ 1) (mapM_ showExpr exprs)
   where
     line = if b then "ln" else ""
 
@@ -115,7 +120,7 @@ showStmt (_, StmtIf cond b1 maybeB2) = do
   local (+ 2) (showExpr cond)
   tell [ (tabs (indent + 1)) ++ "- THEN" ]
   local (+ 2) (showBlock b1)
-  case maybeB2 of 
+  case maybeB2 of
     Just b2 -> do
       tell [ (tabs (indent + 1)) ++ "- ELSE" ]
       local (+ 2) (showBlock b2)
@@ -133,6 +138,8 @@ showStmt (_, StmtScope b) = do
   indent <- ask
   tell [ (tabs indent) ++ "- StmtScope"]
   local (+ 1) (showBlock b)
+
+showStmt (_, s) = tell [show s]
 
 showBlock :: (Annotated Block TypeA) -> PrintAST ()
 showBlock ((b, xs), Block stmts) = do
@@ -165,11 +172,11 @@ showExpr (_, ExprBinOp op e1 e2) = do
 
 showAssignLHS :: (Annotated AssignLHS TypeA) -> PrintAST ()
 showAssignLHS (_, LHSVar id) = do
-  indent <- ask  
+  indent <- ask
   tell [ (tabs indent) ++ "- AssignLHSVar " ++ show id ]
 
 showAssignLHS (_, LHSIndexingElem elem) = do
-  indent <- ask  
+  indent <- ask
   tell [ (tabs indent) ++ "- AssignLhsIndexingElem" ]
   local (+ 1) (showIndexingElem elem)
 
@@ -180,9 +187,9 @@ showAssignRHS (_, RHSExpr e) = do
   tell [ (tabs indent) ++ "- AssignRhsExpr" ]
   local (+ 1) (showExpr e)
 showAssignRHS (_, RHSArrayLit es) = do
-  indent <- ask  
+  indent <- ask
   tell [ (tabs indent) ++ "- AssignRhsArrayLit" ]
-  mapM_ showExpr es 
+  mapM_ showExpr es
 
 showAssignRHS (_, RHSNewTuple es) = do
   indent <- ask

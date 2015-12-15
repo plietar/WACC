@@ -1,0 +1,44 @@
+begin
+  ffi async void sleep_ms(int) = wacc_sleep_ms;
+  ffi async void yield() = wacc_yield;
+
+  async int fib(int x) is
+    if x == 0 || x == 1
+    then return 1
+    else
+      let a = await fib(x- 2);
+      await yield();
+      let b = await fib(x- 1);
+      return a + b
+    fi
+  end
+
+  async int sleep(int delay) is
+    await sleep_ms(1000 * delay);
+    return 0
+  end
+
+  async int taskA() is
+    int x = 0;
+    while true do
+        let f = await fib(x);
+        println "fib(", x, ") = ", f;
+        x = x + 1
+    done;
+    return 0
+  end
+
+  async int taskB() is
+    int x = 0;
+    while true do
+        println "taskB ", x;
+        x = x + 1;
+        await sleep(1)
+    done;
+    return 0
+  end
+
+  fire taskA();
+  fire taskB()
+end
+

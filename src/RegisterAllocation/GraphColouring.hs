@@ -110,8 +110,9 @@ allocateRegisters allVars cfg rig moves = maybe (codegenError "Graph Colouring f
       savedRegs = filter (`Set.member` usedRegs) calleeSaveRegs
       saveSize = 4 * length savedRegs
 
-      fixSavedRegisters IFunctionBegin{..} = IFunctionBegin { iArgs = iArgs, iSavedRegs = savedRegs }
-      fixSavedRegisters IReturn{..}        = IReturn { iArgs = iArgs, iSavedRegs = savedRegs }
+      fixSavedRegisters ir@IFunctionBegin{..} = ir { iSavedRegs = savedRegs }
+      fixSavedRegisters ir@IReturn{..}        = ir { iSavedRegs = savedRegs }
+      fixSavedRegisters ir@IYield{..}         = ir { iSavedRegs = savedRegs }
       fixSavedRegisters ir = ir
 
       fixFrameSize ir@IFrameAllocate{..} = ir { iSize   = iSize + frameSize }
@@ -120,12 +121,17 @@ allocateRegisters allVars cfg rig moves = maybe (codegenError "Graph Colouring f
       fixFrameSize ir@IFrameWrite{..}    = ir { iOffset = iOffset + frameSize + saveSize }
       fixFrameSize ir = ir
 
+      fixYield (ir@IYield{..}, (lI, lO))   = (ir { iSavedContext = Set.elems (Set.delete GeneratorState lO) }, (lI, lO))
+      fixYield (ir@IRestore{..}, (lI, lO))   = (ir { iSavedContext = Set.elems (Set.delete GeneratorState lI) }, (lI, lO))
+      fixYield irl = irl
+
   return (Graph.nmap ( simplifyMoves .
                       applyColouring colouring .
                       addLoadStoreSpilled spilledOffsets .
                       map fixFrameSize .
                       map fixSavedRegisters .
-                      map fst) cfg', colouring)
+                      map fst .
+                      map fixYield) cfg', colouring)
   where
 
 -- Merge nodes X and Y, using X's label
@@ -160,10 +166,10 @@ showRIG rig = execWriter $ do
 -- the graph at each step
 buildStack :: DynGraph gr => Map Var Int -> Map Int Var -> gr [IRL] () -> gr Var () -> gr Var () -> gr Var () -> [Node] -> [Var -> Var] -> [Var] -> Int
                           -> Maybe (Map Int Var, gr [IRL] (), gr Var (), [Node], Map Node Var, [Var])
-buildStack allVars allNodes cfg oRig rig moves stack spill spilledVars maxR 
+buildStack allVars allNodes cfg oRig rig moves stack spill spilledVars maxR
   | isSimplifiedGraph rig = Just (allNodes, cfg, oRig, stack, Map.fromList (Graph.labNodes rig), spilledVars)
 
-  | Just n <- findValidNode rig moves (Graph.nodes rig) maxR 
+  | Just n <- findValidNode rig moves (Graph.nodes rig) maxR
     = buildStack allVars allNodes cfg oRig (Graph.delNode n rig) moves (n : stack) spill spilledVars maxR
 
   | Just (allVars', allNodes', cfg', oRig', rig', moves') <- tryMerge maxR allVars allNodes cfg oRig rig moves
@@ -205,7 +211,7 @@ tryMerge maxR allVars allNodes cfg oRig rig moves = tryMerge' (Graph.edges moves
   where
     tryMerge' [] = Nothing
     tryMerge' ((x,y):es) = tryMergeNodes maxR allVars allNodes cfg oRig rig moves x y
-                          <|> tryMerge' es 
+                          <|> tryMerge' es
 
 tryMergeNodes :: DynGraph gr => Int -> Map Var Int -> Map Int Var -> gr [IRL] () -> gr Var () -> gr Var () -> gr Var () -> Node -> Node
                              -> Maybe (Map Var Int, Map Int Var, gr [IRL] (), gr Var (), gr Var (), gr Var ())
@@ -238,7 +244,7 @@ tryFreeze maxR rig moves = tryFreeze' (Graph.edges moves)
   where
     tryFreeze' [] = Nothing
     tryFreeze' ((x,y):es) = tryFreezeNodes maxR rig moves x y
-                          <|> tryFreeze' es 
+                          <|> tryFreeze' es
 
 tryFreezeNodes :: DynGraph gr => Int -> gr Var () -> gr Var () -> Node -> Node -> Maybe (gr Var ())
 tryFreezeNodes maxR rig moves x y
@@ -248,7 +254,7 @@ tryFreezeNodes maxR rig moves x y
     else Nothing
 
 -- Find a valid colouring for a graph and (Maybe) return
--- the mapping that is found 
+-- the mapping that is found
 augmentColouring :: Graph gr => gr Var () -> [Var] -> Map Node Var -> [Node] -> Maybe (Map Node Var)
 augmentColouring _ _ colouring [] = Just colouring
 augmentColouring rig colours colouring (node:xs) = do
@@ -256,7 +262,7 @@ augmentColouring rig colours colouring (node:xs) = do
   let colouring' = Map.insert node col colouring
   augmentColouring rig colours colouring' xs
 
--- Find available colour that does not clash with any of 
+-- Find available colour that does not clash with any of
 -- its neihbors.
 -- Nothing if there isnt an available colour
 colourNode :: Eq c => [Node] -> [c] -> Map Node c -> Maybe c
@@ -303,10 +309,6 @@ mapIR colouring IMove{..}
   = IMove { iValue = colouring iValue
            , iDest = colouring iDest }
 
-mapIR colouring ICondJump{..}
-  = ICondJump { iLabel = iLabel
-              , iValue = colouring iValue }
-
 mapIR colouring IFrameRead{..}
   = IFrameRead { iOffset = iOffset
                , iDest   = colouring iDest
@@ -318,7 +320,7 @@ mapIR colouring IFrameWrite{..}
                 , iType   = iType }
 
 mapIR colouring IHeapRead{..}
-  = IHeapRead { iHeapVar = colouring iHeapVar 
+  = IHeapRead { iHeapVar = colouring iHeapVar
               , iDest    = colouring iDest
               , iOperand = operand
               , iType    = iType }
@@ -328,7 +330,7 @@ mapIR colouring IHeapRead{..}
       OperandVar v s -> OperandVar (colouring v) s
 
 mapIR colouring IHeapWrite{..}
-    = IHeapWrite { iHeapVar = colouring iHeapVar 
+    = IHeapWrite { iHeapVar = colouring iHeapVar
                  , iValue = colouring iValue
                  , iOperand = operand
                  , iType = iType}
@@ -339,6 +341,26 @@ mapIR colouring IHeapWrite{..}
 
 mapIR colouring IPushArg{..}
   = IPushArg { iValue = colouring iValue }
+
+mapIR colouring ICompare{..}
+  = ICompare { iValue   = colouring iValue
+             , iOperand = operand }
+  where
+    operand = case iOperand of
+      OperandLit x -> OperandLit x
+      OperandVar v s -> OperandVar (colouring v) s
+
+mapIR colouring IJumpReg{..}
+  = IJumpReg { iValue = colouring iValue }
+
+mapIR colouring IYield{..}
+  = IYield { iSavedRegs = iSavedRegs
+           , iValue = colouring iValue
+           , iSavedContext = map colouring iSavedContext }
+
+mapIR colouring IRestore{..}
+  = IRestore { iValue = colouring iValue
+             , iSavedContext = map colouring iSavedContext }
 
 -- Base Case
 mapIR colouring x = x

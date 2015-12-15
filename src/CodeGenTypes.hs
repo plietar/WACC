@@ -6,6 +6,7 @@ module CodeGenTypes where
 import Common.AST
 import Features
 
+import Arguments
 import Control.Applicative
 import Control.Monad.RWS
 import Data.Map as Map
@@ -13,7 +14,7 @@ import Data.Maybe
 import Data.Set(Set)
 import qualified Data.Set as Set
 
-data Var = Local Int | Temp Int | Reg Int | Spilled Int Var
+data Var = Local Int | Temp Int | Reg Int | Spilled Int Var | GeneratorState
   deriving (Ord, Eq)
 
 {-
@@ -56,16 +57,16 @@ instance Show Var where
   show (Temp n)      = "temp_" ++ show n
   show (Spilled n _) = "spill_" ++ show n
   show (Reg n)       = "r" ++ show n
-
-data Label = NamedLabel String | UnnamedLabel Int
-  deriving (Ord, Eq)
+  show GeneratorState = "generator"
 
 data Operand = OperandVar Var Int | OperandLit Int
   deriving (Show)
 
-instance Show Label where
-  show (UnnamedLabel i) = "L" ++ show i
-  show (NamedLabel   n) = n
+data Condition = CondEQ | CondNE
+
+instance Show Condition where
+  show CondEQ = "EQ"
+  show CondNE = "NE"
 
 data IR
   = IFunctionBegin { iSavedRegs :: [Var], iArgs :: [Var] }
@@ -77,15 +78,23 @@ data IR
   | IUnOp { iDest :: Var, iUnOp :: UnOp, iValue :: Var }
   | IMove { iDest :: Var, iValue :: Var }
 
-  | ICondJump { iLabel :: Label, iValue :: Var }
+  | ICompare { iValue :: Var, iOperand :: Operand }
+  | ICondJump { iLabel :: Label, iCondition :: Condition }
   | IJump { iLabel :: Label }
+  | IJumpReg { iValue :: Var }
   | ICall { iLabel :: Label, iArgs :: [Var] }
   | ILabel { iLabel :: Label }
 
   | IFrameAllocate { iSize :: Int }
   | IFrameFree { iSize :: Int }
-  | IFrameRead { iOffset :: Int, iDest :: Var, iType :: Type }
-  | IFrameWrite { iOffset :: Int, iValue :: Var, iType :: Type }
+
+  | IFrameRead { iOffset :: Int
+               , iDest :: Var
+               , iType :: Type }
+
+  | IFrameWrite { iOffset :: Int
+                , iValue :: Var
+                , iType :: Type }
 
   | IHeapRead { iHeapVar :: Var, iDest :: Var, iOperand :: Operand, iType :: Type }
   | IHeapWrite { iHeapVar :: Var, iValue :: Var, iOperand :: Operand, iType :: Type }
@@ -93,7 +102,17 @@ data IR
   | IPushArg { iValue :: Var }
   | IClearArgs { iSize :: Int }
 
+  | IYield { iSavedRegs :: [Var]
+           , iSavedContext :: [Var]
+           , iValue :: Var }
+  | IRestore { iSavedContext :: [Var]
+             , iValue :: Var }
+
   deriving Show
+
+data CodeGenReader = CodeGenReader {
+  asyncContext :: Bool
+}
 
 data CodeGenState = CodeGenState {
   tempNames :: [Var],
@@ -113,7 +132,7 @@ instance Monoid CodeGenOutput where
   mappend (CodeGenOutput a b) (CodeGenOutput a' b')
     = CodeGenOutput (mappend a a') (mappend b b')
 
-type CodeGen = RWS () CodeGenOutput CodeGenState
+type CodeGen = RWST CodeGenReader CodeGenOutput CodeGenState WACCArguments
 
 allocateTemp :: CodeGen Var
 allocateTemp = do

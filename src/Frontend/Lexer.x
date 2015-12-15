@@ -29,7 +29,7 @@ tokens :-
 
   -- Comments
   "#".*(\n)            ;
- 
+
   -- Symbols
   ","                  { \(AlexPn _ line column) s -> ((line, column), TokComma) }
   ";"                  { \(AlexPn _ line column) s -> ((line, column), TokSemiColon) }
@@ -43,11 +43,12 @@ tokens :-
   begin | end | is | skip | read | free | return | exit | print | println | if
     | then | else | fi | while | do | done | newpair | call | fst | snd | int
     | bool | char | switch | case | string | pair | len | ord | chr | null | tuple | newtuple
+    | bool | char | switch | case | string | pair | len | ord | chr | null | tuple | newtuple
                        { \(AlexPn _ line column) s-> ((line, column), TokKeyword s) }
- 
+
   -- Operators
   "!" | "*" | "/" | "%" | "+" | "-" | ">" | ">=" | "<" | "<="
-    | "==" | "!=" | "&&" | "||"
+    | "==" | "!=" | "&&" | "||" | "<-"
                        { \(AlexPn _ line column) s-> ((line, column), TokOp s) }
 
   -- Assign Operator
@@ -61,7 +62,7 @@ tokens :-
   -- Identifier
   ($underscore | $alpha) ($underscore | $alpha | $digit)*
                        { \(AlexPn _ line column) s-> ((line, column), TokIdent s) }
- 
+
   -- Integer Literal
   @integer_literal     { \(AlexPn _ line column) s-> ((line, column), TokIntLit (read s)) }
   -- Character Literal
@@ -79,7 +80,7 @@ waccLexer fname str = fmap (addfname fname) $ go (alexStartPos,'\n',[],str)
                 AlexEOF -> OK []
                 AlexError ((AlexPn _ line column),chr,_,str)
                   -> lexicalError $ show fname ++ " (line " ++ show line ++  ", column "  ++ show column
-                                               ++ "):\n" ++ "Token recognition error at: " 
+                                               ++ "):\n" ++ "Token recognition error at: "
                                                ++ (chr : firstWord str)
                 AlexSkip  inp' len     -> go inp'
                 AlexToken inp' len act -> fmap (\tokens -> act pos (take len str) : tokens) (go inp')

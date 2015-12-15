@@ -1,0 +1,25 @@
+begin
+  ffi async void sleep_ms(int) = wacc_sleep_ms;
+  ffi async void yield() = wacc_yield;
+
+  async void sender(chan(int) ch) is
+    let x = 0;
+    while true do
+      ch <- x;
+      println "Send ", x;
+      x = x + 1
+    done
+  end
+
+  async void receiver(chan(int) ch) is
+    while true do
+      let x = <- ch;
+      println "Recv ", x;
+      await sleep_ms(500)
+    done
+  end
+
+  let ch : chan(int) = chan();
+  fire receiver(ch);
+  fire sender(ch)
+end

@@ -1,8 +1,33 @@
 #!/usr/bin/env bash
 set -eux
 
-./compile $1/$2.wacc
-arm-linux-gnueabi-gcc -o $2 -mcpu=arm1176jzf-s -mtune=arm1176jzf-s $2.s
-qemu-arm -L /usr/arm-linux-gnueabi/ $2
+if [[ $1 == --debug ]]
+then debug=true; shift
+else debug=false
+fi
 
+dir=$(dirname $1)
+filename=$(basename $1)
+name=${filename%.*}
+
+CFLAGS="-std=c99 -mcpu=arm1176jzf-s -mtune=arm1176jzf-s -D_GNU_SOURCE"
+if $debug; then
+    CFLAGS="$CFLAGS -g"
+fi
+
+RUNTIME="src/runtime/main.c src/runtime/list.c src/runtime/task.c src/runtime/network.c src/runtime/async.c src/runtime/heap.c src/runtime/channel.c"
+
+./compile --with-runtime ${1}
+arm-linux-gnueabi-gcc $CFLAGS \
+  -o $name ${name}.s ${RUNTIME}
+
+if $debug; then
+    trap 'kill $(jobs -p)' EXIT
+    qemu-arm -g 1234 -L /usr/arm-linux-gnueabi/ $name &
+    arm-linux-gnueabihf-gdb \
+        -ex "set sysroot /usr/arm-linux-gnueabi" \
+        -ex "target remote localhost:1234" $name
+else
+    qemu-arm -L /usr/arm-linux-gnueabi/ $name
+fi
 

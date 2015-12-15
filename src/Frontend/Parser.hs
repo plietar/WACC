@@ -1,13 +1,16 @@
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeFamilies, LambdaCase #-}
 
 module Frontend.Parser (waccParser) where
 
 import Common.AST
 import Common.Span
+import Common.Stuff
 import Common.WACCResult
 import Frontend.Tokens
+import Arguments
 
-import Control.Applicative 
+import Control.Applicative
+import Control.Monad.Trans
 import Data.Int
 import Text.Parsec.Combinator
 import Text.Parsec.Expr
@@ -16,11 +19,7 @@ import Text.Parsec.Pos
 import Text.Parsec.Prim ((<?>))
 import Text.Parsec.String ()
 
-infixl 4 $>
-($>) :: Functor f => f a -> b -> f b
-($>) = flip (<$)
-
-type Parser = P.Parsec [(Pos, Token)] ()
+type Parser = P.ParsecT [(Pos, Token)] () WACCArguments
 
 showTok :: (Pos, Token) -> String
 showTok (_, tok) = show tok
@@ -40,14 +39,17 @@ spanned p = do
   finalPos <- position
   return ((initialPos, finalPos), node)
 
+wrapSpan :: (Annotated a SpanA -> b SpanA) -> Annotated a SpanA -> Annotated b SpanA
+wrapSpan f x@(sp, _) = (sp, f x)
+
 identifier :: Parser Identifier
-identifier = P.token showTok posTok matchTok <?> "identifier"
+identifier = P.tokenPrim showTok (\ _ t _ -> posTok t) matchTok <?> "identifier"
   where
     matchTok (_, TokIdent ident) = Just ident
     matchTok _                   = Nothing
 
 token :: Token -> Parser Token
-token expected = P.token showTok posTok matchTok <?> show expected
+token expected = P.tokenPrim showTok (\ _ t _ -> posTok t) matchTok <?> show expected
   where
     matchTok (_, actual)
       | actual == expected = Just actual
@@ -63,7 +65,7 @@ op expected = token (TokOp expected)
 literal :: Parser Literal
 literal = (lit >>= check) <?> "literal"
   where
-    lit = P.token showTok posTok matchTok
+    lit = P.tokenPrim showTok (\_ t _ -> posTok t) matchTok
     matchTok (_, TokIntLit l)       = Just (LitInt l)
     matchTok (_, TokBoolLit l)      = Just (LitBool l)
     matchTok (_, TokCharLit l)      = Just (LitChar l)
@@ -136,11 +138,13 @@ parseType = (do
   return (arr t)
   ) <?> "type"
   where
-    notArrayType = baseType <|> pairType <|> tupleType
+    notArrayType = baseType <|> pairType <|> tupleType <|> chanType
     baseType = (keyword "int"    $> TyInt) <|>
                (keyword "bool"   $> TyBool) <|>
                (keyword "char"   $> TyChar) <|>
-               (keyword "string" $> TyArray TyChar)
+               (keyword "string" $> TyArray TyChar) <|>
+               (TyName <$> identifier)
+
     pairType = do
       _ <- P.try (keyword "pair" <* P.lookAhead (token TokLParen))
       parens (TyTuple <$> (sepBy pairElemType comma))
@@ -148,6 +152,11 @@ parseType = (do
     tupleType = do
       _ <- P.try (keyword "tuple")
       parens (TyTuple <$> (sepBy parseType comma))
+
+    chanType = keyword "chan" >> (TyChan <$> parens parseType)
+
+voidType :: Parser Type
+voidType = keyword "void" $> TyVoid
 
 pairElem :: Parser (Annotated IndexingElem SpanA)
 pairElem = spanned $ do
@@ -163,9 +172,6 @@ indexingElem = spanned $ do
   where
     index = brackets expr
 
-wrapSpan :: (Annotated a SpanA -> b SpanA) -> Annotated a SpanA -> Annotated b SpanA
-wrapSpan f x@(sp, _) = (sp, f x)
-
 assignLHS :: Parser (Annotated AssignLHS SpanA)
 assignLHS
   = spanned $ LHSIndexingElem <$> indexingElem <|>
@@ -178,32 +184,63 @@ assignRHS
               rhsArrayLit <|>
               rhsPairElem <|>
               rhsCall <|>
+              rhsAwait <|>
               rhsNewPair <|>
-              rhsNewTuple
+              rhsNewTuple <|>
+              rhsNewChan <|>
+              rhsChanRecv
     where
-      rhsExpr      = RHSExpr <$> expr
-      rhsArrayLit  = RHSArrayLit <$> brackets (sepBy expr comma) <?> "array literal"
-      rhsPairElem  = RHSExpr <$> wrapSpan ExprIndexingElem <$> pairElem
-      rhsNewPair   = keyword "newpair" *> parens (RHSNewTuple <$> ((\a b -> [a,b]) <$> expr <* comma <*> expr))
-      rhsCall      = do
-                     _  <- keyword "call"
-                     i  <- identifier
-                     es <- parens (sepBy expr comma)
-                     return (RHSCall i es)
-      rhsNewTuple  = keyword "newtuple" *> parens (RHSNewTuple <$> (sepBy expr comma))
+      rhsExpr     = RHSExpr <$> expr
+      rhsArrayLit = RHSArrayLit <$> brackets (sepBy expr comma) <?> "array literal"
+      rhsPairElem = RHSExpr <$> wrapSpan ExprIndexingElem <$> pairElem
+      rhsNewPair  = keyword "newpair" *> parens (RHSNewTuple <$> ((\a b -> [a,b]) <$> expr <* comma <*> expr))
+      rhsNewTuple = keyword "newtuple" *> parens (RHSNewTuple <$> (sepBy expr comma))
+
+      rhsCall = do
+        keyword "call"
+        name  <- identifier
+        args <- parens (sepBy expr comma)
+        return (RHSCall name args)
+
+      rhsAwait = do
+        keyword "await"
+        name <- identifier
+        args <- parens (sepBy expr comma)
+        return (RHSAwait name args)
+
+      rhsNewChan = do
+        keyword "chan"
+        parens (return ())
+        return RHSNewChan
+
+      rhsChanRecv = do
+        op "<-"
+        name <- identifier
+        return (RHSChanRecv name)
 
 skipStmt :: Parser (Annotated Stmt SpanA)
 skipStmt = spanned $ do
   keyword "skip"
   return StmtSkip
 
-varStmt :: Parser (Annotated Stmt SpanA)
-varStmt = spanned $ do
-  t <- parseType
+letStmt :: Parser (Annotated Stmt SpanA)
+letStmt = spanned $ do
+  keyword "let"
   i <- identifier
-  _ <- token TokEqual
+  t <- (colon >> parseType) <|> return TyAny
+  token TokEqual
   r <- assignRHS
   return (StmtVar t i r)
+
+varStmt :: Parser (Annotated Stmt SpanA)
+varStmt = spanned $ do
+  (varType, varName) <- P.try $ do
+    t <- parseType
+    i <- identifier
+    _ <- token TokEqual
+    return (t,i)
+  rhs <- assignRHS
+  return (StmtVar varType varName rhs)
 
 whileStmt :: Parser (Annotated Stmt SpanA)
 whileStmt = spanned $ do
@@ -247,7 +284,7 @@ caseArm = spanned $ do
   _ <- keyword "case"
   i <- literal
   _ <- colon
-  b <- block 
+  b <- block
   return (CaseArm i b)
 
 scopeStmt :: Parser (Annotated Stmt SpanA)
@@ -259,15 +296,15 @@ scopeStmt = spanned $ do
 
 printStmt :: Parser (Annotated Stmt SpanA)
 printStmt = spanned $ do
-  _ <- keyword "print"
-  e <- expr
-  return (StmtPrint e False)
+  keyword "print"
+  args <- sepBy1 expr comma
+  return (StmtPrint args False)
 
 printlnStmt :: Parser (Annotated Stmt SpanA)
 printlnStmt = spanned $ do
-  _ <- keyword "println"
-  e <- expr
-  return (StmtPrint e True)
+  keyword "println"
+  args <- sepBy1 expr comma
+  return (StmtPrint args True)
 
 assignStmt :: Parser (Annotated Stmt SpanA)
 assignStmt = spanned $ do
@@ -300,6 +337,33 @@ returnStmt = spanned $ do
   e <- expr
   return (StmtReturn e)
 
+callStmt :: Parser (Annotated Stmt SpanA)
+callStmt = spanned $ do
+  _ <- keyword "call"
+  name <- identifier
+  args <- parens (sepBy expr comma)
+  return (StmtCall name args)
+
+awaitStmt :: Parser (Annotated Stmt SpanA)
+awaitStmt = spanned $ do
+  _ <- keyword "await"
+  name <- identifier
+  args <- parens (sepBy expr comma)
+  return (StmtAwait name args)
+
+fireStmt :: Parser (Annotated Stmt SpanA)
+fireStmt = spanned $ do
+  _ <- keyword "fire"
+  name <- identifier
+  args <- parens (sepBy expr comma)
+  return (StmtFire name args)
+
+chanSendStmt :: Parser (Annotated Stmt SpanA)
+chanSendStmt = spanned $ do
+  channel <- P.try (identifier <* op "<-")
+  rhs <- assignRHS
+  return (StmtChanSend channel rhs)
+
 stmt :: Parser (Annotated Stmt SpanA)
 stmt = skipStmt    <|>
        whileStmt   <|>
@@ -308,12 +372,17 @@ stmt = skipStmt    <|>
        scopeStmt   <|>
        printStmt   <|>
        printlnStmt <|>
-       assignStmt  <|>
        readStmt    <|>
        freeStmt    <|>
        exitStmt    <|>
        returnStmt  <|>
-       varStmt     <?> "statement"
+       letStmt     <|>
+       callStmt    <|>
+       awaitStmt   <|>
+       fireStmt    <|>
+       chanSendStmt <|>
+       varStmt     <|>
+       assignStmt  <?> "statement"
 
 block :: Parser (Annotated Block SpanA)
 block = spanned $ Block <$> sepBy1 stmt semi
@@ -321,31 +390,72 @@ block = spanned $ Block <$> sepBy1 stmt semi
 param :: Parser (Type, Identifier)
 param = (,) <$> parseType <*> identifier
 
-function :: Parser (Annotated FuncDef SpanA)
-function = spanned $ do
-  (t,i) <- P.try ((,) <$> parseType <*> identifier <* lookAhead (token TokLParen))
-  x <- parens (sepBy param comma)
-  _ <- keyword "is"
-  b <- block
-  _ <- keyword "end"
-  return (FuncDef t (FuncName i) x b)
+function :: Parser (Annotated Decl SpanA)
+function = wrapSpan DeclFunc <$> (spanned $ do
+  async <- option False (keyword "async" >> return True)
+  (returnType, functionName) <- P.try $ do
+    t <- parseType <|> voidType
+    i <- identifier
+    lookAhead (token TokLParen)
+    return (t, i)
+
+  args <- parens (sepBy param comma)
+  keyword "is"
+  body <- block
+  keyword "end"
+  return (FuncDef returnType async (FuncName functionName) args body))
+
+typeDecl :: Parser (Annotated Decl SpanA)
+typeDecl = wrapSpan DeclType <$> (spanned $ do
+  keyword "type"
+  typeName <- identifier
+  equal
+  typeAlias <- parseType
+  semi
+
+  return (TypeDef typeName typeAlias))
+
+ffiFunction :: Parser (Annotated Decl SpanA)
+ffiFunction = wrapSpan DeclFFIFunc <$> (spanned $ do
+  async <- option False (keyword "async" >> return True)
+  returnType <- parseType <|> voidType
+  functionName <- identifier
+  args <- parens (sepBy parseType comma)
+  symbolName <- (equal >> identifier) <|> return functionName
+  semi
+
+  return (FFIFunc returnType async functionName args symbolName))
+
+ffiType :: Parser (Annotated Decl SpanA)
+ffiType = wrapSpan DeclType <$> (spanned $ do
+  keyword "type"
+  name <- identifier
+  semi
+
+  return (TypeDef name (TyFFI name)))
+
+decl :: Parser (Annotated Decl SpanA)
+decl = function <|>
+       typeDecl <|>
+       (keyword "ffi" *> (ffiFunction <|> ffiType))
 
 mainFunc :: Parser (Annotated FuncDef SpanA)
 mainFunc = spanned $ do
   b <- block
-  return (FuncDef TyVoid MainFunc [] b)
+  async <- lift (getArgument runtimeEnabled)
+  return (FuncDef TyVoid async MainFunc [] b)
 
 program :: Parser (Annotated Program SpanA)
 program = spanned $ do
   _ <- keyword "begin"
-  f <- many function
+  f <- many decl
   m <- mainFunc
   _ <- keyword "end"
-  return (Program (m:f))
+  return (Program ((wrapSpan DeclFunc m):f))
 
-waccParser :: String -> [(Pos, Token)] -> WACCResult (Annotated Program SpanA)
-waccParser fname tokens
-  = case P.runParser (program <* eof) () fname tokens of
-      Left e -> syntaxError (show e)
-      Right p -> OK p
+waccParser :: String -> [(Pos, Token)] -> WACCResultT WACCArguments (Annotated Program SpanA)
+waccParser fname tokens =
+  (lift $ P.runParserT (program <* eof) () fname tokens) >>= \case
+             Left e -> syntaxError (show e)
+             Right p -> return p
 

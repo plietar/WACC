@@ -3,6 +3,7 @@
 
 module CodeGen (genProgram) where
 
+import Arguments
 import Common.AST
 import CodeGenTypes
 import Features
@@ -23,15 +24,18 @@ emit xs = tell (CodeGenOutput xs Set.empty)
 emitFeature :: Feature -> CodeGen ()
 emitFeature f = tell (CodeGenOutput [] (Set.singleton f))
 
-genProgram :: Annotated Program TypeA -> ([[IR]], Set Feature)
+genProgram :: Annotated Program TypeA -> WACCArguments ([[IR]], Set Feature)
 genProgram (_, Program fs)
-  = let generate = sequence (map genFunction fs)
-        result = evalState generate (map UnnamedLabel [0..])
-    in (map fst result, Set.unions (map snd result))
+  = snd <$> evalRWST (mapM genDecl fs) () (map UnnamedLabel [0..])
+
+genDecl :: Annotated Decl TypeA -> RWST () ([[IR]], Set Feature) [Label] WACCArguments ()
+genDecl (_, DeclFunc f) = genFunction f
+genDecl (_, DeclType f) = return ()
+genDecl (_, DeclFFIFunc f) = return ()
 
 -- Functions
-genFunction :: Annotated FuncDef TypeA -> State [Label] ([IR], Set Feature)
-genFunction (_, FuncDef _ fname params body) = do
+genFunction :: Annotated FuncDef TypeA -> RWST () ([[IR]], Set Feature) [Label] WACCArguments ()
+genFunction (_, FuncDef _ async fname params body) = do
     labs <- get
 
     let initialState = CodeGenState {
@@ -41,15 +45,16 @@ genFunction (_, FuncDef _ fname params body) = do
           frame = emptyFrame
         }
 
-        argRegCount = length argPassingRegs
+        reader = CodeGenReader {
+            asyncContext = async
+        }
+
+        argRegSkip = if async then 1 else 0
+        argRegCount = length argPassingRegs - argRegSkip
         (regNames, stackNames) = splitAt argRegCount (map snd params)
-        argZip = (zip regNames argPassingRegs)
+        argZip = (zip regNames (drop argRegSkip argPassingRegs))
 
-        generation = do
-          emit [ ILabel { iLabel = NamedLabel (show fname) }
-               , IFunctionBegin { iArgs = map snd argZip, iSavedRegs = calleeSaveRegs }
-               , IFrameAllocate { iSize = 0 } ] -- Fixed later once colouring / spilling is done
-
+        setupArguments = do
           regArgsMap <- forM argZip $ \(name, r) -> do
             v <- allocateTemp
             emit [ IMove { iDest = v, iValue = r } ]
@@ -60,13 +65,40 @@ genFunction (_, FuncDef _ fname params body) = do
             emit [ IFrameRead { iDest = v, iOffset = offset, iType = TyInt } ]
             return (name, v)
 
-          case fname of
-            MainFunc -> do
-              genCall0 "p_initialise" []
-              emitFeature Initialise
-            _ -> return ()
-
           setupFrame (Map.fromList (regArgsMap ++ stackArgsMap))
+
+
+        generation :: CodeGen ()
+        generation = do
+          emit [ ILabel { iLabel = NamedLabel (show fname) }
+               , IFunctionBegin { iArgs = map snd argZip, iSavedRegs = calleeSaveRegs }
+               , IFrameAllocate { iSize = 0 } ] -- Fixed later once colouring / spilling is done
+
+          if async
+          then do
+            emit [ IMove { iDest = GeneratorState, iValue = Reg 0 } ]
+
+            startLabel <- allocateLabel
+            emit [ ICompare { iValue = GeneratorState, iOperand = OperandLit 0 }
+                 , ICondJump { iCondition = CondEQ, iLabel = startLabel } ]
+
+            continuationVar <- allocateTemp
+            emit [ IHeapRead { iHeapVar = GeneratorState
+                             , iDest = continuationVar
+                             , iOperand = OperandLit 0
+                             , iType = TyInt }
+                 , IJumpReg { iValue = continuationVar } ]
+
+            emit [ ILabel { iLabel = startLabel } ]
+
+            setupArguments
+
+            sizeVar <- allocateTemp
+            emit [ ILiteral { iDest = sizeVar, iLiteral = LitInt 64 } ]
+            stateVar <- genCall1 "malloc" [sizeVar]
+            emit [ IMove { iDest = GeneratorState, iValue = stateVar } ]
+
+          else setupArguments
 
           genBlock body
 
@@ -74,16 +106,45 @@ genFunction (_, FuncDef _ fname params body) = do
           emit [ ILiteral { iDest = retVal, iLiteral = LitInt 0 } ]
           genReturn retVal
 
-        (endState, result) = (execRWS generation () initialState)
+    (endState, result) <- lift (execRWST generation reader initialState)
 
     put (labels endState)
-    return (instructions result, features result)
+    tell ([instructions result], features result)
+
+genYield :: Var -> CodeGen ()
+genYield value = do
+  continuationLabel <- allocateLabel
+  continuationVar <- allocateTemp
+
+  emit [ ILiteral { iDest = continuationVar, iLiteral = LitLabel continuationLabel }
+       , IHeapWrite { iHeapVar = GeneratorState
+                    , iValue = continuationVar
+                    , iOperand = OperandLit 0
+                    , iType = TyInt }
+       , IMove { iDest = Reg 0, iValue = GeneratorState }
+       , IMove { iDest = Reg 1, iValue = value }
+       , IYield { iSavedRegs = calleeSaveRegs, iValue = GeneratorState, iSavedContext = [] }
+       , ILabel { iLabel = continuationLabel }
+       , IRestore { iValue = GeneratorState, iSavedContext = [] } ]
 
 genReturn :: Var -> CodeGen ()
-genReturn retVal
-  = emit [ IMove { iDest = Reg 0, iValue = retVal }
-         , IFrameFree { iSize = 0 } -- Fixed later once colouring / spilling is done
-         , IReturn { iArgs = [ Reg 0 ], iSavedRegs = calleeSaveRegs } ]
+genReturn retVal = do
+  async <- asks asyncContext
+  if async
+  then do
+    -- FIXME
+    -- genCall "free" [ GeneratorState ]
+
+    zeroVal <- allocateTemp
+    emit [ ILiteral { iDest = zeroVal, iLiteral = LitInt 0 }
+         , IMove { iDest = Reg 0, iValue = zeroVal }
+         , IMove { iDest = Reg 1, iValue = retVal }
+         , IFrameFree { iSize = 0 }
+         , IReturn { iArgs = [ Reg 0, Reg 1 ], iSavedRegs = [] } ]
+
+  else emit [ IMove { iDest = Reg 0, iValue = retVal }
+            , IFrameFree { iSize = 0 }
+            , IReturn { iArgs = [ Reg 0 ], iSavedRegs = [] } ]
 
 genCall0 :: Identifier -> [Var] -> CodeGen ()
 genCall0 label vars = do
@@ -112,6 +173,39 @@ genCall2 label vars = do
   emit [ IMove { iDest = outVal0, iValue = Reg 0 }
        , IMove { iDest = outVal1, iValue = Reg 1 } ]
   return (outVal0, outVal1)
+
+genAwait :: Identifier -> [Var] -> CodeGen Var
+genAwait name argVars = do
+  stateVar <- allocateTemp
+  resultVar <- allocateTemp
+
+  againLabel <- allocateLabel
+  endLabel <- allocateLabel
+
+  -- Initial call
+  nullVar <- allocateTemp
+  emit [ ILiteral { iDest = nullVar, iLiteral = LitInt 0 } ]
+  (s, r) <- genCall2 name (nullVar : argVars)
+  emit [ IMove { iDest = stateVar, iValue = s } ]
+  emit [ IMove { iDest = resultVar, iValue = r } ]
+
+  emit [ ICompare { iValue = stateVar, iOperand = OperandLit 0 } ]
+  emit [ ICondJump { iLabel = endLabel, iCondition = CondEQ } ]
+
+  emit [ ILabel { iLabel = againLabel } ]
+  -- Keep calling until function is ready
+  genYield resultVar
+
+  (s, r) <- genCall2 name [stateVar]
+  emit [ IMove { iDest = stateVar, iValue = s } ]
+  emit [ IMove { iDest = resultVar, iValue = r } ]
+
+  emit [ ICompare { iValue = stateVar, iOperand = OperandLit 0 } ]
+  emit [ ICondJump { iLabel = againLabel, iCondition = CondNE } ]
+
+  emit [ ILabel { iLabel = endLabel } ]
+
+  return resultVar
 
 -- This does not attempt to be 100% accurate
 -- The register allocator affects a lot how many register are used
@@ -206,11 +300,11 @@ genFrameRead ident = gets (getFrameLocal ident . frame)
 -- Read from Tuple/Array
 genIndexingRead :: Var -> (Type, Annotated Expr TypeA) -> CodeGen Var
 genIndexingRead arrayVar ((TyArray elemTy), indexExpr) = do
-  
-  
+
+
   emitFeature CheckArrayBounds
   outVar         <- allocateTemp
-  arrayOffsetVar <- allocateTemp 
+  arrayOffsetVar <- allocateTemp
   offsetedArray  <- allocateTemp
   indexVar       <- genExpr indexExpr
 
@@ -231,7 +325,7 @@ genIndexingRead tupleVar (elemTy@(TyTuple ts), (_, ExprLit (LitInt x))) = do
   emitFeature CheckNullPointer
   genCall0 "p_check_null_pointer" [tupleVar]
   outVar   <- allocateTemp
-  emit [ IHeapRead { iHeapVar = tupleVar 
+  emit [ IHeapRead { iHeapVar = tupleVar
                    , iDest    = outVar
                    , iOperand = OperandLit (4 * fromInteger x)
                    , iType    = elemTy } ]
@@ -254,7 +348,7 @@ genAssign (_, LHSIndexingElem ((elemTy, ts), IndexingElem ident exprs)) valueVar
 
 genIndexingWrite :: Type -> Annotated Expr TypeA -> Var -> Var -> CodeGen ()
 genIndexingWrite (TyArray elemTy) writeIndexExpr subIndexVar valueVar = do
-  
+
   emitFeature CheckArrayBounds
   offsetedBase <- allocateTemp
   writeIndexVar <- genExpr writeIndexExpr
@@ -263,17 +357,17 @@ genIndexingWrite (TyArray elemTy) writeIndexExpr subIndexVar valueVar = do
   genCall0 "p_check_array_bounds" [writeIndexVar, subIndexVar]
   emit [ILiteral { iDest = arrayOffsetVar, iLiteral = LitInt 4 }
        , IBinOp { iBinOp = BinOpAdd, iDest = offsetedBase
-                , iLeft = arrayOffsetVar, iRight = subIndexVar } 
-       , IHeapWrite { iHeapVar  = offsetedBase 
+                , iLeft = arrayOffsetVar, iRight = subIndexVar }
+       , IHeapWrite { iHeapVar  = offsetedBase
                     , iValue    = valueVar
                     , iOperand  = OperandVar writeIndexVar (typeShift elemTy)
                     , iType     = elemTy } ]
 
 genIndexingWrite (TyTuple ts) (_, ExprLit (LitInt x)) subIndexVar valueVar = do
-  
+
   emitFeature CheckNullPointer
   genCall0 "p_check_null_pointer" [subIndexVar]
-  emit [ IHeapWrite { iHeapVar = subIndexVar 
+  emit [ IHeapWrite { iHeapVar = subIndexVar
                     , iValue  = valueVar
                     , iOperand = OperandLit (4 * fromInteger x)
                     , iType = TyInt } ]
@@ -319,7 +413,7 @@ genRHS (TyTuple types, RHSNewTuple exprs) = do
   emit [ ILiteral { iDest = sizeVar, iLiteral = LitInt (toInteger (length exprs * 4)) }]
   tupleVar <- genCall1 "malloc" [sizeVar]
   forM (zip exprs [0..]) $ \(expr, index) -> do
-    elemVar <- genExpr expr  
+    elemVar <- genExpr expr
     emit [ IHeapWrite  { iHeapVar = tupleVar
                        , iValue = elemVar
                        , iOperand = OperandLit (index * 4)
@@ -328,7 +422,30 @@ genRHS (TyTuple types, RHSNewTuple exprs) = do
 
 genRHS (_, RHSCall name exprs) = do
   argVars <- mapM genExpr exprs
-  genCall1 ("f_" ++ name) argVars
+  genCall1 name argVars
+
+genRHS (_, RHSAwait name exprs) = do
+  argVars <- mapM genExpr exprs
+  genAwait name argVars
+
+genRHS (_, RHSNewChan) = genCall1 "wacc_channel_create" []
+
+genRHS (_, RHSChanRecv chanName) = do
+  chanVar <- genFrameRead chanName
+  genAwait "wacc_channel_receive" [chanVar]
+
+genCaseArm :: Label -> Var -> Annotated CaseArm TypeA -> CodeGen ()
+genCaseArm endLabel e (_, CaseArm l b) = do
+  condVar <- allocateTemp
+  literalVar <- allocateTemp
+  nextCase <- allocateLabel
+
+  emit [ ILiteral { iDest = literalVar, iLiteral = l}
+       , ICompare { iValue = e, iOperand = OperandVar literalVar 0 }
+       , ICondJump { iLabel = nextCase, iCondition = CondNE } ]
+  genBlock b
+  emit [ IJump {iLabel = endLabel}
+       , ILabel {iLabel = nextCase} ]
 
 genStmt :: Annotated Stmt TypeA -> CodeGen ()
 genStmt (_, StmtSkip) = return ()
@@ -336,7 +453,7 @@ genStmt (_, StmtSkip) = return ()
 genStmt (st, StmtVar ty ident rhs) = do
   initFrame <- gets frame
   let newFrame = initFrame { definedLocals = Set.insert ident (definedLocals initFrame) }
-  modify (\s -> s { frame = newFrame }) 
+  modify (\s -> s { frame = newFrame })
 
   genStmt (st, StmtAssign (ty, LHSVar ident) rhs)
 
@@ -361,17 +478,18 @@ genStmt (_, StmtExit expr) = do
   v <- genExpr expr
   genCall0 "exit" [v]
 
-genStmt (_, StmtPrint expr@(ty, _) newline) = do
-  v <- genExpr expr
-  let (fname, feat) = case ty of
-        TyInt  -> ("p_print_int", Just PrintInt)
-        TyBool -> ("p_print_bool", Just PrintBool)
-        TyChar -> ("putchar", Nothing)
-        TyArray TyChar -> ("p_print_string", Just PrintString)
-        _      -> ("p_print_reference", Just PrintReference)
+genStmt (_, StmtPrint exprs newline) = do
+  forM exprs $ \expr@(ty, _) -> do
+      v <- genExpr expr
+      let (fname, feat) = case ty of
+            TyInt  -> ("p_print_int", Just PrintInt)
+            TyBool -> ("p_print_bool", Just PrintBool)
+            TyChar -> ("putchar", Nothing)
+            TyArray TyChar -> ("p_print_string", Just PrintString)
+            _      -> ("p_print_reference", Just PrintReference)
 
-  maybe (return ()) emitFeature feat
-  genCall0 fname [v]
+      maybe (return ()) emitFeature feat
+      genCall0 fname [v]
 
   when newline (genCall0 "p_print_ln" [] >> emitFeature PrintLine)
 
@@ -385,21 +503,25 @@ genStmt (_, StmtRead lhs@(ty, _)) = do
   genAssign lhs v
 
 genStmt (_, StmtIf condition thenBlock elseBlock) = do
-  thenLabel <- allocateLabel
+  elseLabel <- allocateLabel
   endLabel <- allocateLabel
 
   condVar <- genExpr condition
-  emit [ICondJump { iLabel = thenLabel, iValue = condVar }]
 
-  case elseBlock of 
-    Just b -> genBlock b
-            
-    Nothing -> return ()
+  emit [ ICompare { iValue = condVar, iOperand = OperandLit 0 }
+       , ICondJump { iLabel = elseLabel, iCondition = CondEQ } ]
 
-  emit [IJump { iLabel = endLabel }
-       , ILabel { iLabel = thenLabel }] 
   genBlock thenBlock
-  emit [ILabel { iLabel = endLabel }]
+
+  case elseBlock of
+    Just b -> do
+      emit [ IJump { iLabel = endLabel }
+           , ILabel { iLabel = elseLabel } ]
+      genBlock b
+      emit [ ILabel { iLabel = endLabel } ]
+    Nothing -> do
+      emit [ ILabel { iLabel = elseLabel } ]
+
 
 genStmt (_, StmtWhile condition block ) = do
   startLabel <- allocateLabel
@@ -412,34 +534,44 @@ genStmt (_, StmtWhile condition block ) = do
 
   emit [ILabel { iLabel = endLabel }]
   condVar <- genExpr condition
-  emit [ICondJump { iLabel = startLabel, iValue = condVar }]
+  emit [ ICompare { iValue = condVar, iOperand = OperandLit 0 }
+       , ICondJump { iLabel = startLabel, iCondition = CondNE } ]
 
 genStmt (_, StmtSwitch expr cs) = do
   e <- genExpr expr
   endLabel <- allocateLabel
   mapM (genCaseArm endLabel e) cs
-  emit [ILabel {iLabel = endLabel }] 
+  emit [ILabel {iLabel = endLabel }]
 
 genStmt (_, StmtScope block) = genBlock block
 
-genCaseArm :: Label -> Var -> Annotated CaseArm TypeA -> CodeGen ()
-genCaseArm endLabel e (_, CaseArm l b) = do
-  condVar <- allocateTemp
-  literalVar <- allocateTemp
-  nextCase <- allocateLabel
+genStmt (_, StmtCall name exprs) = do
+  argVars <- mapM genExpr exprs
+  genCall0 name argVars
 
-  emit [ILiteral { iDest = literalVar, iLiteral = l}
-       , IBinOp { iBinOp = BinOpNE, iDest = condVar, iLeft = e, iRight = literalVar }
-       , ICondJump { iLabel = nextCase, iValue = condVar }]
-  genBlock b
-  emit [IJump {iLabel = endLabel}
-       , ILabel {iLabel = nextCase}]
+genStmt (_, StmtAwait name exprs) = do
+  argVars <- mapM genExpr exprs
+  genAwait name argVars
+  return ()
 
-  
+genStmt (_, StmtFire name exprs) = do
+  funcVar <- allocateTemp
+  nameVar <- allocateTemp
+  emit [ ILiteral { iDest = funcVar, iLiteral = LitLabel (NamedLabel name) } ]
+  emit [ ILiteral { iDest = nameVar, iLiteral = LitString name } ]
+
+  argVars <- mapM genExpr exprs
+  genCall0 "wacc_fire" (funcVar : nameVar : argVars)
+
+genStmt (_, StmtChanSend chanName elemRHS) = do
+  chanVar <- genFrameRead chanName
+  elemVar <- genRHS elemRHS
+
+  genAwait "wacc_channel_send" [chanVar, elemVar]
+  return ()
+
 -- Block code generation
 genBlock :: Annotated Block TypeA -> CodeGen ()
 genBlock ((_, locals), Block stmts)
   = withChildFrame (map fst locals) (forM_ stmts genStmt)
-
-
 
