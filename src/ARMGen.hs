@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 module ARMGen where
 
+import Arguments
 import Common.AST
 import CodeGenTypes
 import Data.Monoid
@@ -22,7 +23,7 @@ data ARMWriter = ARMWriter
   , features :: Set Feature
   }
 
-type ARMGen = RWS () ARMWriter ARMState
+type ARMGen = (RWST () ARMWriter ARMState WACCArguments)
 
 instance Monoid ARMWriter where
   mempty = ARMWriter [] [] Set.empty
@@ -53,8 +54,14 @@ dataSegment w = ".data" : concatMap genLit (stringLiterals w)
                                 , ".word " ++ show (length value)
                                 , ".ascii " ++ show value ]
 
-genARM :: [IR] -> ARMWriter
-genARM irs = snd $ execRWS (mapM genARMInstruction irs) () (ARMState (map (("msg_" ++) . show) [0..]))
+genARM :: [IR] -> WACCArguments ARMWriter
+genARM irs = snd <$> execRWST generation () (ARMState (map (("msg_" ++) . show) [0..]))
+  where
+    generation :: ARMGen ()
+    generation = do
+      mapM genARMInstruction irs
+      hasRuntime <- lift $ getArgument runtimeEnabled
+      unless hasRuntime (emitFeature NoRuntime)
 
 genARMInstruction :: IR -> ARMGen ()
 genARMInstruction (ILiteral { iDest = dest, iLiteral = LitNull })

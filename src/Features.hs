@@ -14,10 +14,10 @@ data Feature = CheckDivideByZero
               | PrintLine
               | ReadInt
               | ReadChar
-              | Initialise
               | ThrowDoubleFreeError
               | ThrowRuntimeError
               | ThrowOverflowError
+              | NoRuntime
               deriving (Show, Eq, Ord, Enum)
 
 genFeatures :: Set Feature -> ([String], [String])
@@ -34,7 +34,7 @@ dependantOn CheckNullPointer   = Set.fromList [CheckNullPointer,  ThrowRuntimeEr
 dependantOn ThrowOverflowError = Set.fromList [ThrowOverflowError,ThrowRuntimeError, PrintString]
 dependantOn ThrowRuntimeError  = Set.fromList [ThrowRuntimeError, PrintString]
 dependantOn ThrowDoubleFreeError = Set.fromList [ThrowDoubleFreeError, PrintString]
-dependantOn Initialise         = Set.fromList [Initialise, ThrowDoubleFreeError, PrintString]
+dependantOn NoRuntime          = Set.fromList [NoRuntime, ThrowDoubleFreeError, PrintString]
 dependantOn feature            = Set.fromList [feature]
 
 genFeature :: Feature -> ([String], [String])
@@ -196,7 +196,7 @@ genFeature ThrowDoubleFreeError = (["msg_p_throw_double_free:",
                                     "LDR r0, =msg_p_throw_double_free",
                                     "BL p_print_string",
                                     "POP {pc}"])
-genFeature Initialise = ([],
+genFeature NoRuntime = ([],
                          [ "p_initialise:"
                          , "PUSH {lr}"
                          , "MOV r0, #-5"
@@ -205,5 +205,6 @@ genFeature Initialise = ([],
                          , "MOV r0, #6"
                          , "LDR r1, =p_throw_double_free"
                          , "BL signal"
-                         , "POP {pc}"])
+                         , "POP {lr}"
+                         , "B wacc_main" ])
 

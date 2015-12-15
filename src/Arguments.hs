@@ -1,8 +1,11 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP, GeneralizedNewtypeDeriving, StandaloneDeriving #-}
 
 module Arguments where
 
 import Options.Applicative
+import Control.Monad.Reader
+import Control.Monad.Identity
+import Common.WACCResult
 
 data OutputType = OutputTokens
                 | OutputAST
@@ -21,14 +24,15 @@ data OutputType = OutputTokens
                 deriving Show
 
 data Arguments = Arguments
-                 { sourceFile :: String
-                 , outputType :: OutputType
-                 , outputFile :: Maybe String }
+                 { outputType :: OutputType
+                 , runtimeEnabled :: Bool
+                 , outputFile :: Maybe String
+                 , sourceFile :: String
+                 }
                  deriving Show
 
 argumentList = Arguments
-               <$> argument str (metavar "INPUT")
-               <*> (flag' OutputTokens (long "tokens")
+               <$> (flag' OutputTokens (long "tokens")
                     <|> flag' OutputAST (long "ast")
                     <|> flag' OutputTypedAST (long "types")
                     <|> flag' OutputIR (long "ir")
@@ -43,10 +47,42 @@ argumentList = Arguments
                     <|> flag' OutputDotColouring (long "dot-colouring")
 #endif
                     <|> pure OutputASM)
+               <*> switch (long "with-runtime")
                <*> (optional (strOption (short 'o' <> metavar "OUTPUT")))
+               <*> argument str (metavar "INPUT")
 
 argumentInfo = info (helper <*> argumentList) fullDesc
 
-waccArguments :: IO Arguments
-waccArguments = execParser argumentInfo
+newtype WACCArgumentsT m a = WACCArgumentsT (ReaderT Arguments m a)
+                             deriving (MonadTrans)
+type WACCArguments = WACCArgumentsT Identity
+
+deriving instance Functor     m => Functor     (WACCArgumentsT m)
+deriving instance Alternative m => Alternative (WACCArgumentsT m)
+deriving instance Applicative m => Applicative (WACCArgumentsT m)
+deriving instance Monad       m => Monad       (WACCArgumentsT m)
+deriving instance MonadPlus   m => MonadPlus   (WACCArgumentsT m)
+deriving instance MonadFix    m => MonadFix    (WACCArgumentsT m)
+deriving instance MonadIO     m => MonadIO     (WACCArgumentsT m)
+
+getArgument :: Monad m => (Arguments -> a) -> WACCArgumentsT m a
+getArgument = WACCArgumentsT . asks
+
+withArguments :: WACCArgumentsT IO a -> IO a
+withArguments (WACCArgumentsT m) = do
+  args <- execParser argumentInfo
+  runReaderT m args
+
+mapArgumentsT :: (m a -> n b) -> WACCArgumentsT m a -> WACCArgumentsT n b
+mapArgumentsT f (WACCArgumentsT m) = WACCArgumentsT $ mapReaderT f m
+
+liftArguments :: Monad m => WACCArguments a -> WACCArgumentsT m a
+liftArguments = mapArgumentsT (return . runIdentity)
+
+fmapM :: (a -> WACCArguments b) -> WACCResult a -> WACCArguments (WACCResult b)
+fmapM f (OK value)  = let (WACCArgumentsT r) = f value
+                      in WACCArgumentsT $ do
+                          args <- ask
+                          (return . OK . runReader r) args 
+fmapM f (Error k m) = return (Error k m)
 

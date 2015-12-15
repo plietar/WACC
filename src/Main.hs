@@ -11,6 +11,8 @@ import Arguments
 import ARMGen
 import OutputFormatting
 import Features
+import Frontend.Tokens
+import Common.Span
 
 import Data.List (zipWith4)
 import Data.Maybe (fromMaybe)
@@ -29,6 +31,8 @@ import System.FilePath.Posix
 import Data.Graph.Inductive.PatriciaTree (Gr)
 import qualified Data.Graph.Inductive.Graph as Graph
 
+import Control.Monad.Trans
+
 exitCodeForResult :: WACCResult a -> ExitCode
 exitCodeForResult (OK _)                  = ExitSuccess
 exitCodeForResult (Error LexicalError  _) = ExitFailure 100
@@ -36,29 +40,15 @@ exitCodeForResult (Error SyntaxError   _) = ExitFailure 100
 exitCodeForResult (Error SemanticError _) = ExitFailure 200
 exitCodeForResult (Error CodeGenError  _) = ExitFailure 1
 
-compile :: String -> String -> OutputType -> WACCResult [String]
-compile filename contents output
-  = case output of
-    OutputTokens       -> showTokens <$> tokens
-    OutputAST          -> (:[]) . show <$> ast
-    OutputTypedAST     -> showTypedAST <$> typedAst
-    OutputIR           -> concatMap showIR <$> ir
-    OutputCFG          -> concatMap showCFG <$> cfg
-    OutputRIG          -> concatMap showRIG <$> rig
-    OutputColouring    -> concatMap showColouring <$> colouring
-    OutputIRFinal      -> showIR <$> irFinal
-    OutputASM          -> asm
-#if WITH_GRAPHVIZ
-    OutputDotCFG       -> concatMap showDotCFG <$> cfg
-    OutputDotRIG       -> concatMap showDotRIG <$> rig
-    OutputDotColouring -> concat <$> (zipWith showDotColouring <$> rig <*> colouring)
-#endif
+compile :: String -> String -> OutputType -> WACCArguments (WACCResult [String])
+compile filename contents output = do
+  let tokens = waccLexer filename contents :: WACCResult [(Pos, Token)]
 
-  where
-    tokens    = waccLexer  filename contents
-    ast       = waccParser filename =<< tokens
-    typedAst  = waccSemCheck        =<< ast
-    codeGen   = genProgram <$> typedAst
+  ast       <- runWACCResultT (waccParser filename =<< waccResultT tokens)
+  typedAst  <- runWACCResultT (waccSemCheck =<< waccResultT ast)
+  codeGen   <- fmapM genProgram typedAst
+
+  let
     ir        = fst <$> codeGen
     irFeatures = snd <$> codeGen
     cfg       = map (deadCodeElimination . basicBlocks) <$> ir :: WACCResult [Gr [IR] ()]
@@ -72,9 +62,12 @@ compile filename contents output
     cfgFinal  = map fst <$> allocation
     colouring = map snd <$> allocation
 
+    irFinal :: WACCResult [IR]
     irFinal   = concatMap (concatMap snd . Graph.labNodes) <$> cfgFinal
 
-    armWriter = genARM <$> irFinal
+  armWriter <- fmapM genARM irFinal
+
+  let
     armFeatures = ARMGen.features <$> armWriter
     feat      = genFeatures <$> (Set.union <$> armFeatures <*> irFeatures)
     asmSimple = concat <$> sequence
@@ -84,27 +77,43 @@ compile filename contents output
                              , snd <$> feat] :: WACCResult [String]
     asm       = map tabbedInstruction <$> asmSimple
 
-main :: IO ()
-main = do
-  args <- waccArguments
+  return $ case output of
+    OutputTokens       -> showTokens <$> tokens
+    OutputAST          -> (:[]) . show <$> ast
+    OutputTypedAST     -> showTypedAST <$> typedAst
+    OutputIR           -> concatMap showIR <$> ir
+    OutputCFG          -> concatMap showCFG <$> cfg
+    OutputRIG          -> concatMap showRIG <$> rig
+    OutputColouring    -> concatMap showColouring <$> colouring
+    OutputIRFinal      -> showIR <$> irFinal
+    OutputASM          -> asm
+  #if WITH_GRAPHVIZ
+    OutputDotCFG       -> concatMap showDotCFG <$> cfg
+    OutputDotRIG       -> concatMap showDotRIG <$> rig
+    OutputDotColouring -> concat <$> (zipWith showDotColouring <$> rig <*> colouring)
+  #endif
 
-  let filename = sourceFile args
+main :: IO ()
+main = withArguments $ do
+  filename <- getArgument sourceFile
   let defaultOutputFile = dropExtension (takeFileName filename) <.> "s"
 
-  let outFile = fromMaybe defaultOutputFile (outputFile args)
+  outFile <- fromMaybe defaultOutputFile <$> getArgument outputFile
 
   let out = if outFile == "-"
             then putStr
             else writeFile outFile
 
-  contents <- readFile filename
+  contents <- lift $ readFile filename
 
-  let result = compile filename contents (outputType args)
+  outType <- getArgument outputType
+
+  result <- liftArguments $ compile filename contents outType
   case result of
-    OK output -> out (unlines output)
+    OK output -> lift $ out (unlines output)
     Error kind msg -> do
-      putStrLn ("Error " ++ show kind)
-      putStr (unlines (reverse msg))
+      lift $ putStrLn ("Error " ++ show kind)
+      lift $ putStr (unlines (reverse msg))
 
-  exitWith (exitCodeForResult result)
+  lift $ exitWith (exitCodeForResult result)
 

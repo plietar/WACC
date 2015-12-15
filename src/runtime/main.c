@@ -10,6 +10,8 @@
 #include <time.h>
 #include <stdlib.h>
 #include <sys/epoll.h>
+#include <signal.h>
+#include <malloc.h>
 
 extern uint64_t wacc_main(uint32_t, uint32_t);
 
@@ -70,11 +72,18 @@ void update_socket(wacc_sock *sock) {
     }
 }
 
+void throw_double_free() {
+    printf("DoubleFreeError: pair freed twice\n");
+}
+
 int main() {
-    start_task("main", wacc_main, 0);
+    mallopt(M_CHECK_ACTION, 2);
+    signal(SIGABRT, throw_double_free);
 
     epoll_fd = epoll_create(1);
     sleep_tasks = heap_create();
+
+    start_task("main", wacc_main, 0);
 
     for (;;) {
         for (wacc_task *task = ready_tasks; task != NULL; ) {

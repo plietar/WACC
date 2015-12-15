@@ -6,6 +6,7 @@ module CodeGenTypes where
 import Common.AST
 import Features
 
+import Arguments
 import Control.Applicative
 import Control.Monad.RWS
 import Data.Map as Map
@@ -131,7 +132,7 @@ instance Monoid CodeGenOutput where
   mappend (CodeGenOutput a b) (CodeGenOutput a' b')
     = CodeGenOutput (mappend a a') (mappend b b')
 
-type CodeGen = RWS CodeGenReader CodeGenOutput CodeGenState
+type CodeGen = RWST CodeGenReader CodeGenOutput CodeGenState WACCArguments
 
 allocateTemp :: CodeGen Var
 allocateTemp = do

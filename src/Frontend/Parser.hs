@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeFamilies, LambdaCase #-}
 
 module Frontend.Parser (waccParser) where
 
@@ -6,8 +6,10 @@ import Common.AST
 import Common.Span
 import Common.WACCResult
 import Frontend.Tokens
+import Arguments
 
 import Control.Applicative
+import Control.Monad.Trans
 import Data.Int
 import Text.Parsec.Combinator
 import Text.Parsec.Expr
@@ -20,7 +22,7 @@ infixl 4 $>
 ($>) :: Functor f => f a -> b -> f b
 ($>) = flip (<$)
 
-type Parser = P.Parsec [(Pos, Token)] ()
+type Parser = P.ParsecT [(Pos, Token)] () WACCArguments
 
 showTok :: (Pos, Token) -> String
 showTok (_, tok) = show tok
@@ -44,13 +46,13 @@ wrapSpan :: (Annotated a SpanA -> b SpanA) -> Annotated a SpanA -> Annotated b S
 wrapSpan f x@(sp, _) = (sp, f x)
 
 identifier :: Parser Identifier
-identifier = P.token showTok posTok matchTok <?> "identifier"
+identifier = P.tokenPrim showTok (\ _ t _ -> posTok t) matchTok <?> "identifier"
   where
     matchTok (_, TokIdent ident) = Just ident
     matchTok _                   = Nothing
 
 token :: Token -> Parser Token
-token expected = P.token showTok posTok matchTok <?> show expected
+token expected = P.tokenPrim showTok (\ _ t _ -> posTok t) matchTok <?> show expected
   where
     matchTok (_, actual)
       | actual == expected = Just actual
@@ -66,7 +68,7 @@ op expected = token (TokOp expected)
 literal :: Parser Literal
 literal = (lit >>= check) <?> "literal"
   where
-    lit = P.token showTok posTok matchTok
+    lit = P.tokenPrim showTok (\_ t _ -> posTok t) matchTok
     matchTok (_, TokIntLit l)       = Just (LitInt l)
     matchTok (_, TokBoolLit l)      = Just (LitBool l)
     matchTok (_, TokCharLit l)      = Just (LitChar l)
@@ -435,7 +437,8 @@ decl = function <|>
 mainFunc :: Parser (Annotated FuncDef SpanA)
 mainFunc = spanned $ do
   b <- block
-  return (FuncDef TyVoid True MainFunc [] b)
+  async <- lift (getArgument runtimeEnabled)
+  return (FuncDef TyVoid async MainFunc [] b)
 
 program :: Parser (Annotated Program SpanA)
 program = spanned $ do
@@ -445,9 +448,9 @@ program = spanned $ do
   _ <- keyword "end"
   return (Program ((wrapSpan DeclFunc m):f))
 
-waccParser :: String -> [(Pos, Token)] -> WACCResult (Annotated Program SpanA)
-waccParser fname tokens
-  = case P.runParser (program <* eof) () fname tokens of
-      Left e -> syntaxError (show e)
-      Right p -> OK p
+waccParser :: String -> [(Pos, Token)] -> WACCResultT WACCArguments (Annotated Program SpanA)
+waccParser fname tokens =
+  lift $ P.runParserT (program <* eof) () fname tokens >>= \case
+             --Left e -> syntaxError' (show e)
+             Right p -> undefined
 

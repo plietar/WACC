@@ -1,9 +1,10 @@
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleInstances, GeneralizedNewtypeDeriving, StandaloneDeriving #-}
 
 module Common.WACCResult where
 
 import Control.Applicative
 import Control.Monad.State
+import Control.Monad.Reader
 import Control.Monad.Trans
 
 data ErrorKind = LexicalError
@@ -33,22 +34,68 @@ instance Monad WACCResult where
   (OK value)       >>= f = f value
   (Error kind msg) >>= _ = Error kind msg
 
-class ErrorContext m where
-  withErrorContext :: String -> m -> m
+class Monad m => MonadResult m where
+  withErrorContext :: String -> m a -> m a
+  lexicalError  :: String -> m a
+  syntaxError   :: String -> m a
+  semanticError :: String -> m a
+  codegenError  :: String -> m a
 
-instance ErrorContext (WACCResult a) where
+instance MonadResult WACCResult where
   withErrorContext msg (OK value)        = (OK value)
   withErrorContext msg (Error kind msgs) = (Error kind (msg : msgs))
 
-instance ErrorContext (StateT s WACCResult a) where
+  lexicalError  e = Error LexicalError  [e]
+  syntaxError   e = Error SyntaxError   [e]
+  semanticError e = Error SemanticError [e]
+  codegenError  e = Error CodeGenError  [e]
+
+instance Monad m => MonadResult (WACCResultT m) where
+  withErrorContext msg m = WACCResultT $ do
+    a <- runWACCResultT m
+    return (withErrorContext msg a)
+
+  lexicalError  = WACCResultT . return . syntaxError
+  syntaxError   = WACCResultT . return . syntaxError
+  semanticError = WACCResultT . return . semanticError
+  codegenError  = WACCResultT . return . syntaxError
+
+instance MonadResult m => MonadResult (StateT s m) where
   withErrorContext msg = mapStateT (withErrorContext msg)
+  lexicalError  = lift . syntaxError
+  syntaxError   = lift . syntaxError
+  semanticError = lift . semanticError
+  codegenError  = lift . syntaxError
 
+instance MonadResult m => MonadResult (ReaderT s m) where
+  withErrorContext msg = mapReaderT (withErrorContext msg)
+  lexicalError  = lift . syntaxError
+  syntaxError   = lift . syntaxError
+  semanticError = lift . semanticError
+  codegenError  = lift . syntaxError
 
-lexicalError :: String -> WACCResult a
-lexicalError e = Error LexicalError [e]
-syntaxError :: String -> WACCResult a
-syntaxError e = Error SyntaxError [e]
-semanticError :: String -> WACCResult a
-semanticError e = Error SemanticError [e]
-codegenError :: String -> WACCResult a
-codegenError e = Error CodeGenError [e]
+newtype WACCResultT m a = WACCResultT { runWACCResultT :: m (WACCResult a) }
+
+instance Functor m => Functor (WACCResultT m) where
+  fmap f = WACCResultT . fmap (fmap f) . runWACCResultT
+
+instance Monad m => Applicative (WACCResultT m) where
+  pure    = WACCResultT . pure . pure
+  f <*> a = WACCResultT $ do
+            f' <- runWACCResultT f
+            a' <- runWACCResultT a
+            return (f' <*> a')
+
+instance Monad m => Monad (WACCResultT m) where
+  return  = pure
+  m >>= k = WACCResultT $ do
+            a <- runWACCResultT m
+            case a of
+              OK x -> runWACCResultT (k x)
+              Error k e -> return (Error k e)
+
+instance MonadTrans WACCResultT where
+  lift m = WACCResultT $ OK <$> m
+
+waccResultT :: Monad m => WACCResult a -> WACCResultT m a
+waccResultT = WACCResultT . return

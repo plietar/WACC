@@ -3,6 +3,7 @@
 
 module CodeGen (genProgram) where
 
+import Arguments
 import Common.AST
 import CodeGenTypes
 import Features
@@ -23,17 +24,17 @@ emit xs = tell (CodeGenOutput xs Set.empty)
 emitFeature :: Feature -> CodeGen ()
 emitFeature f = tell (CodeGenOutput [] (Set.singleton f))
 
-genProgram :: Annotated Program TypeA -> ([[IR]], Set Feature)
+genProgram :: Annotated Program TypeA -> WACCArguments ([[IR]], Set Feature)
 genProgram (_, Program fs)
-  = snd $ evalRWS (mapM genDecl fs) () (map UnnamedLabel [0..])
+  = snd <$> evalRWST (mapM genDecl fs) () (map UnnamedLabel [0..])
 
-genDecl :: Annotated Decl TypeA -> RWS () ([[IR]], Set Feature) [Label] ()
+genDecl :: Annotated Decl TypeA -> RWST () ([[IR]], Set Feature) [Label] WACCArguments ()
 genDecl (_, DeclFunc f) = genFunction f
 genDecl (_, DeclType f) = return ()
 genDecl (_, DeclFFIFunc f) = return ()
 
 -- Functions
-genFunction :: Annotated FuncDef TypeA -> RWS () ([[IR]], Set Feature) [Label] ()
+genFunction :: Annotated FuncDef TypeA -> RWST () ([[IR]], Set Feature) [Label] WACCArguments ()
 genFunction (_, FuncDef _ async fname params body) = do
     labs <- get
 
@@ -67,18 +68,11 @@ genFunction (_, FuncDef _ async fname params body) = do
           setupFrame (Map.fromList (regArgsMap ++ stackArgsMap))
 
 
+        generation :: CodeGen ()
         generation = do
           emit [ ILabel { iLabel = NamedLabel (show fname) }
                , IFunctionBegin { iArgs = map snd argZip, iSavedRegs = calleeSaveRegs }
                , IFrameAllocate { iSize = 0 } ] -- Fixed later once colouring / spilling is done
-
-          {-
-          case fname of
-            MainFunc -> do
-              genCall0 "p_initialise" []
-              emitFeature Initialise
-            _ -> return ()
-            -}
 
           if async
           then do
@@ -112,7 +106,7 @@ genFunction (_, FuncDef _ async fname params body) = do
           emit [ ILiteral { iDest = retVal, iLiteral = LitInt 0 } ]
           genReturn retVal
 
-        (endState, result) = (execRWS generation reader initialState)
+    (endState, result) <- lift (execRWST generation reader initialState)
 
     put (labels endState)
     tell ([instructions result], features result)
