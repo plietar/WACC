@@ -17,7 +17,7 @@ fi
 
 RUNTIME="src/runtime/main.c src/runtime/list.c src/runtime/task.c src/runtime/network.c src/runtime/async.c src/runtime/heap.c src/runtime/channel.c"
 
-./compile ${1}
+./compile --with-runtime ${1}
 arm-linux-gnueabi-gcc $CFLAGS \
   -o $name ${name}.s ${RUNTIME}
 
