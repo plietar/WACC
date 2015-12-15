@@ -1,0 +1,14 @@
+begin
+  type foo = struct {
+    int x;
+    chan(string) ch;
+  };
+
+  let a : foo = struct {
+    x = 8,
+    ch = chan()
+  };
+
+  print a
+end
+

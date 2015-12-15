@@ -12,6 +12,8 @@ import Arguments
 import Control.Applicative
 import Control.Monad.Trans
 import Data.Int
+import Data.Tuple (swap)
+import qualified Data.Map as Map
 import Text.Parsec.Combinator
 import Text.Parsec.Expr
 import qualified Text.Parsec.Prim as P
@@ -94,6 +96,9 @@ parens = between (token TokLParen) (token TokRParen)
 brackets :: Parser p -> Parser p
 brackets = between (token TokLBracket) (token TokRBracket)
 
+braces :: Parser p -> Parser p
+braces = between (token TokLBrace) (token TokRBrace)
+
 expr :: Parser (Annotated Expr SpanA)
 expr = buildExpressionParser exprTable term <?> "expression"
   where
@@ -138,7 +143,7 @@ parseType = (do
   return (arr t)
   ) <?> "type"
   where
-    notArrayType = baseType <|> pairType <|> tupleType <|> chanType
+    notArrayType = baseType <|> pairType <|> tupleType <|> chanType <|> structType
     baseType = (keyword "int"    $> TyInt) <|>
                (keyword "bool"   $> TyBool) <|>
                (keyword "char"   $> TyChar) <|>
@@ -154,6 +159,12 @@ parseType = (do
       parens (TyTuple <$> (sepBy parseType comma))
 
     chanType = keyword "chan" >> (TyChan <$> parens parseType)
+
+    structType = do
+      keyword "struct"
+      -- FIXME(paul): Check for duplicated fields
+      innerTypes <- braces (endBy (swap <$> ((,) <$> parseType <*> identifier)) semi)
+      return (TyStruct (Map.fromList innerTypes))
 
 voidType :: Parser Type
 voidType = keyword "void" $> TyVoid
@@ -182,6 +193,7 @@ assignRHS :: Parser (Annotated AssignRHS SpanA)
 assignRHS
   = spanned $ rhsExpr <|>
               rhsArrayLit <|>
+              rhsStructLit <|>
               rhsPairElem <|>
               rhsCall <|>
               rhsAwait <|>
@@ -195,6 +207,12 @@ assignRHS
       rhsPairElem = RHSExpr <$> wrapSpan ExprIndexingElem <$> pairElem
       rhsNewPair  = keyword "newpair" *> parens (RHSNewTuple <$> ((\a b -> [a,b]) <$> expr <* comma <*> expr))
       rhsNewTuple = keyword "newtuple" *> parens (RHSNewTuple <$> (sepBy expr comma))
+
+      rhsStructLit = do
+        keyword "struct"
+        -- FIXME(paul): Check for duplicated fields
+        values <- braces (sepEndBy ((,) <$> identifier <* equal <*> assignRHS) comma)
+        return (RHSStructLit (Map.fromList values))
 
       rhsCall = do
         keyword "call"

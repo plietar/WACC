@@ -8,6 +8,8 @@ module Common.AST where
 
 import Common.Span
 import Data.List
+import Data.Map (Map)
+import qualified Data.Map as Map
 
 data FuncName = FuncName Identifier | MainFunc
 data Program a = Program [Annotated Decl a]
@@ -48,6 +50,7 @@ data AssignLHS a
 data AssignRHS a
   = RHSExpr     (Annotated Expr a)
   | RHSArrayLit [Annotated Expr a]
+  | RHSStructLit (Map String (Annotated AssignRHS a))
   | RHSNewTuple [Annotated Expr a]
   | RHSCall     Identifier [Annotated Expr a]
   | RHSAwait    Identifier [Annotated Expr a]
@@ -107,6 +110,7 @@ data Type = TyInt
           | TyTuple [Type]
           | TyArray Type
           | TyChan Type
+          | TyStruct (Map String Type)
           | TyName Identifier
           | TyFFI Identifier
           | TyAny
@@ -143,6 +147,7 @@ instance Show Type where
   show (TyTuple ts) = "tuple(" ++ intercalate ", " (map show ts) ++ ")"
   show (TyArray t)  = show t ++ "[]"
   show (TyChan t)   = "chan(" ++ show t ++ ")"
+  show (TyStruct ts) = "struct{" ++ concatMap (\(name, ty) -> show name ++ " " ++ show ty) (Map.assocs ts) ++ "}"
   show (TyName n)   = show n
   show (TyFFI n)    = n
   show TyAny        = "any"

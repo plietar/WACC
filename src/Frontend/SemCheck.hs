@@ -94,10 +94,16 @@ compatibleType (TyTuple ts1) (TyTuple ts2)
     <^(&&)
     (length ts1 == length ts2)
 
+compatibleType (TyStruct ts1) (TyStruct ts2)
+  = all snd <$> mergeStructs compatibleType (Map.assocs ts1) (Map.assocs ts2)
+
 compatibleType (TyChan t1) (TyChan t2)
   = compatibleType t1 t2 
 
 compatibleType t1 t2 = return (t1 == t2)
+
+
+
 
 mergeTypes :: Type -> Type -> SemCheck Type
 mergeTypes t1 TyAny = return t1
@@ -116,9 +122,23 @@ mergeTypes t1@(TyTuple ts1) t2@(TyTuple ts2) = do
 mergeTypes (TyChan t1) (TyChan t2)
   = TyChan <$> mergeTypes t1 t2
 
+mergeTypes (TyStruct ts1) (TyStruct ts2)
+  = TyStruct <$> (Map.fromList <$> mergeStructs mergeTypes (Map.assocs ts1) (Map.assocs ts2))
+
 mergeTypes t1 t2
   | t1 == t2  = return t1
   | otherwise = semanticError ("Types " ++ show t1 ++ " and " ++ show t2 ++ " are not compatible")
+
+mergeStructs :: (Type -> Type -> SemCheck a) -> [(Identifier, Type)] -> [(Identifier, Type)] -> SemCheck [(Identifier, a)]
+mergeStructs _ [] [] = return []
+mergeStructs _ ((n1, t1) : _) [] = semanticError ("Missing field " ++ n1)
+mergeStructs _ [] ((n2, t2) : _) = semanticError ("Missing field " ++ n2)
+mergeStructs f ((n1, t1) : ts1) ((n2, t2) : ts2) = do
+  unless (n1 == n2) (semanticError ("Field mismatch " ++ n1 ++ ", " ++ n2))
+  ty <- f t1 t2 
+  tys <- mergeStructs f ts1 ts2
+  return ((n1,ty) : tys)
+
 
 checkType :: Type -> SemCheck Type
 checkType (TyArray elemTy)
@@ -132,7 +152,9 @@ checkType (TyName name)
 checkType ty = return ty
 
 isArrayType :: Type -> SemCheck Bool
-isArrayType = compatibleType (TyArray TyAny)
+isArrayType (TyArray _) = return True
+isArrayType TyAny       = return True
+isArrayType _           = return False
 
 isHeapType :: Type -> SemCheck Bool
 isHeapType (TyTuple _ ) = return True
@@ -303,6 +325,13 @@ checkAssignRHS (_, RHSArrayLit exprs) = do
   exprs' <- mapM checkExpr exprs
   innerType <- foldM mergeTypes TyAny (map fst exprs')
   return (TyArray innerType, RHSArrayLit exprs')
+
+checkAssignRHS (_, RHSStructLit values) = do
+  valuesList <- mapM (\(k,v) -> (k,) <$> checkAssignRHS v) (Map.assocs values)
+  let valuesTy = Map.fromList (map (\(k, (ty, _)) -> (k, ty)) valuesList)
+      values'  = Map.fromList valuesList
+
+  return (TyStruct valuesTy, RHSStructLit values')
 
 checkAssignRHS (_, RHSNewTuple exprs) = do
   exprs' <- mapM checkExpr exprs
