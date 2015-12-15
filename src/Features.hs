@@ -231,11 +231,12 @@ typeInfo baseTy@(TyTuple elemTys)
     , ".ascii \"" ++ show baseTy ++ "\\0\"" ]
     where
       mangled = mangle baseTy
-      pointerInfo = (zipWith (++) (repeat ".byte ") (map isPointer elemTys
+      pointerInfo = zipWith (++) (repeat ".byte ") (map isPointer elemTys)
 
 isPointer :: Type -> String
 isPointer (TyArray _) = "1"
 isPointer (TyTuple _) = "1"
+isPointer TyNull = "1"
 isPointer _ = "0"
 
 mangle :: Type -> String

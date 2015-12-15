@@ -64,7 +64,7 @@ data Operand = OperandVar Var Int | OperandLit Int
   deriving (Show)
 
 instance Show Label where
-  show (UnnamedLabel i) = "L" ++ show i
+  show (UnnamedLabel i) = ".L" ++ show i
   show (NamedLabel   n) = n
 
 data IR

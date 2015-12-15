@@ -71,9 +71,10 @@ mergeTypes TyNull (TyTuple ts1)
   = OK (TyTuple ts1)
 mergeTypes (TyTuple ts1) TyNull
   = OK (TyTuple ts1)
+
 mergeTypes t1 t2
   | t1 == t2  = OK t1
-  | otherwise = semanticError ("Types " ++ show t1 ++ " and " ++ 
+  | otherwise = semanticError ("Types " ++ show t1 ++ " and " ++
                                       show t2 ++ " are not compatible")
 
 isArrayType :: Type -> Bool
