@@ -312,9 +312,9 @@ checkAssignRHS (_, RHSNewChan) = return (TyChan TyAny, RHSNewChan)
 
 checkAssignRHS (_, RHSChanRecv chanName) = do
   chanTy <- getVariable chanName
-  elemTy <- case chanTy of
-    TyChan ty -> return ty
-    _         -> semanticError ("Cannot receive from non-channel type " ++ show chanTy)
+  (TyChan elemTy) <- mergeTypes chanTy (TyChan TyAny)
+  unlessM (asks asyncContext)
+          (semanticError ("Cannot receive from channel from within a synchronous function"))
   return (elemTy, RHSChanRecv chanName)
 
 checkArgs :: [Type] -> [Type] -> SemCheck ()
@@ -346,6 +346,9 @@ checkCall fname args = do
 
 checkAwait :: Identifier -> [Annotated Expr SpanA] -> SemCheck (Identifier, [Annotated Expr TypeA], Type)
 checkAwait fname args = do
+  unlessM (asks asyncContext)
+          (semanticError ("Cannot await from within a synchronous function"))
+
   (symbolName, async, expectedArgsType, returnType) <- getFunction fname
   unless async (semanticError ("Cannot await synchronous function " ++ fname))
 
@@ -492,9 +495,9 @@ checkStmt (_, StmtChanSend chanName rhs) = do
   chanTy <- liftSemCheck $ getVariable chanName
   rhs'@(rhsTy, _) <- liftSemCheck $ checkAssignRHS rhs
 
-  case chanTy of
-    TyChan ty -> liftSemCheck $ mergeTypes ty rhsTy
-    _         -> semanticError ("Cannot send to non-channel type " ++ show chanTy)
+  liftSemCheck $ mergeTypes chanTy (TyChan rhsTy)
+  unlessM (gets asyncContext)
+          (semanticError ("Cannot send to channel from within a synchronous function"))
 
   return (False, StmtChanSend chanName rhs')
 
