@@ -231,6 +231,19 @@ checkIndexingElem' baseType@(TyArray t) exprs@((ty, e):es) = do
 checkIndexingElem' t [] = return (t, [])
 checkIndexingElem' t _  = semanticError ("Type " ++ show t ++ " not indexable")
 
+checkStructElem :: Annotated StructElem SpanA -> SemCheck (Annotated StructElem TypeA)
+checkStructElem (_, StructElem baseName members) = do
+  baseTy <- getVariable baseName
+  resultTy <- foldM checkStructElem' baseTy members
+  return (resultTy, StructElem baseName members)
+  where
+    checkStructElem' :: Type -> Identifier -> SemCheck Type
+    checkStructElem' ty@(TyStruct elemsTy) name
+      = case Map.lookup name elemsTy of
+        Just elemTy -> return elemTy
+        Nothing -> semanticError ("No field named " ++ name ++ " in " ++ show ty)
+    checkStructElem' ty _ = semanticError ("Type " ++ show ty ++ " is not a structure")
+
 checkExpr :: Annotated Expr SpanA -> SemCheck (Annotated Expr TypeA)
 checkExpr (_, ExprLit lit) = return (checkLiteral lit, ExprLit lit)
 
@@ -239,8 +252,12 @@ checkExpr (_, ExprVar varname) = do
   return (ty, ExprVar varname)
 
 checkExpr (_, ExprIndexingElem indexElem) = do
-  indexElem'@((t, tys), ts) <- checkIndexingElem indexElem
-  return (t, ExprIndexingElem indexElem')
+  indexElem'@((ty, _), _) <- checkIndexingElem indexElem
+  return (ty, ExprIndexingElem indexElem')
+
+checkExpr (_, ExprStructElem structElem) = do
+  structElem'@(ty, _) <- checkStructElem structElem
+  return (ty, ExprStructElem structElem')
 
 checkExpr (_, ExprUnOp op expr) = do
   expr'@(t1, _) <- checkExpr expr
@@ -313,8 +330,12 @@ checkAssignLHS (_, LHSVar varname) = do
   return (ty, LHSVar varname)
 
 checkAssignLHS (_, LHSIndexingElem indexElem) = do
-  indexElem'@((ty, tys), _) <- checkIndexingElem indexElem
+  indexElem'@((ty, _), _) <- checkIndexingElem indexElem
   return (ty, LHSIndexingElem indexElem')
+
+checkAssignLHS (_, LHSStructElem structElem) = do
+  structElem'@(ty, _) <- checkStructElem structElem
+  return (ty, LHSStructElem structElem')
 
 checkAssignRHS :: Annotated AssignRHS SpanA -> SemCheck (Annotated AssignRHS TypeA)
 checkAssignRHS (_, RHSExpr expr) = do

@@ -9,6 +9,10 @@ begin
     ch = chan()
   };
 
-  print a
+  a.x = 5;
+  let c = a.ch;
+  c <- "Hello";
+  print a.y;
+  print c.a
 end
 

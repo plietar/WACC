@@ -9,6 +9,7 @@ data Token =
     TokRBracket       |
     TokLBrace         |
     TokRBrace         |
+    TokDot            |
     TokComma          |
     TokEqual          |
     TokSemiColon      |
@@ -25,6 +26,7 @@ instance Show Token where
   show (TokOp op)       = "operator " ++ show op
   show TokLParen        = "left parenthesis"
   show TokRParen        = "right parenthesis"
+  show TokDot           = "dot"
   show TokComma         = "comma"
   show TokEqual         = "equal"
   show TokLBracket      = "left bracket"

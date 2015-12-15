@@ -81,6 +81,8 @@ literal = (lit >>= check) <?> "literal"
                          else return x
     check x = return x
 
+dot :: Parser Token
+dot = token TokDot
 semi :: Parser Token
 semi = token TokSemiColon
 comma :: Parser Token
@@ -105,6 +107,7 @@ expr = buildExpressionParser exprTable term <?> "expression"
     term = parens expr
            <|> spanned (ExprLit <$> literal)
            <|> spanned (ExprIndexingElem <$> indexingElem)
+           <|> spanned (ExprStructElem <$> structElem)
            <|> spanned (ExprVar <$> identifier)
            <?> "term"
 
@@ -183,10 +186,17 @@ indexingElem = spanned $ do
   where
     index = brackets expr
 
+structElem :: Parser (Annotated StructElem SpanA)
+structElem = spanned $ do
+  name <- P.try (identifier <* P.lookAhead dot)
+  member <- many1 (dot *> identifier)
+  return (StructElem name member)
+
 assignLHS :: Parser (Annotated AssignLHS SpanA)
 assignLHS
   = spanned $ LHSIndexingElem <$> indexingElem <|>
               LHSIndexingElem <$> pairElem <|>
+              LHSStructElem   <$> structElem <|>
               LHSVar <$> identifier
 
 assignRHS :: Parser (Annotated AssignRHS SpanA)

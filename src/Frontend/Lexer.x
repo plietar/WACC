@@ -31,6 +31,7 @@ tokens :-
   "#".*(\n)            ;
 
   -- Symbols
+  "."                  { \(AlexPn _ line column) s -> ((line, column), TokDot) }
   ","                  { \(AlexPn _ line column) s -> ((line, column), TokComma) }
   ";"                  { \(AlexPn _ line column) s -> ((line, column), TokSemiColon) }
   ":"                  { \(AlexPn _ line column) s -> ((line, column), TokColon) }
