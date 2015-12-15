@@ -1,18 +1,28 @@
 begin
   type foo = struct {
     int x;
-    chan(string) ch;
   };
 
-  let a : foo = struct {
-    x = 8,
-    ch = chan()
+  type bar = struct {
+    foo a;
   };
 
+  void f(bar a) is
+    print a.a.x
+  end
+
+  let a = struct {
+    x = 8
+  };
+
+  let b = struct {
+    a = a,
+    z = 8
+  };
+
+
+  print b.a.x;
   a.x = 5;
-  let c = a.ch;
-  c <- "Hello";
-  print a.y;
-  print c.a
+  print a.x
 end
 

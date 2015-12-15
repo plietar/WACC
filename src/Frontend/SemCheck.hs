@@ -10,11 +10,14 @@ import Common.Stuff
 
 import Control.Monad.State
 import Control.Monad.Reader
+import Control.Monad.Writer
 import Control.Monad.Trans
 import Control.Applicative
 
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Set (Set)
+import qualified Data.Set as Set
 
 data Context = Context
   { variables    :: ScopedMap String Type
@@ -24,8 +27,8 @@ data Context = Context
   , asyncContext :: Bool
   }
 
-type SemCheck = ReaderT Context (WACCResultT WACCArguments)
-type SemCheckState = StateT Context (WACCResultT WACCArguments)
+type SemCheck = ReaderT Context (WriterT (Set Identifier) (WACCResultT WACCArguments))
+type SemCheckState = StateT Context (WriterT (Set Identifier) (WACCResultT WACCArguments))
 
 liftSemCheck :: SemCheck a -> SemCheckState a
 liftSemCheck m = do
@@ -88,7 +91,7 @@ compatibleType TyNull (TyTuple _) = return True
 compatibleType (TyTuple _) TyNull = return True
 
 compatibleType (TyArray t1) (TyArray t2)
-  = compatibleType t1 t2 
+  = compatibleType t1 t2
 compatibleType (TyTuple ts1) (TyTuple ts2)
   = (andM (zipWith compatibleType ts1 ts2))
     <^(&&)
@@ -98,7 +101,7 @@ compatibleType (TyStruct ts1) (TyStruct ts2)
   = all snd <$> mergeStructs compatibleType (Map.assocs ts1) (Map.assocs ts2)
 
 compatibleType (TyChan t1) (TyChan t2)
-  = compatibleType t1 t2 
+  = compatibleType t1 t2
 
 compatibleType t1 t2 = return (t1 == t2)
 
@@ -135,7 +138,7 @@ mergeStructs _ ((n1, t1) : _) [] = semanticError ("Missing field " ++ n1)
 mergeStructs _ [] ((n2, t2) : _) = semanticError ("Missing field " ++ n2)
 mergeStructs f ((n1, t1) : ts1) ((n2, t2) : ts2) = do
   unless (n1 == n2) (semanticError ("Field mismatch " ++ n1 ++ ", " ++ n2))
-  ty <- f t1 t2 
+  ty <- f t1 t2
   tys <- mergeStructs f ts1 ts2
   return ((n1,ty) : tys)
 
@@ -149,6 +152,9 @@ checkType (TyChan elemTy)
   = TyChan <$> checkType elemTy
 checkType (TyName name)
   = getTypeAlias name
+checkType (TyStruct members) = do
+  tell (Set.fromList (Map.keys members))
+  TyStruct <$> mapM checkType members
 checkType ty = return ty
 
 isArrayType :: Type -> SemCheck Bool
@@ -187,6 +193,8 @@ isAbstractType (TyTuple [_, TyTuple [TyAny,TyAny]])
   = return False
 isAbstractType (TyTuple tys) = anyM isAbstractType tys
 isAbstractType (TyArray ty)  = isAbstractType ty
+isAbstractType (TyChan ty)   = isAbstractType ty
+isAbstractType (TyStruct tys) = anyM isAbstractType (Map.elems tys)
 isAbstractType _             = return False
 
 isVoidType :: Type -> SemCheck Bool
@@ -348,9 +356,10 @@ checkAssignRHS (_, RHSArrayLit exprs) = do
   return (TyArray innerType, RHSArrayLit exprs')
 
 checkAssignRHS (_, RHSStructLit values) = do
-  valuesList <- mapM (\(k,v) -> (k,) <$> checkAssignRHS v) (Map.assocs values)
-  let valuesTy = Map.fromList (map (\(k, (ty, _)) -> (k, ty)) valuesList)
-      values'  = Map.fromList valuesList
+  tell (Set.fromList (Map.keys values))
+
+  values' <- mapM checkAssignRHS values
+  let valuesTy = Map.map fst values'
 
   return (TyStruct valuesTy, RHSStructLit values')
 
@@ -418,7 +427,7 @@ checkFire :: Identifier -> [Annotated Expr SpanA] -> SemCheck (Identifier, [Anno
 checkFire fname args = do
   (symbolName, async, expectedArgsType, returnType) <- getFunction fname
   unless async (semanticError ("Cannot fire synchronous function " ++ fname))
-  unlessM (lift . lift $ getArgument runtimeEnabled)
+  unlessM (lift . lift . lift $ getArgument runtimeEnabled)
           (semanticError "Cannot use fire if runtime is disabled")
 
   when (length args > 1) (semanticError ("Function " ++ fname ++ " with more than one argument cannot be fired"))
@@ -620,11 +629,11 @@ defineDecl (_, DeclFunc f) = defineFunction f
 defineDecl (_, DeclType f) = defineTypeAlias f
 defineDecl (_, DeclFFIFunc f) = defineFFIFunc f
 
-checkProgram :: Annotated Program SpanA -> WACCResultT WACCArguments (Annotated Program TypeA)
+checkProgram :: Annotated Program SpanA -> WriterT (Set Identifier) (WACCResultT WACCArguments) (Annotated Program TypeA)
 checkProgram (_, Program decls) = do
   context <- execStateT (forM_ decls defineDecl) emptyContext
   decls' <- runReaderT (forM decls checkDecl) context
   return ((), Program decls')
 
-waccSemCheck :: Annotated Program SpanA -> WACCResultT WACCArguments (Annotated Program TypeA)
-waccSemCheck = checkProgram
+waccSemCheck :: Annotated Program SpanA -> WACCResultT WACCArguments (Annotated Program TypeA, Set Identifier)
+waccSemCheck = runWriterT . checkProgram

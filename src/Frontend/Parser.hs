@@ -287,7 +287,7 @@ forStmt = spanned $ do
   c <- expr
   e <- expr
   b <- block
-  return (StmtFor i c e b)  
+  return (StmtFor i c e b)
 
 ifStmt :: Parser (Annotated Stmt SpanA)
 ifStmt = spanned $ do

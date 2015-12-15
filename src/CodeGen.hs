@@ -13,6 +13,7 @@ import Control.Monad.State
 import Control.Applicative
 
 import Data.Set (Set)
+import Data.Map (Map)
 import Data.Tuple(swap)
 import qualified Data.Set as Set
 import qualified Data.Map as Map
@@ -24,8 +25,8 @@ emit xs = tell (CodeGenOutput xs Set.empty)
 emitFeature :: Feature -> CodeGen ()
 emitFeature f = tell (CodeGenOutput [] (Set.singleton f))
 
-genProgram :: Annotated Program TypeA -> WACCArguments ([[IR]], Set Feature)
-genProgram (_, Program fs)
+genProgram :: Annotated Program TypeA -> Set Identifier -> WACCArguments ([[IR]], Set Feature)
+genProgram (_, Program fs) structMembers
   = snd <$> evalRWST (mapM genDecl fs) () (map UnnamedLabel [0..])
 
 genDecl :: Annotated Decl TypeA -> RWST () ([[IR]], Set Feature) [Label] WACCArguments ()
