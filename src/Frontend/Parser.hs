@@ -4,6 +4,7 @@ module Frontend.Parser (waccParser) where
 
 import Common.AST
 import Common.Span
+import Common.Stuff
 import Common.WACCResult
 import Frontend.Tokens
 import Arguments
@@ -17,10 +18,6 @@ import qualified Text.Parsec.Prim as P
 import Text.Parsec.Pos
 import Text.Parsec.Prim ((<?>))
 import Text.Parsec.String ()
-
-infixl 4 $>
-($>) :: Functor f => f a -> b -> f b
-($>) = flip (<$)
 
 type Parser = P.ParsecT [(Pos, Token)] () WACCArguments
 

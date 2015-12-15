@@ -2,6 +2,7 @@
 module ARMGen where
 
 import Arguments
+import Common.Stuff
 import Common.AST
 import CodeGenTypes
 import Data.Monoid
@@ -60,8 +61,7 @@ genARM irs = snd <$> execRWST generation () (ARMState (map (("msg_" ++) . show) 
     generation :: ARMGen ()
     generation = do
       mapM genARMInstruction irs
-      hasRuntime <- lift $ getArgument runtimeEnabled
-      unless hasRuntime (emitFeature NoRuntime)
+      unlessM (lift $ getArgument runtimeEnabled) (emitFeature NoRuntime)
 
 genARMInstruction :: IR -> ARMGen ()
 genARMInstruction (ILiteral { iDest = dest, iLiteral = LitNull })

@@ -361,6 +361,9 @@ checkFire :: Identifier -> [Annotated Expr SpanA] -> SemCheck (Identifier, [Anno
 checkFire fname args = do
   (symbolName, async, expectedArgsType, returnType) <- getFunction fname
   unless async (semanticError ("Cannot fire synchronous function " ++ fname))
+  unlessM (lift . lift $ getArgument runtimeEnabled)
+          (semanticError "Cannot use fire if runtime is disabled")
+
   when (length args > 1) (semanticError ("Function " ++ fname ++ " with more than one argument cannot be fired"))
 
   args' <- mapM checkExpr args

@@ -35,3 +35,7 @@ infixl 3 ^>
 (^>) :: Applicative f => f (a -> b) -> f a -> f b
 (^>) = (<*>)
 
+infixl 4 $>
+($>) :: Functor f => f a -> b -> f b
+($>) = flip (<$)
+
