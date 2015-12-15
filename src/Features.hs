@@ -2,6 +2,7 @@ module Features where
 
 import Data.Monoid
 import Data.Set (Set)
+import Common.AST
 import qualified Data.Set as Set
 
 data Feature = CheckDivideByZero
@@ -17,8 +18,9 @@ data Feature = CheckDivideByZero
               | ThrowDoubleFreeError
               | ThrowRuntimeError
               | ThrowOverflowError
+              | GCTypeInformation Type
               | NoRuntime
-              deriving (Show, Eq, Ord, Enum)
+              deriving (Show, Eq, Ord)
 
 genFeatures :: Set Feature -> ([String], [String])
 genFeatures features
@@ -206,6 +208,51 @@ genFeature NoRuntime = ([],
                          , "MOV r0, #6"
                          , "LDR r1, =p_throw_double_free"
                          , "BL signal"
-                         , "POP {lr}"
-                         , "B wacc_main" ])
+                         , "BL wacc_main" 
+                         , "POP {pc}" ])
+genFeature (GCTypeInformation t) = ([(mangleTypeInformation t) ++ ":" ] ++ (typeInfo t), [])
+
+-- Garbage Collection Methods
+typeInfo :: Type -> [String]
+typeInfo baseTy@(TyArray elemTy)
+  = [ ".byte 1"   -- isArray
+    , ".word " ++ "string" ++ mangled
+    , ".word 0"   -- length (unnecessary for arrays)
+    , ".byte " ++ isPointer elemTy  -- isPointer
+    , "string" ++ mangled ++ ":"
+    , ".ascii \"" ++ show baseTy ++ "\\0\"" ] 
+    where
+      mangled = mangleTypeInformation baseTy 
+typeInfo baseTy@(TyTuple elemTys)
+  = [ ".byte 0"
+    , ".word " ++ "string" ++ mangled
+    , ".word " ++ show (length elemTys)]
+    ++ pointerInfo ++
+    [ "string" ++ mangled ++ ":"
+    , ".ascii \"" ++ show baseTy ++ "\\0\"" ]
+    where
+      mangled = mangleTypeInformation baseTy
+      pointerInfo = zipWith (++) (repeat ".byte ") (map isPointer elemTys)
+
+isPointer :: Type -> String
+isPointer (TyArray _) = "1"
+isPointer (TyTuple _) = "1"
+isPointer TyNull = "1"
+isPointer _ = "0"
+
+mangleTypeInformation :: Type -> String
+mangleTypeInformation t = "Ty" ++ mangleTypeName t
+
+-- Mangle a name from its types
+mangleTypeName :: Type -> String
+mangleTypeName TyInt = "int"
+mangleTypeName TyChar = "char"
+mangleTypeName (TyArray t) = "A" ++ mangleTypeName t
+mangleTypeName (TyTuple ts) = "T" ++ concatMap mangleTypeName ts
+mangleTypeName TyBool = "bool"
+mangleTypeName TyVoid = "void"
+mangleTypeName TyNull = "null"
+mangleTypeName TyAny = "any"
+
+
 

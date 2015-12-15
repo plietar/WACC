@@ -112,7 +112,7 @@ data Type = TyInt
           | TyAny
           | TyVoid
           | TyNull
-    deriving (Eq)
+          deriving (Eq, Ord)
 
 instance Show BinOp where
   show BinOpAdd = "+"

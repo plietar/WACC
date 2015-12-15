@@ -33,6 +33,13 @@ genDecl (_, DeclFunc f) = genFunction f
 genDecl (_, DeclType f) = return ()
 genDecl (_, DeclFFIFunc f) = return ()
 
+genAlloc :: Int -> Type -> CodeGen Var
+genAlloc size t = do
+  sizeVar <- allocateTemp
+  emit [ ILiteral { iDest = sizeVar, iLiteral = LitInt (toInteger size) } ]
+  typeInfoVar <- genGCTypeInfo t
+  genCall1 "GCAlloc" [sizeVar, typeInfoVar]
+
 -- Functions
 genFunction :: Annotated FuncDef TypeA -> RWST () ([[IR]], Set Feature) [Label] WACCArguments ()
 genFunction (_, FuncDef _ async fname params body) = do
@@ -379,15 +386,25 @@ typeShift TyBool = 0
 typeShift _      = 2
 
 
+-- Garbage Collector Type Information Methods
+genGCTypeInfo :: Type -> CodeGen Var
+genGCTypeInfo t = do
+  emitFeature (GCTypeInformation t)
+  let label = mangleTypeInformation t
+  typeInfoVar <- allocateTemp
+  emit [ ILiteral { iDest = typeInfoVar, iLiteral = LitLabel (NamedLabel label) } ]
+  return typeInfoVar
+
+
+
+
+
 -- RHS Expression Assignment
 genRHS :: Annotated AssignRHS TypeA -> CodeGen Var
 genRHS (_, RHSExpr expr) = genExpr expr
-genRHS (TyArray elemTy, RHSArrayLit exprs) = do
-  sizeVar <- allocateTemp
-  emit [ ILiteral { iDest = sizeVar, iLiteral = LitInt (toInteger size) } ]
-  arrayVar <- genCall1 "malloc" [sizeVar]
-
+genRHS (t@(TyArray elemTy), RHSArrayLit exprs) = do
   arrayLen <- allocateTemp
+  arrayVar <- genAlloc size t
   emit [ ILiteral { iDest = arrayLen, iLiteral = LitInt (toInteger (length exprs)) }
        , IHeapWrite { iHeapVar = arrayVar
                     , iValue = arrayLen
@@ -408,10 +425,8 @@ genRHS (TyArray elemTy, RHSArrayLit exprs) = do
                  else 0
       elemSize = typeSize elemTy
 
-genRHS (TyTuple types, RHSNewTuple exprs) = do
-  sizeVar <- allocateTemp
-  emit [ ILiteral { iDest = sizeVar, iLiteral = LitInt (toInteger (length exprs * 4)) }]
-  tupleVar <- genCall1 "malloc" [sizeVar]
+genRHS (baseTy@(TyTuple types), RHSNewTuple exprs) = do
+  tupleVar <- genAlloc size baseTy
   forM (zip exprs [0..]) $ \(expr, index) -> do
     elemVar <- genExpr expr
     emit [ IHeapWrite  { iHeapVar = tupleVar
@@ -419,6 +434,8 @@ genRHS (TyTuple types, RHSNewTuple exprs) = do
                        , iOperand = OperandLit (index * 4)
                        , iType = types !! index } ]
   return tupleVar
+    where
+      size = length exprs * 4
 
 genRHS (_, RHSCall name exprs) = do
   argVars <- mapM genExpr exprs
@@ -468,7 +485,7 @@ genStmt (_, StmtFree expr@(ty, _)) = do
       genCall0 "p_check_null_pointer" [v]
       emitFeature CheckNullPointer
     _ -> return ()
-  genCall0 "free" [v]
+--  genCall0 "free" [v]
 
 genStmt (_, StmtReturn expr) = do
   v <- genExpr expr

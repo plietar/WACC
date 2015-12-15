@@ -80,7 +80,6 @@ genARMInstruction (ILiteral { iDest = dest, iLiteral = LitString str } ) = do
   emit ["LDR " ++ show dest ++ ", =" ++ message]
 genARMInstruction (ILiteral { iDest = dest, iLiteral = LitLabel lab } ) = do
   emit ["LDR " ++ show dest ++ ", =" ++ show lab]
-
 --BinOp
 genARMInstruction (IBinOp { iBinOp = op, iDest = dest,
         iLeft  = left, iRight = right } )

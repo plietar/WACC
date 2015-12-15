@@ -15,6 +15,9 @@
 
 extern uint64_t wacc_main(uint32_t, uint32_t);
 
+void GCInit();
+void GCFree();
+
 uint32_t task_count = 0;
 wacc_task *ready_tasks = NULL;
 heap *sleep_tasks;
@@ -77,6 +80,7 @@ void throw_double_free() {
 }
 
 int main() {
+    GCInit();
     mallopt(M_CHECK_ACTION, 2);
     signal(SIGABRT, throw_double_free);
 
@@ -178,5 +182,6 @@ int main() {
             list_insert(&ready_tasks, task);
         }
     }
+    GCFree();
 }
 

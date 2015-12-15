@@ -31,10 +31,10 @@ argPassingRegs :: [Var]
 argPassingRegs = Reg <$> [0..3]
 
 callerSaveRegs :: [Var]
-callerSaveRegs = Reg <$> ([0..3] ++ [14])
+callerSaveRegs = Reg <$> ([0..3] ++ [12, 14])
 
 calleeSaveRegs :: [Var]
-calleeSaveRegs = Reg <$> ([4..12] ++ [14])
+calleeSaveRegs = Reg <$> ([4..11] ++ [14])
 
 allRegs :: [Var]
 allRegs = Reg <$> ([0..12] ++ [14])
