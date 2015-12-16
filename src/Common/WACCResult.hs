@@ -5,6 +5,7 @@ module Common.WACCResult where
 import Control.Applicative
 import Control.Monad.State
 import Control.Monad.Reader
+import Control.Monad.Writer
 import Control.Monad.Trans
 
 data ErrorKind = LexicalError
@@ -67,8 +68,15 @@ instance MonadResult m => MonadResult (StateT s m) where
   semanticError = lift . semanticError
   codegenError  = lift . syntaxError
 
-instance MonadResult m => MonadResult (ReaderT s m) where
+instance MonadResult m => MonadResult (ReaderT r m) where
   withErrorContext msg = mapReaderT (withErrorContext msg)
+  lexicalError  = lift . syntaxError
+  syntaxError   = lift . syntaxError
+  semanticError = lift . semanticError
+  codegenError  = lift . syntaxError
+
+instance (MonadResult m, Monoid w) => MonadResult (WriterT w m) where
+  withErrorContext msg = mapWriterT (withErrorContext msg)
   lexicalError  = lift . syntaxError
   syntaxError   = lift . syntaxError
   semanticError = lift . semanticError

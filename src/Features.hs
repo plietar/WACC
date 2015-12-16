@@ -2,7 +2,9 @@ module Features where
 
 import Data.Monoid
 import Data.Set (Set)
+import qualified Data.Map as Map
 import Common.AST
+import Data.List (intercalate)
 import qualified Data.Set as Set
 
 data Feature = CheckDivideByZero
@@ -18,8 +20,9 @@ data Feature = CheckDivideByZero
               | ThrowDoubleFreeError
               | ThrowRuntimeError
               | ThrowOverflowError
-              | GCTypeInformation Type
               | NoRuntime
+              | StructVTable String [Int]
+              | GCTypeInformation Type
               deriving (Show, Eq, Ord)
 
 genFeatures :: Set Feature -> ([String], [String])
@@ -210,29 +213,45 @@ genFeature NoRuntime = ([],
                          , "BL signal"
                          , "BL wacc_main" 
                          , "POP {pc}" ])
-genFeature (GCTypeInformation t) = ([(mangleTypeInformation t) ++ ":" ] ++ (typeInfo t), [])
+
+genFeature (StructVTable lbl offsets)
+ = ([ ".global " ++ lbl
+    , lbl ++ ":" ] ++
+    map (\x -> ".word " ++ show x) offsets, [])
+
+genFeature (GCTypeInformation ty) = (typeInfo ty ++ typeDescription ty, [])
+
+mangleVTableName :: [String] -> String
+mangleVTableName vars
+ = "_vtable_" ++ intercalate "_" vars
 
 -- Garbage Collection Methods
 typeInfo :: Type -> [String]
 typeInfo baseTy@(TyArray elemTy)
-  = [ ".byte 1"   -- isArray
-    , ".word " ++ "string" ++ mangled
+  = [ "_ty_info_" ++ mangleTypeName baseTy ++ ":"
+    , ".byte 1"   -- isArray
+    , ".word _ty_string_" ++ mangleTypeName baseTy
     , ".word 0"   -- length (unnecessary for arrays)
-    , ".byte " ++ isPointer elemTy  -- isPointer
-    , "string" ++ mangled ++ ":"
-    , ".ascii \"" ++ show baseTy ++ "\\0\"" ] 
-    where
-      mangled = mangleTypeInformation baseTy 
+    , ".byte " ++ isPointer elemTy ] -- isPointer
+
 typeInfo baseTy@(TyTuple elemTys)
-  = [ ".byte 0"
-    , ".word " ++ "string" ++ mangled
-    , ".word " ++ show (length elemTys)]
-    ++ pointerInfo ++
-    [ "string" ++ mangled ++ ":"
-    , ".ascii \"" ++ show baseTy ++ "\\0\"" ]
-    where
-      mangled = mangleTypeInformation baseTy
-      pointerInfo = zipWith (++) (repeat ".byte ") (map isPointer elemTys)
+  = [ "_ty_info_" ++ mangleTypeName baseTy ++ ":"
+    , ".byte 0"
+    , ".word _ty_string_" ++ mangleTypeName baseTy
+    , ".word " ++ show (length elemTys) ] ++
+    map ((".byte " ++) . isPointer) elemTys
+
+typeInfo baseTy@(TyStruct members)
+  = [ "_ty_info_" ++ mangleTypeName baseTy ++ ":"
+    , ".byte 0"
+    , ".word _ty_string_" ++ mangleTypeName baseTy
+    , ".word " ++ show (Map.size members)] ++
+    map ((".byte " ++) . isPointer) (Map.elems members) 
+
+typeDescription :: Type -> [String]
+typeDescription ty
+  = [ "_ty_string_" ++ mangleTypeName ty ++ ":"
+    , ".ascii \"" ++ show ty ++ "\\0\"" ]
 
 isPointer :: Type -> String
 isPointer (TyArray _) = "1"
@@ -240,19 +259,18 @@ isPointer (TyTuple _) = "1"
 isPointer TyNull = "1"
 isPointer _ = "0"
 
-mangleTypeInformation :: Type -> String
-mangleTypeInformation t = "Ty" ++ mangleTypeName t
-
 -- Mangle a name from its types
 mangleTypeName :: Type -> String
-mangleTypeName TyInt = "int"
-mangleTypeName TyChar = "char"
+mangleTypeName TyInt = "i"
+mangleTypeName TyChar = "c"
 mangleTypeName (TyArray t) = "A" ++ mangleTypeName t
-mangleTypeName (TyTuple ts) = "T" ++ concatMap mangleTypeName ts
-mangleTypeName TyBool = "bool"
-mangleTypeName TyVoid = "void"
-mangleTypeName TyNull = "null"
-mangleTypeName TyAny = "any"
-
-
+mangleTypeName (TyTuple ts) = "T" ++ show (length ts) ++ concatMap mangleTypeName ts
+mangleTypeName TyBool = "b"
+mangleTypeName TyVoid = "v"
+mangleTypeName TyNull = "n"
+mangleTypeName TyAny = "a"
+mangleTypeName (TyFFI name) = "F" ++ show (length name) ++ name
+mangleTypeName (TyStruct members)
+  = "S" ++ show (Map.size members)
+        ++ concatMap (\(name, ty) -> "s" ++ show (length name) ++ name ++ mangleTypeName ty) (Map.assocs members)
 

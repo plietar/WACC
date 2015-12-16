@@ -83,6 +83,15 @@ fmapM :: (a -> WACCArguments b) -> WACCResult a -> WACCArguments (WACCResult b)
 fmapM f (OK value)  = let (WACCArgumentsT r) = f value
                       in WACCArgumentsT $ do
                           args <- ask
-                          (return . OK . runReader r) args 
+                          (return . OK . runReader r) args
 fmapM f (Error k m) = return (Error k m)
 
+fmapM2 :: (a -> b -> WACCArguments c) -> WACCResult a -> WACCResult b -> WACCArguments (WACCResult c)
+fmapM2 f (OK value1) (OK value2)
+  = let (WACCArgumentsT r) = f value1 value2
+    in WACCArgumentsT $ do
+       args <- ask
+       (return . OK . runReader r) args
+
+fmapM2 _ (Error k m) _ = return (Error k m)
+fmapM2 _ _ (Error k m) = return (Error k m)

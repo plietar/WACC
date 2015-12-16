@@ -30,7 +30,7 @@ if $debug; then
     qemu-arm -g 1234 -L /usr/arm-linux-gnueabi/ dist/$name < ${2:-/dev/stdin} &
     arm-linux-gnueabihf-gdb \
         -ex "set sysroot /usr/arm-linux-gnueabi" \
-        -ex "target remote localhost:1234" $name
+        -ex "target remote localhost:1234" dist/$name
 else
     qemu-arm -L /usr/arm-linux-gnueabi/ dist/$name < ${2:-/dev/stdin}
 fi

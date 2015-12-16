@@ -8,13 +8,19 @@ import Common.ScopedMap as ScopedMap
 import Common.WACCResult
 import Common.Stuff
 
-import Control.Monad.State
-import Control.Monad.Reader
+import Prelude hiding (mapM)
+import Control.Monad.State hiding (mapM)
+import Control.Monad.Reader hiding (mapM)
+import Control.Monad.Writer hiding (mapM)
 import Control.Monad.Trans
 import Control.Applicative
 
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Set (Set)
+import qualified Data.Set as Set
+
+import Data.Traversable(mapM)
 
 data Context = Context
   { variables    :: ScopedMap String Type
@@ -24,8 +30,8 @@ data Context = Context
   , asyncContext :: Bool
   }
 
-type SemCheck = ReaderT Context (WACCResultT WACCArguments)
-type SemCheckState = StateT Context (WACCResultT WACCArguments)
+type SemCheck = ReaderT Context (WriterT (Set Identifier) (WACCResultT WACCArguments))
+type SemCheckState = StateT Context (WriterT (Set Identifier) (WACCResultT WACCArguments))
 
 liftSemCheck :: SemCheck a -> SemCheckState a
 liftSemCheck m = do
@@ -88,16 +94,22 @@ compatibleType TyNull (TyTuple _) = return True
 compatibleType (TyTuple _) TyNull = return True
 
 compatibleType (TyArray t1) (TyArray t2)
-  = compatibleType t1 t2 
+  = compatibleType t1 t2
 compatibleType (TyTuple ts1) (TyTuple ts2)
   = (andM (zipWith compatibleType ts1 ts2))
     <^(&&)
     (length ts1 == length ts2)
 
+compatibleType (TyStruct ts1) (TyStruct ts2)
+  = all snd <$> mergeStructs compatibleType (Map.assocs ts1) (Map.assocs ts2)
+
 compatibleType (TyChan t1) (TyChan t2)
-  = compatibleType t1 t2 
+  = compatibleType t1 t2
 
 compatibleType t1 t2 = return (t1 == t2)
+
+
+
 
 mergeTypes :: Type -> Type -> SemCheck Type
 mergeTypes t1 TyAny = return t1
@@ -116,9 +128,23 @@ mergeTypes t1@(TyTuple ts1) t2@(TyTuple ts2) = do
 mergeTypes (TyChan t1) (TyChan t2)
   = TyChan <$> mergeTypes t1 t2
 
+mergeTypes (TyStruct ts1) (TyStruct ts2)
+  = TyStruct <$> (Map.fromList <$> mergeStructs mergeTypes (Map.assocs ts1) (Map.assocs ts2))
+
 mergeTypes t1 t2
   | t1 == t2  = return t1
   | otherwise = semanticError ("Types " ++ show t1 ++ " and " ++ show t2 ++ " are not compatible")
+
+mergeStructs :: (Type -> Type -> SemCheck a) -> [(Identifier, Type)] -> [(Identifier, Type)] -> SemCheck [(Identifier, a)]
+mergeStructs _ [] [] = return []
+mergeStructs _ ((n1, t1) : _) [] = semanticError ("Missing field " ++ n1)
+mergeStructs _ [] ((n2, t2) : _) = semanticError ("Missing field " ++ n2)
+mergeStructs f ((n1, t1) : ts1) ((n2, t2) : ts2) = do
+  unless (n1 == n2) (semanticError ("Field mismatch " ++ n1 ++ ", " ++ n2))
+  ty <- f t1 t2
+  tys <- mergeStructs f ts1 ts2
+  return ((n1,ty) : tys)
+
 
 checkType :: Type -> SemCheck Type
 checkType (TyArray elemTy)
@@ -129,10 +155,15 @@ checkType (TyChan elemTy)
   = TyChan <$> checkType elemTy
 checkType (TyName name)
   = getTypeAlias name
+checkType (TyStruct members) = do
+  tell (Set.fromList (Map.keys members))
+  TyStruct <$> mapM checkType members
 checkType ty = return ty
 
 isArrayType :: Type -> SemCheck Bool
-isArrayType = compatibleType (TyArray TyAny)
+isArrayType (TyArray _) = return True
+isArrayType TyAny       = return True
+isArrayType _           = return False
 
 isHeapType :: Type -> SemCheck Bool
 isHeapType (TyTuple _ ) = return True
@@ -165,6 +196,8 @@ isAbstractType (TyTuple [_, TyTuple [TyAny,TyAny]])
   = return False
 isAbstractType (TyTuple tys) = anyM isAbstractType tys
 isAbstractType (TyArray ty)  = isAbstractType ty
+isAbstractType (TyChan ty)   = isAbstractType ty
+isAbstractType (TyStruct tys) = anyM isAbstractType (Map.elems tys)
 isAbstractType _             = return False
 
 isVoidType :: Type -> SemCheck Bool
@@ -209,6 +242,19 @@ checkIndexingElem' baseType@(TyArray t) exprs@((ty, e):es) = do
 checkIndexingElem' t [] = return (t, [])
 checkIndexingElem' t _  = semanticError ("Type " ++ show t ++ " not indexable")
 
+checkStructElem :: Annotated StructElem SpanA -> SemCheck (Annotated StructElem TypeA)
+checkStructElem (_, StructElem baseName members) = do
+  baseTy <- getVariable baseName
+  resultTy <- foldM checkStructElem' baseTy members
+  return (resultTy, StructElem baseName members)
+  where
+    checkStructElem' :: Type -> Identifier -> SemCheck Type
+    checkStructElem' ty@(TyStruct elemsTy) name
+      = case Map.lookup name elemsTy of
+        Just elemTy -> return elemTy
+        Nothing -> semanticError ("No field named " ++ name ++ " in " ++ show ty)
+    checkStructElem' ty _ = semanticError ("Type " ++ show ty ++ " is not a structure")
+
 checkExpr :: Annotated Expr SpanA -> SemCheck (Annotated Expr TypeA)
 checkExpr (_, ExprLit lit) = return (checkLiteral lit, ExprLit lit)
 
@@ -217,8 +263,12 @@ checkExpr (_, ExprVar varname) = do
   return (ty, ExprVar varname)
 
 checkExpr (_, ExprIndexingElem indexElem) = do
-  indexElem'@((t, tys), ts) <- checkIndexingElem indexElem
-  return (t, ExprIndexingElem indexElem')
+  indexElem'@((ty, _), _) <- checkIndexingElem indexElem
+  return (ty, ExprIndexingElem indexElem')
+
+checkExpr (_, ExprStructElem structElem) = do
+  structElem'@(ty, _) <- checkStructElem structElem
+  return (ty, ExprStructElem structElem')
 
 checkExpr (_, ExprUnOp op expr) = do
   expr'@(t1, _) <- checkExpr expr
@@ -291,8 +341,12 @@ checkAssignLHS (_, LHSVar varname) = do
   return (ty, LHSVar varname)
 
 checkAssignLHS (_, LHSIndexingElem indexElem) = do
-  indexElem'@((ty, tys), _) <- checkIndexingElem indexElem
+  indexElem'@((ty, _), _) <- checkIndexingElem indexElem
   return (ty, LHSIndexingElem indexElem')
+
+checkAssignLHS (_, LHSStructElem structElem) = do
+  structElem'@(ty, _) <- checkStructElem structElem
+  return (ty, LHSStructElem structElem')
 
 checkAssignRHS :: Annotated AssignRHS SpanA -> SemCheck (Annotated AssignRHS TypeA)
 checkAssignRHS (_, RHSExpr expr) = do
@@ -303,6 +357,14 @@ checkAssignRHS (_, RHSArrayLit exprs) = do
   exprs' <- mapM checkExpr exprs
   innerType <- foldM mergeTypes TyAny (map fst exprs')
   return (TyArray innerType, RHSArrayLit exprs')
+
+checkAssignRHS (_, RHSStructLit values) = do
+  tell (Set.fromList (Map.keys values))
+
+  values' <- mapM checkAssignRHS values
+  let valuesTy = Map.map fst values'
+
+  return (TyStruct valuesTy, RHSStructLit values')
 
 checkAssignRHS (_, RHSNewTuple exprs) = do
   exprs' <- mapM checkExpr exprs
@@ -368,7 +430,7 @@ checkFire :: Identifier -> [Annotated Expr SpanA] -> SemCheck (Identifier, [Anno
 checkFire fname args = do
   (symbolName, async, expectedArgsType, returnType) <- getFunction fname
   unless async (semanticError ("Cannot fire synchronous function " ++ fname))
-  unlessM (lift . lift $ getArgument runtimeEnabled)
+  unlessM (lift . lift . lift $ getArgument runtimeEnabled)
           (semanticError "Cannot use fire if runtime is disabled")
 
   when (length args > 1) (semanticError ("Function " ++ fname ++ " with more than one argument cannot be fired"))
@@ -570,11 +632,11 @@ defineDecl (_, DeclFunc f) = defineFunction f
 defineDecl (_, DeclType f) = defineTypeAlias f
 defineDecl (_, DeclFFIFunc f) = defineFFIFunc f
 
-checkProgram :: Annotated Program SpanA -> WACCResultT WACCArguments (Annotated Program TypeA)
+checkProgram :: Annotated Program SpanA -> WriterT (Set Identifier) (WACCResultT WACCArguments) (Annotated Program TypeA)
 checkProgram (_, Program decls) = do
   context <- execStateT (forM_ decls defineDecl) emptyContext
   decls' <- runReaderT (forM decls checkDecl) context
   return ((), Program decls')
 
-waccSemCheck :: Annotated Program SpanA -> WACCResultT WACCArguments (Annotated Program TypeA)
-waccSemCheck = checkProgram
+waccSemCheck :: Annotated Program SpanA -> WACCResultT WACCArguments (Annotated Program TypeA, Set Identifier)
+waccSemCheck = runWriterT . checkProgram

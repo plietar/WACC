@@ -31,6 +31,7 @@ tokens :-
   "#".*(\n)            ;
 
   -- Symbols
+  "."                  { \(AlexPn _ line column) s -> ((line, column), TokDot) }
   ","                  { \(AlexPn _ line column) s -> ((line, column), TokComma) }
   ";"                  { \(AlexPn _ line column) s -> ((line, column), TokSemiColon) }
   ":"                  { \(AlexPn _ line column) s -> ((line, column), TokColon) }
@@ -38,12 +39,15 @@ tokens :-
   "]"                  { \(AlexPn _ line column) s -> ((line, column), TokRBracket) }
   "("                  { \(AlexPn _ line column) s -> ((line, column), TokLParen) }
   ")"                  { \(AlexPn _ line column) s -> ((line, column), TokRParen) }
+  "{"                  { \(AlexPn _ line column) s -> ((line, column), TokLBrace) }
+  "}"                  { \(AlexPn _ line column) s -> ((line, column), TokRBrace) }
 
   -- Program Keywords
   begin | end | is | skip | read | free | return | exit | print | println | if
     | then | else | fi | while | do | done | newpair | call | fst | snd | int
     | bool | char | switch | case | string | pair | len | ord | chr | null | tuple | newtuple
     | let | ffi | void | async | await | fire | type | chan
+    | struct
                        { \(AlexPn _ line column) s-> ((line, column), TokKeyword s) }
 
   -- Operators

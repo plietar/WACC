@@ -5,6 +5,7 @@ module CodeGen (genProgram) where
 
 import Arguments
 import Common.AST
+import Common.Stuff
 import CodeGenTypes
 import Features
 
@@ -13,6 +14,7 @@ import Control.Monad.State
 import Control.Applicative
 
 import Data.Set (Set)
+import Data.Map (Map,(!))
 import Data.Tuple(swap)
 import qualified Data.Set as Set
 import qualified Data.Map as Map
@@ -24,26 +26,23 @@ emit xs = tell (CodeGenOutput xs Set.empty)
 emitFeature :: Feature -> CodeGen ()
 emitFeature f = tell (CodeGenOutput [] (Set.singleton f))
 
-genProgram :: Annotated Program TypeA -> WACCArguments ([[IR]], Set Feature)
-genProgram (_, Program fs)
-  = snd <$> evalRWST (mapM genDecl fs) () (map UnnamedLabel [0..])
+genProgram :: Annotated Program TypeA -> Set Identifier -> WACCArguments ([[IR]], Set Feature)
+genProgram (_, Program fs) structMembers
+  = let vtable = Map.fromList . map swap . zip [0,4..] . Set.elems $ structMembers
+        labs = map UnnamedLabel [0..]
+        generation = mapM genDecl fs
+    in snd <$> evalRWST generation vtable labs
 
-genDecl :: Annotated Decl TypeA -> RWST () ([[IR]], Set Feature) [Label] WACCArguments ()
+genDecl :: Annotated Decl TypeA -> RWST (Map Identifier Int) ([[IR]], Set Feature) [Label] WACCArguments ()
 genDecl (_, DeclFunc f) = genFunction f
 genDecl (_, DeclType f) = return ()
 genDecl (_, DeclFFIFunc f) = return ()
 
-genAlloc :: Int -> Type -> CodeGen Var
-genAlloc size t = do
-  sizeVar <- allocateTemp
-  emit [ ILiteral { iDest = sizeVar, iLiteral = LitInt (toInteger size) } ]
-  typeInfoVar <- genGCTypeInfo t
-  genCall1 "GCAlloc" [sizeVar, typeInfoVar]
-
 -- Functions
-genFunction :: Annotated FuncDef TypeA -> RWST () ([[IR]], Set Feature) [Label] WACCArguments ()
+genFunction :: Annotated FuncDef TypeA -> RWST (Map Identifier Int) ([[IR]], Set Feature) [Label] WACCArguments ()
 genFunction (_, FuncDef _ async fname params body) = do
     labs <- get
+    vtable <- ask
 
     let initialState = CodeGenState {
           localNames = map Local [0..],
@@ -53,7 +52,8 @@ genFunction (_, FuncDef _ async fname params body) = do
         }
 
         reader = CodeGenReader {
-            asyncContext = async
+            asyncContext = async,
+            vtableOffsets = vtable
         }
 
         argRegSkip = if async then 1 else 0
@@ -117,6 +117,41 @@ genFunction (_, FuncDef _ async fname params body) = do
 
     put (labels endState)
     tell ([instructions result], features result)
+
+genLiteral :: Literal -> CodeGen Var
+genLiteral lit = do
+  litVar <- allocateTemp
+  emit [ ILiteral { iDest = litVar, iLiteral = lit } ]
+  return litVar
+
+genLitInt :: Integral a => a -> CodeGen Var
+genLitInt = genLiteral . LitInt . fromIntegral
+
+-- Read from local
+genFrameRead :: String -> CodeGen Var
+genFrameRead ident = gets (getFrameLocal ident . frame)
+
+genHeapRead :: Var -> Operand -> Type -> CodeGen Var
+genHeapRead baseVar operand ty = do
+  outVar <- allocateTemp
+  emit [ IHeapRead { iHeapVar = baseVar
+                   , iDest = outVar
+                   , iOperand = operand
+                   , iType = ty } ]
+  return outVar
+
+genHeapWrite :: Var -> Operand -> Var -> Type -> CodeGen ()
+genHeapWrite baseVar operand elemVar ty =
+  emit [ IHeapWrite { iHeapVar = baseVar
+                    , iValue = elemVar
+                    , iOperand = operand
+                    , iType = ty } ]
+
+genAlloc :: Int -> Type -> CodeGen Var
+genAlloc size ty = do
+  sizeVar <- genLitInt size
+  typeInfoVar <- genGCTypeInfo ty
+  genCall1 "GCAlloc" [sizeVar, typeInfoVar]
 
 genYield :: Var -> CodeGen ()
 genYield value = do
@@ -282,7 +317,7 @@ genExpr (_, ExprBinOp BinOpMul expr1 expr2) = do
               , iLeft = var1, iRight = var2 } ]
   return lowVar
 
-genExpr (_ , ExprBinOp operator expr1 expr2) = do
+genExpr (_, ExprBinOp operator expr1 expr2) = do
   outVar <- allocateTemp
   (var1, var2) <- genExpr2 expr1 expr2
   emit [ IBinOp { iBinOp = operator
@@ -294,21 +329,33 @@ genExpr (_ , ExprBinOp operator expr1 expr2) = do
 -- Variable
 genExpr (ty, ExprVar ident) = genFrameRead ident
 
-genExpr (_, ExprIndexingElem ((t, ts), IndexingElem ident exprs)) = do
+genExpr (_, ExprIndexingElem ((_, ts), IndexingElem ident exprs)) = do
+  indexVar <- genFrameRead ident
+  foldM genIndexingRead indexVar (zip ts exprs)
 
-  indexVar    <- genFrameRead ident
-  outVar      <- foldM genIndexingRead indexVar (zip ts exprs)
-  return outVar
+genExpr (_, ExprStructElem (_, StructElem baseName members)) = do
+  baseVar <- genFrameRead baseName
+  foldM genStructRead baseVar members
 
--- Read from Frame
-genFrameRead :: String -> CodeGen Var
-genFrameRead ident = gets (getFrameLocal ident . frame)
+genStructOffset :: Var -> Identifier -> CodeGen Var
+genStructOffset baseVar name = do
+  vtableVar <- genHeapRead baseVar (OperandLit 0) TyInt
+  vtableOffset <- (! name) <$> asks vtableOffsets
+  genHeapRead vtableVar (OperandLit vtableOffset) TyInt
+
+genStructRead :: Var -> Identifier -> CodeGen Var
+genStructRead baseVar name = do
+  offsetVar <- genStructOffset baseVar name
+  genHeapRead baseVar (OperandVar offsetVar 0) TyInt
+
+genStructWrite :: Var -> Identifier -> Var -> CodeGen ()
+genStructWrite baseVar name valueVar = do
+  offsetVar <- genStructOffset baseVar name
+  genHeapWrite baseVar (OperandVar offsetVar 0) valueVar TyInt
 
 -- Read from Tuple/Array
 genIndexingRead :: Var -> (Type, Annotated Expr TypeA) -> CodeGen Var
 genIndexingRead arrayVar ((TyArray elemTy), indexExpr) = do
-
-
   emitFeature CheckArrayBounds
   outVar         <- allocateTemp
   arrayOffsetVar <- allocateTemp
@@ -345,13 +392,20 @@ genAssign (ty, LHSVar ident) valueVar = do
   emit [ IMove { iDest = localVar, iValue = valueVar } ]
 
 genAssign (_, LHSIndexingElem ((elemTy, ts), IndexingElem ident exprs)) valueVar = do
-
-  let readIndexExprs  = init exprs
-      writeIndexExpr  = last exprs
+  let readIndexExprs = init exprs
+      writeIndexExpr = last exprs
 
   indexVar   <- genFrameRead ident
   subIndexVar <- foldM genIndexingRead indexVar (zip ts readIndexExprs)
   genIndexingWrite (last ts) writeIndexExpr subIndexVar valueVar
+
+genAssign (_, LHSStructElem (_, StructElem baseName members)) valueVar = do
+  let readMembers = init members
+      writeMember = last members
+
+  baseVar <- genFrameRead baseName
+  readVar <- foldM genStructRead baseVar readMembers
+  genStructWrite readVar writeMember valueVar
 
 genIndexingWrite :: Type -> Annotated Expr TypeA -> Var -> Var -> CodeGen ()
 genIndexingWrite (TyArray elemTy) writeIndexExpr subIndexVar valueVar = do
@@ -390,14 +444,8 @@ typeShift _      = 2
 genGCTypeInfo :: Type -> CodeGen Var
 genGCTypeInfo t = do
   emitFeature (GCTypeInformation t)
-  let label = mangleTypeInformation t
-  typeInfoVar <- allocateTemp
-  emit [ ILiteral { iDest = typeInfoVar, iLiteral = LitLabel (NamedLabel label) } ]
-  return typeInfoVar
-
-
-
-
+  let label = "_ty_info_" ++ mangleTypeName t
+  genLiteral (LitLabel (NamedLabel label))
 
 -- RHS Expression Assignment
 genRHS :: Annotated AssignRHS TypeA -> CodeGen Var
@@ -425,14 +473,34 @@ genRHS (t@(TyArray elemTy), RHSArrayLit exprs) = do
                  else 0
       elemSize = typeSize elemTy
 
-genRHS (baseTy@(TyTuple types), RHSNewTuple exprs) = do
-  tupleVar <- genAlloc size baseTy
+genRHS (ty, RHSStructLit members) = do
+  structVar <- genAlloc (4 + 4 * Map.size members) ty
+
+  allNames <- asks (Map.keys . vtableOffsets)
+
+  let membersOffsets = Map.fromList (zip (Map.keys members) [4,8..]) :: Map String Int
+  let vtableData = map (fromMaybe 0 . (\x -> Map.lookup x membersOffsets)) allNames
+  let vtableName = mangleVTableName (Map.keys members)
+
+  emitFeature (StructVTable vtableName vtableData)
+  vtableVar <- genLiteral (LitLabel (NamedLabel vtableName))
+
+  genHeapWrite structVar (OperandLit 0) vtableVar TyInt
+
+  forM (zip (Map.elems members) [0..]) $ \(memberRHS, index) -> do
+    memberVar <- genRHS memberRHS
+    genHeapWrite structVar (OperandLit (4 + 4 * index)) memberVar TyInt
+
+  return structVar
+
+genRHS (ty, RHSNewTuple exprs) = do
+  tupleVar <- genAlloc size ty
   forM (zip exprs [0..]) $ \(expr, index) -> do
     elemVar <- genExpr expr
     emit [ IHeapWrite  { iHeapVar = tupleVar
                        , iValue = elemVar
                        , iOperand = OperandLit (index * 4)
-                       , iType = types !! index } ]
+                       , iType = TyInt } ]
   return tupleVar
     where
       size = length exprs * 4
