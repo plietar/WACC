@@ -100,17 +100,15 @@ genFunction (_, FuncDef _ async fname params body) = do
 
             setupArguments
 
-            sizeVar <- allocateTemp
-            emit [ ILiteral { iDest = sizeVar, iLiteral = LitInt 64 } ]
-            stateVar <- genCall1 "malloc" [sizeVar]
+            -- FIXME(paul) allocate the correct amount of memory
+            stateVar <- genAlloc 64 Nothing
             emit [ IMove { iDest = GeneratorState, iValue = stateVar } ]
 
           else setupArguments
 
           genBlock body
 
-          retVal <- allocateTemp
-          emit [ ILiteral { iDest = retVal, iLiteral = LitInt 0 } ]
+          retVal <- genLitInt 0
           genReturn retVal
 
     (endState, result) <- lift (execRWST generation reader initialState)
@@ -147,23 +145,23 @@ genHeapWrite baseVar operand elemVar ty =
                     , iOperand = operand
                     , iType = ty } ]
 
-genAlloc :: Int -> Type -> CodeGen Var
-genAlloc size ty = do
+genAlloc :: Int -> Maybe Type -> CodeGen Var
+genAlloc size maybeTy = do
   sizeVar <- genLitInt size
-  typeInfoVar <- genGCTypeInfo ty
+  typeInfoVar <- case maybeTy of
+    Just ty -> genGCTypeInfo ty
+    Nothing -> genLitInt 0
+
   genCall1 "GCAlloc" [sizeVar, typeInfoVar]
 
 genYield :: Var -> CodeGen ()
 genYield value = do
   continuationLabel <- allocateLabel
-  continuationVar <- allocateTemp
 
-  emit [ ILiteral { iDest = continuationVar, iLiteral = LitLabel continuationLabel }
-       , IHeapWrite { iHeapVar = GeneratorState
-                    , iValue = continuationVar
-                    , iOperand = OperandLit 0
-                    , iType = TyInt }
-       , IMove { iDest = Reg 0, iValue = GeneratorState }
+  continuationVar <- genLiteral (LitLabel continuationLabel)
+  genHeapWrite GeneratorState (OperandLit 0) continuationVar TyInt
+
+  emit [ IMove { iDest = Reg 0, iValue = GeneratorState }
        , IMove { iDest = Reg 1, iValue = value }
        , IYield { iSavedRegs = calleeSaveRegs, iValue = GeneratorState, iSavedContext = [] }
        , ILabel { iLabel = continuationLabel }
@@ -171,22 +169,17 @@ genYield value = do
 
 genReturn :: Var -> CodeGen ()
 genReturn retVal = do
-  async <- asks asyncContext
-  if async
-  then do
-    -- FIXME
-    -- genCall "free" [ GeneratorState ]
-
-    zeroVal <- allocateTemp
-    emit [ ILiteral { iDest = zeroVal, iLiteral = LitInt 0 }
-         , IMove { iDest = Reg 0, iValue = zeroVal }
-         , IMove { iDest = Reg 1, iValue = retVal }
-         , IFrameFree { iSize = 0 }
-         , IReturn { iArgs = [ Reg 0, Reg 1 ], iSavedRegs = [] } ]
-
-  else emit [ IMove { iDest = Reg 0, iValue = retVal }
-            , IFrameFree { iSize = 0 }
-            , IReturn { iArgs = [ Reg 0 ], iSavedRegs = [] } ]
+  ifM (asks asyncContext)
+    (do
+      zeroVal <- genLitInt 0
+      emit [ IMove { iDest = Reg 0, iValue = zeroVal }
+           , IMove { iDest = Reg 1, iValue = retVal }
+           , IFrameFree { iSize = 0 }
+           , IReturn { iArgs = [ Reg 0, Reg 1 ], iSavedRegs = [] } ]
+    )
+    (emit [ IMove { iDest = Reg 0, iValue = retVal }
+          , IFrameFree { iSize = 0 }
+          , IReturn { iArgs = [ Reg 0 ], iSavedRegs = [] } ])
 
 genCall0 :: Identifier -> [Var] -> CodeGen ()
 genCall0 label vars = do
@@ -450,20 +443,16 @@ genGCTypeInfo t = do
 -- RHS Expression Assignment
 genRHS :: Annotated AssignRHS TypeA -> CodeGen Var
 genRHS (_, RHSExpr expr) = genExpr expr
-genRHS (t@(TyArray elemTy), RHSArrayLit exprs) = do
-  arrayLen <- allocateTemp
-  arrayVar <- genAlloc size t
-  emit [ ILiteral { iDest = arrayLen, iLiteral = LitInt (toInteger (length exprs)) }
-       , IHeapWrite { iHeapVar = arrayVar
-                    , iValue = arrayLen
-                    , iOperand = OperandLit 0
-                    , iType = TyInt }]
+genRHS (baseTy@(TyArray elemTy), RHSArrayLit exprs) = do
+  arrayVar <- genAlloc size (Just baseTy)
+
+  arrayLen <- genLitInt (length exprs)
+  genHeapWrite arrayVar (OperandLit 0) arrayLen TyInt
+
   forM (zip exprs [0..]) $ \(expr, index) -> do
     elemVar <- genExpr expr
-    emit [ IHeapWrite  { iHeapVar = arrayVar
-                       , iValue = elemVar
-                       , iOperand = OperandLit (4 + index * elemSize)
-                       , iType = elemTy } ]
+    genHeapWrite arrayVar (OperandLit (4 + index * elemSize)) arrayLen TyInt
+
   return arrayVar
     where
       -- For empty arrays, the element type is TyAny, so we can't get the size
@@ -474,7 +463,7 @@ genRHS (t@(TyArray elemTy), RHSArrayLit exprs) = do
       elemSize = typeSize elemTy
 
 genRHS (ty, RHSStructLit members) = do
-  structVar <- genAlloc (4 + 4 * Map.size members) ty
+  structVar <- genAlloc (4 + 4 * Map.size members) (Just ty)
 
   allNames <- asks (Map.keys . vtableOffsets)
 
@@ -494,7 +483,7 @@ genRHS (ty, RHSStructLit members) = do
   return structVar
 
 genRHS (ty, RHSNewTuple exprs) = do
-  tupleVar <- genAlloc size ty
+  tupleVar <- genAlloc size (Just ty)
   forM (zip exprs [0..]) $ \(expr, index) -> do
     elemVar <- genExpr expr
     emit [ IHeapWrite  { iHeapVar = tupleVar
