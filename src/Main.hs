@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP #-}
 
 module Main where
+import Common.AST
 import Common.WACCResult
 import Frontend.Parser
 import Frontend.Lexer
@@ -16,7 +17,9 @@ import Common.Span
 
 import Data.List (zipWith4)
 import Data.Maybe (fromMaybe)
+import Data.Tuple (swap)
 import qualified Data.Set as Set
+import qualified Data.Map as Map
 
 import Control.Applicative
 import Control.Monad
@@ -45,8 +48,12 @@ compile filename contents output = do
   let tokens = waccLexer filename contents :: WACCResult [(Pos, Token)]
 
   ast       <- runWACCResultT (waccParser filename =<< waccResultT tokens)
-  typedAst  <- runWACCResultT (waccSemCheck =<< waccResultT ast)
-  codeGen   <- fmapM genProgram typedAst
+  typeCheck <- runWACCResultT (waccSemCheck =<< waccResultT ast)
+  let
+    typedAst = fst <$> typeCheck
+    structMembers = snd <$> typeCheck
+
+  codeGen   <- fmapM2 genProgram typedAst structMembers
 
   let
     ir        = fst <$> codeGen

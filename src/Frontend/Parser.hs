@@ -12,6 +12,8 @@ import Arguments
 import Control.Applicative
 import Control.Monad.Trans
 import Data.Int
+import Data.Tuple (swap)
+import qualified Data.Map as Map
 import Text.Parsec.Combinator
 import Text.Parsec.Expr
 import qualified Text.Parsec.Prim as P
@@ -79,6 +81,8 @@ literal = (lit >>= check) <?> "literal"
                          else return x
     check x = return x
 
+dot :: Parser Token
+dot = token TokDot
 semi :: Parser Token
 semi = token TokSemiColon
 comma :: Parser Token
@@ -94,12 +98,16 @@ parens = between (token TokLParen) (token TokRParen)
 brackets :: Parser p -> Parser p
 brackets = between (token TokLBracket) (token TokRBracket)
 
+braces :: Parser p -> Parser p
+braces = between (token TokLBrace) (token TokRBrace)
+
 expr :: Parser (Annotated Expr SpanA)
 expr = buildExpressionParser exprTable term <?> "expression"
   where
     term = parens expr
            <|> spanned (ExprLit <$> literal)
            <|> spanned (ExprIndexingElem <$> indexingElem)
+           <|> spanned (ExprStructElem <$> structElem)
            <|> spanned (ExprVar <$> identifier)
            <?> "term"
 
@@ -138,7 +146,7 @@ parseType = (do
   return (arr t)
   ) <?> "type"
   where
-    notArrayType = baseType <|> pairType <|> tupleType <|> chanType
+    notArrayType = baseType <|> pairType <|> tupleType <|> chanType <|> structType
     baseType = (keyword "int"    $> TyInt) <|>
                (keyword "bool"   $> TyBool) <|>
                (keyword "char"   $> TyChar) <|>
@@ -154,6 +162,12 @@ parseType = (do
       parens (TyTuple <$> (sepBy parseType comma))
 
     chanType = keyword "chan" >> (TyChan <$> parens parseType)
+
+    structType = do
+      keyword "struct"
+      -- FIXME(paul): Check for duplicated fields
+      innerTypes <- braces (sepEndBy (swap <$> ((,) <$> parseType <*> identifier)) comma)
+      return (TyStruct (Map.fromList innerTypes))
 
 voidType :: Parser Type
 voidType = keyword "void" $> TyVoid
@@ -172,16 +186,24 @@ indexingElem = spanned $ do
   where
     index = brackets expr
 
+structElem :: Parser (Annotated StructElem SpanA)
+structElem = spanned $ do
+  name <- P.try (identifier <* P.lookAhead dot)
+  member <- many1 (dot *> identifier)
+  return (StructElem name member)
+
 assignLHS :: Parser (Annotated AssignLHS SpanA)
 assignLHS
   = spanned $ LHSIndexingElem <$> indexingElem <|>
               LHSIndexingElem <$> pairElem <|>
+              LHSStructElem   <$> structElem <|>
               LHSVar <$> identifier
 
 assignRHS :: Parser (Annotated AssignRHS SpanA)
 assignRHS
   = spanned $ rhsExpr <|>
               rhsArrayLit <|>
+              rhsStructLit <|>
               rhsPairElem <|>
               rhsCall <|>
               rhsAwait <|>
@@ -195,6 +217,12 @@ assignRHS
       rhsPairElem = RHSExpr <$> wrapSpan ExprIndexingElem <$> pairElem
       rhsNewPair  = keyword "newpair" *> parens (RHSNewTuple <$> ((\a b -> [a,b]) <$> expr <* comma <*> expr))
       rhsNewTuple = keyword "newtuple" *> parens (RHSNewTuple <$> (sepBy expr comma))
+
+      rhsStructLit = do
+        keyword "struct"
+        -- FIXME(paul): Check for duplicated fields
+        values <- braces (sepEndBy ((,) <$> identifier <* equal <*> assignRHS) comma)
+        return (RHSStructLit (Map.fromList values))
 
       rhsCall = do
         keyword "call"
@@ -259,7 +287,7 @@ forStmt = spanned $ do
   c <- expr
   e <- expr
   b <- block
-  return (StmtFor i c e b)  
+  return (StmtFor i c e b)
 
 ifStmt :: Parser (Annotated Stmt SpanA)
 ifStmt = spanned $ do
