@@ -453,7 +453,7 @@ genRHS (baseTy@(TyArray elemTy), RHSArrayLit exprs) = do
 
   forM (zip exprs [0..]) $ \(expr, index) -> do
     elemVar <- genExpr expr
-    genHeapWrite arrayVar (OperandLit (4 + index * elemSize)) arrayLen TyInt
+    genHeapWrite arrayVar (OperandLit (4 + index * elemSize)) elemVar TyInt
 
   return arrayVar
     where
