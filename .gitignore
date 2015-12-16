@@ -38,3 +38,4 @@ testing/test_files/
 *.nav
 *.toc
 dist
+.vagrant
