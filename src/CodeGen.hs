@@ -148,11 +148,13 @@ genHeapWrite baseVar operand elemVar ty =
 genAlloc :: Int -> Maybe Type -> CodeGen Var
 genAlloc size maybeTy = do
   sizeVar <- genLitInt size
-  typeInfoVar <- case maybeTy of
-    Just ty -> genGCTypeInfo ty
-    Nothing -> genLitInt 0
-
-  genCall1 "GCAlloc" [sizeVar, typeInfoVar]
+  ifM (lift $ getArgument runtimeEnabled)
+    (do
+      typeInfoVar <- case maybeTy of
+        Just ty -> genGCTypeInfo ty
+        Nothing -> genLitInt 0
+      genCall1 "GCAlloc" [sizeVar, typeInfoVar])
+    (genCall1 "malloc" [sizeVar])
 
 genYield :: Var -> CodeGen ()
 genYield value = do
@@ -542,7 +544,9 @@ genStmt (_, StmtFree expr@(ty, _)) = do
       genCall0 "p_check_null_pointer" [v]
       emitFeature CheckNullPointer
     _ -> return ()
---  genCall0 "free" [v]
+
+  unlessM (lift $ getArgument runtimeEnabled)
+    (genCall0 "free" [v])
 
 genStmt (_, StmtReturn expr) = do
   v <- genExpr expr
