@@ -146,7 +146,6 @@ uint32_t *GCInternalAlloc(uint byte_size, type_info *type_information, uint32_t 
 // Return: Address of the object data.
 //         Empty header at OBJECT_HEADER_START(address)
 uint32_t *allocateWordsNoGC(uint objWords, Page **list, colour colour) {
-
   Page *page = getValidPage(list, objWords);
   page->space = colour;
   uint32_t *objHeaderAddress = PAGE_DATA_START(page) + page->usedWords;
@@ -196,10 +195,10 @@ void forwardHeapPointers(Page *page) {
 
   while ((uint32_t *) header < end) {
     if (header->forwardReference == NULL) {
+      type_info *typeInfo = header->typeInfo;
+      uint32_t *data = OBJECT_DATA_START(header);
       if (header->typeInfo != NULL) {
-        type_info *typeInfo = header->typeInfo;
-        uint32_t *data = OBJECT_DATA_START(header);
-        if (typeInfo->isArray) {
+                if (typeInfo->isArray) {
           uint32_t arraySize = *data;
           data++; // Skip size field
           for (int i = 0; i < arraySize; i++) {
@@ -220,6 +219,18 @@ void forwardHeapPointers(Page *page) {
         }
       } else {
         // Async object 
+        // Scan object for possible references in the heap.
+
+        for (uint32_t *ptr = data; ptr < header + header->objWords; ptr++) {
+          if (isAmbiguousRoot((uint32_t *) *ptr)) {
+            Page *refPage = getPage((uint32_t *) *ptr);
+            if (refPage->space == WHITE) {
+              removePage(refPage);
+              insert(refPage, &GREY_PAGES);
+              promote(refPage, GREY);
+            }
+          }
+        }
       }
     }
     header = (object_header *) ( ((uint32_t *) header) + header->objWords);
