@@ -1,37 +1,34 @@
 #include "list.h"
-#include "task.h"
 
-#include <stddef.h>
-
-bool list_empty(wacc_task *list) {
-    return list == NULL;
+bool list_empty(list_head *list) {
+    return (*list) == NULL;
 }
 
-void list_insert(wacc_task **list, wacc_task *task) {
-    task->next = *list;
-    task->prev = NULL;
+void list_insert(list_head *list, list_elem *elem) {
+    elem->next = *list;
+    elem->prev = NULL;
 
     if (*list != NULL) {
-        (*list)->prev = task;
+        (*list)->prev = elem;
     }
 
-    *list = task;
+    *list = elem;
 }
 
-void list_remove(wacc_task **list, wacc_task *task) {
-    if (task->next != NULL) {
-        task->next->prev = task->prev;
+void list_remove(list_head *list, list_elem *elem) {
+    if (elem->next != NULL) {
+        elem->next->prev = elem->prev;
     }
 
-    if (task->prev != NULL) {
-        task->prev->next = task->next;
+    if (elem->prev != NULL) {
+        elem->prev->next = elem->next;
     }
 
-    if (*list == task) {
-        *list = task->next;
+    if (*list == elem) {
+        *list = elem->next;
     }
 
-    task->next = NULL;
-    task->prev = NULL;
+    elem->next = NULL;
+    elem->prev = NULL;
 }
 

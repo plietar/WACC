@@ -4,14 +4,14 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-typedef struct wacc_task wacc_task;
+typedef struct list_elem *list_head;
 
 typedef struct wacc_channel {
     uint32_t buffer;
     bool full;
 
-    wacc_task *recv_list;
-    wacc_task *send_list;
+    list_head recv_list;
+    list_head send_list;
 } wacc_channel;
 
 wacc_channel *wacc_channel_create();

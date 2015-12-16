@@ -19,7 +19,7 @@ void GCInit();
 void GCFree();
 
 uint32_t task_count = 0;
-wacc_task *ready_tasks = NULL;
+list_head ready_tasks = NULL;
 heap *sleep_tasks;
 int epoll_fd;
 
@@ -31,7 +31,7 @@ uint64_t millis() {
 
 void start_task(const char *name, task_entry entry, uint32_t argument) {
     wacc_task *task = task_create(name, entry, argument);
-    list_insert(&ready_tasks, task);
+    list_insert(&ready_tasks, &task->current_list);
 
     task_count += 1;
 }
@@ -40,9 +40,14 @@ void wacc_fire(task_entry entry, wacc_string *name, uint32_t argument) {
     start_task(name->data, entry, argument);
 }
 
-void task_wakeup(wacc_task *task, wacc_task **task_list) {
-    list_remove(task_list, task);
-    list_insert(&ready_tasks, task);
+void task_pause(wacc_task *task, list_head *new_list) {
+    list_remove(&ready_tasks, &task->current_list);
+    list_insert(new_list, &task->current_list);
+}
+
+void task_wakeup(wacc_task *task, list_head *old_list) {
+    list_remove(old_list, &task->current_list);
+    list_insert(&ready_tasks, &task->current_list);
 }
 
 void register_socket(wacc_sock *sock) {
@@ -90,13 +95,14 @@ int main() {
     start_task("main", wacc_main, 0);
 
     for (;;) {
-        for (wacc_task *task = ready_tasks; task != NULL; ) {
+        for (list_elem *elem = ready_tasks; elem != NULL; ) {
+            wacc_task *task = list_get(elem, wacc_task, current_list);
+            list_elem *next = elem->next;
+
             yield_cmd *cmd = task_execute(task);
 
-            wacc_task *next = task->next;
-
             if (task->state == 0) {
-                list_remove(&ready_tasks, task);
+                list_remove(&ready_tasks, elem);
                 task_destroy(task);
                 task_count -= 1;
             } else {
@@ -105,30 +111,27 @@ int main() {
                         break;
 
                     case CMD_SLEEP:
-                        list_remove(&ready_tasks, task);
+                        list_remove(&ready_tasks, elem);
                         heap_insert(sleep_tasks, cmd->wakeup_time, task);
                         break;
 
                     case CMD_WAIT:
-                        list_remove(&ready_tasks, task);
-                        list_insert(cmd->wait_list, task);
+                        task_pause(task, cmd->wait_list);
                         break;
 
                     case CMD_POLL_READ:
-                        list_remove(&ready_tasks, task);
-                        list_insert(&cmd->sock->recv_list, task);
+                        task_pause(task, &cmd->sock->recv_list);
                         update_socket(cmd->sock);
                         break;
 
                     case CMD_POLL_WRITE:
-                        list_remove(&ready_tasks, task);
-                        list_insert(&cmd->sock->send_list, task);
+                        task_pause(task, &cmd->sock->send_list);
                         update_socket(cmd->sock);
                         break;
                 }
             }
 
-            task = next;
+            elem = next;
         }
 
         if (task_count == 0) {
@@ -136,7 +139,7 @@ int main() {
         }
 
         int timeout = 0;
-        if (list_empty(ready_tasks)) {
+        if (list_empty(&ready_tasks)) {
             uint64_t next_wakeup;
             if (heap_peek(sleep_tasks, &next_wakeup, NULL)) {
                 uint64_t now = millis();
@@ -156,20 +159,24 @@ int main() {
             wacc_sock *sock = evs[i].data.ptr;
 
             if (evs[i].events & EPOLLIN) {
-                for (wacc_task *task = sock->recv_list; task != NULL;) {
-                    wacc_task *next = task->next;
+                for (list_elem *elem = ready_tasks; elem != NULL; ) {
+                    wacc_task *task = list_get(elem, wacc_task, current_list);
+                    list_elem *next = elem->next;
+
                     task_wakeup(task, &sock->recv_list);
 
-                    task = next;
+                    elem = next;
                 }
             }
 
             if (evs[i].events & EPOLLOUT) {
-                for (wacc_task *task = sock->send_list; task != NULL;) {
-                    wacc_task *next = task->next;
+                for (list_elem *elem = ready_tasks; elem != NULL; ) {
+                    wacc_task *task = list_get(elem, wacc_task, current_list);
+                    list_elem *next = elem->next;
+
                     task_wakeup(task, &sock->send_list);
 
-                    task = next;
+                    elem = next;
                 }
             }
         }
@@ -179,7 +186,7 @@ int main() {
         while (heap_peek(sleep_tasks, &next_wakeup, NULL) && next_wakeup <= now) {
             wacc_task *task;
             heap_pop(sleep_tasks, NULL, &task);
-            list_insert(&ready_tasks, task);
+            list_insert(&ready_tasks, &task->current_list);
         }
     }
     GCFree();

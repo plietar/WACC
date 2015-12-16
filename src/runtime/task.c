@@ -9,6 +9,7 @@ wacc_task *task_create(const char *name, task_entry entry, uint32_t argument) {
     task->entry = entry;
     task->state = 0;
     task->argument = argument;
+    return task;
 }
 
 void task_destroy(wacc_task *task) {

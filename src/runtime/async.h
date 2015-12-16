@@ -14,7 +14,7 @@
     } while (0)
 
 typedef struct wacc_sock wacc_sock;
-typedef struct wacc_task wacc_task;
+typedef struct list_elem *list_head;
 
 typedef struct yield_cmd {
     enum {
@@ -28,7 +28,7 @@ typedef struct yield_cmd {
     union {
         uint64_t wakeup_time;
         wacc_sock *sock;
-        wacc_task **wait_list;
+        list_head *wait_list;
     };
 } yield_cmd;
 

@@ -3,14 +3,14 @@
 
 #include <stdint.h>
 
-typedef struct wacc_task wacc_task;
+typedef struct list_elem *list_head;
 typedef struct wacc_string wacc_string;
 
 typedef struct wacc_sock {
     int fd;
 
-    wacc_task *recv_list;
-    wacc_task *send_list;
+    list_head recv_list;
+    list_head send_list;
 } wacc_sock;
 
 wacc_sock *wacc_socket();

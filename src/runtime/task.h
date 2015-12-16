@@ -1,6 +1,8 @@
 #ifndef TASK_H
 #define TASK_H
 
+#include "list.h"
+
 #include <stdint.h>
 
 typedef struct yield_cmd yield_cmd;
@@ -13,8 +15,8 @@ typedef struct wacc_task {
     uint32_t state;
     uint32_t argument;
 
-    struct wacc_task *next;
-    struct wacc_task *prev;
+    list_elem current_list;
+    list_elem all_list;
 } wacc_task;
 
 wacc_task *task_create(const char *name, task_entry entry, uint32_t argument);

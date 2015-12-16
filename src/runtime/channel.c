@@ -4,7 +4,7 @@
 
 #include <stdlib.h>
 
-void task_wakeup(wacc_task *task, wacc_task **task_list);
+void task_wakeup(wacc_task *task, list_head *old_list);
 
 wacc_channel *wacc_channel_create() {
     wacc_channel *ch = malloc(sizeof *ch);
@@ -24,7 +24,8 @@ uint64_t wacc_channel_receive(uint32_t _state, wacc_channel *ch) {
         ch->full = false;
 
         if (ch->send_list != NULL) {
-            task_wakeup(ch->send_list, &ch->send_list);
+            task_wakeup(list_get(ch->send_list, wacc_task, current_list),
+                        &ch->send_list);
         }
 
         EXIT(ch->buffer);
@@ -56,7 +57,8 @@ uint64_t wacc_channel_send(uint32_t _state, wacc_channel *_ch, uint32_t _value) 
         state->ch->buffer = state->value;
 
         if (state->ch->recv_list != NULL) {
-            task_wakeup(state->ch->recv_list, &state->ch->recv_list);
+            task_wakeup(list_get(state->ch->recv_list, wacc_task, current_list),
+                        &state->ch->recv_list);
         }
 
         EXIT(0);
