@@ -39,3 +39,5 @@ testing/test_files/
 *.toc
 dist
 .vagrant
+*.a
+*.d
