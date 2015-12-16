@@ -22,8 +22,8 @@ RUNTIME="runtime"
 RUNTIME_DIR="src/runtime"
 
 ./compile --with-runtime ${1} -o dist/${name}.s
-arm-linux-gnueabi-gcc $CFLAGS \
-  -L${RUNTIME_DIR} -l${RUNTIME} dist/${name}.s -o dist/$name  
+arm-linux-gnueabi-gcc $CFLAGS dist/${name}.s \
+  -L${RUNTIME_DIR} -l${RUNTIME} -o dist/$name
 
 if $debug; then
     trap 'kill $(jobs -p)' EXIT

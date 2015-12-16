@@ -13,4 +13,4 @@ libruntime.a: GC/GC.o GC/Page.o GC/PrintMethods.o async.o channel.o list.o main.
 	$(CC) -c $(CFLAGS) $< -o $@
 
 .PHONY: all
-	
+
