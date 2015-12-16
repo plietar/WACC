@@ -3,15 +3,15 @@
 
 void printMemoryUsage() {
   printf("-------------------------Memory Usage Summary-----------------------\n");
-  printf("Total Memory from OS: \t%d bytes\n", total_pages_handled * PAGE_WORDS * 4);
-  printf("Total Memory requested: %d bytes\n", total_memory_requested);
-  printf("Total Memory freed: \t%d bytes\n", total_memory_freed);
-  printf("Total pages handled: \t%d\n", total_pages_handled);
-  printf("Free pages: \t\t%d\n", total_pages_handled - allocated_pages);
-  printf("Freed pages: \t\t%d\n", freed_pages);
-  printf("Page lists: \n");
-  printf("Calls to copy: %d\n", callsToCopy);
-  printf("Calls to alloc: %d\n", GC_Alloc_Calls);
+  printf("Total Memory used from the OS: \t%d bytes\n", total_pages_handled * PAGE_WORDS * 4);
+  printf("Total Memory requested: \t%d bytes\n", total_memory_requested);
+  printf("Total Memory allocated: \t%d bytes\n", total_memory_allocated);
+  printf("Total Memory freed:     \t%d bytes\n", total_memory_freed);
+  printf("Total pages count:      \t%d\n", total_pages_handled);
+  printf("Free pages available:   \t%d\n", total_pages_handled - allocated_pages);
+  printf("Freed pages during collection: %d\n", freed_pages);
+  printf("Number of Calls to copy:  %d\n", callsToCopy);
+  printf("Number of Calls to alloc: %d\n", GC_Alloc_Calls);
 }
 
 

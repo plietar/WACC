@@ -1,9 +1,17 @@
 CABAL=cabal
-all:
-	$(CABAL) update
-	$(CABAL) install fgl optparse-applicative
-	$(CABAL) configure -f -graphviz
+RUNTIME=src/runtime/
+
+all: compiler runtime
+
+compiler:
+#	$(CABAL) update
+#	$(CABAL) install fgl optparse-applicative
+#	$(CABAL) configure -f -graphviz
 	$(CABAL) build
 
-.PHONY: all
 
+
+runtime:
+	$(MAKE) -C $(RUNTIME)
+	
+.PHONY: all

@@ -2,6 +2,7 @@
 \usepackage{graphicx}
 \usepackage{listings}
 \usepackage{color}
+\usepackage{listings}
 
 \topmargin0.0cm
 \headheight0.0cm
@@ -97,6 +98,67 @@ Design patterns used and design choices made throughout the project.
 \subsection{Register Spilling}
 \subsection{Concurrency}
 \subsection{Garbage Collection}
+For our WACC compiler, we decided it would be very interesting to manage our own heap memory instead of needing explicit allocation and freeing of memory. In this way we researched the different types of Garbage Collectors that
+are commonly implemented. Our garbage collector is not any one of the following: Copying, Generational, Concurrent,
+We decided to implement a Mostly-Copying Collector, that minimises the number of copies it needs to perform, thus 
+having good performance.
+
+Reference counting garbage collectors cannot free cyclic objects, so we discarded it. 
+
+We have based our design on a paper by Antony L Hosking "Portable, Mostly-Concurrent, Mostly-Copying Garbage Collection for Multi-Processors". A code fragment from that paper follows. 
+\begin{lstlisting} [mathescape]
+
+proc promote(p,color) ≡ 
+  white := white \{p}; 
+  color := color $\cup$ {p}.
+
+proc trace() ≡ 
+  foreach p $\in$ grey do
+    grey := grey\{p};
+    foreach l $\in$ pointer locations(p) do
+      move (l)
+    end;
+    black := black $ \cup $ {p}
+  end.
+
+proc move(l) ≡ 
+  r := l$\uparrow$; // r is the object pointed to by l
+  if page (r) $\in$ white then 
+    if r′ = nil then
+      r′ := copy(r);
+      grey := grey $ \cup $ {page(r′)}
+    end;
+  l$\uparrow$ := r′
+  end.
+
+proc gc() ≡
+  white := black; grey := {}; black := {}; 
+  foreach r $\in$ AR where page(r) $\in$ white do
+    promote(page(r), grey);
+  end;
+  trace();
+  foreach p $\in$ white do free(p) end.
+ 
+\end{lstlisting}
+
+The heap is a blocked of aligned memory requested to the operating system. We divide the heap into Pages of a fixed
+size. We chose the alignment boundary for the allocated memory to be the same as the page size, which allows us
+to easily determine the page in which an object is allocated, given the object pointer (simply by rounding the pointer
+down to the boundary alignment). In each page, we allocate objects until the page is full. In addition for the space 
+to allocate the object, each object requires a header, where we keep vital information about the objects. This of course produces an overhead in 
+memory usage that is usually unnecessary in Non Garbage-Collected languages. 
+
+
+This paper and algorithm build up on Joel Bartlett's Mostly-Copying Garbage Collector. Although Bartlett's 
+original implementation is a Generational collector, for lack of time, we decided to use a different algorithm based
+upon the previous pseudo-code implementation. This implementation uses Dijkstra's tricolouring abstraction to explain
+the classification of allocated pages in the heap. During normal allocation, only Black pages exist. All objects are 
+thus allocated into Black pages. During Collection, all black pages are converted into White pages, which can be 
+considered the "condemned pages", since all the pages remaining White at the end of the collection process will be 
+collected and freed. 
+
+
+
 \subsection{Improving If Statements}
 We decided to extend the WACC language with additional conditional branching statements; `if' statements without an `else' branch and `switch' statements. Initially to implement the `if' statements without an `else' branch we defined a new data type called `StmtIfNoElse' which had only the condition and the `then' branch associated with it but this added a lot of repetitive code as it was extremely similar to our `StmtIf'. To overcome this problem, we made use of Haskell's Maybe monad to  define `if' statements to have a Maybe block. We then had to change Parser.hs to allow this new syntax and then we had to add the new semantics to SemCheck.hs. The difference in semantic checking between an `if' statement with an `else' branch and one without was that in the case where the `else' block was empty we had to show that the `if' statement never necessarily returns a value.  Finally we had to ensure the correct assembly code was generated which meant changing CodeGen.hs to have a case expression to deal with if the block contained a value (Just b) or was empty (Nothing).
 For `switch' statements we had to define new keywords in lexer.x for `switch' and `case'. Then, similarly we had to add switch statements to our semantic checker and parser and edit how the assembly code is generated.

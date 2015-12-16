@@ -15,13 +15,15 @@ if $debug; then
     CFLAGS="$CFLAGS -g"
 fi
 
-RUNTIME="src/GC/GC.c src/GC/Page.c src/GC/PrintMethods.c src/runtime/main.c "
-RUNTIME+="src/runtime/list.c src/runtime/task.c src/runtime/network.c "
-RUNTIME+="src/runtime/async.c src/runtime/heap.c src/runtime/channel.c "
+#RUNTIME="src/GC/GC.c src/GC/Page.c src/GC/PrintMethods.c src/runtime/main.c "
+#RUNTIME+="src/runtime/list.c src/runtime/task.c src/runtime/network.c "
+#RUNTIME+="src/runtime/async.c src/runtime/heap.c src/runtime/channel.c "
+RUNTIME="runtime"
+RUNTIME_DIR="src/runtime"
 
 ./compile --with-runtime ${1} -o dist/${name}.s
 arm-linux-gnueabi-gcc $CFLAGS \
-  -o dist/$name dist/${name}.s ${RUNTIME}
+  -L${RUNTIME_DIR} -l${RUNTIME} dist/${name}.s -o dist/$name  
 
 if $debug; then
     trap 'kill $(jobs -p)' EXIT
