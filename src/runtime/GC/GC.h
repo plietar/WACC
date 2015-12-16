@@ -63,6 +63,7 @@ extern uint32_t *top_stack;
 extern uint allocated_pages;
 extern uint total_pages_handled;
 extern uint total_memory_requested;
+extern uint total_memory_allocated; // Includes object headers
 extern uint total_memory_freed;
 extern uint freed_pages;
 extern uint GC_Alloc_Calls;

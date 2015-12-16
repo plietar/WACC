@@ -6,7 +6,8 @@
 uint32_t *top_stack = NULL;
 uint allocated_pages = 0;
 uint total_pages_handled = 0;
-uint total_memory_requested = 0;
+uint total_memory_requested = 0; // Without object headers
+uint total_memory_allocated = 0; // Includes object headers
 uint total_memory_freed = 0;
 uint freed_pages = 0;
 uint GC_Alloc_Calls = 0;
@@ -110,6 +111,7 @@ void GCCollect(uint32_t *bottom_stack) {
 
 uint32_t *GCInternalAlloc(uint byte_size, type_info *type_information, uint32_t *bottom_stack) {
   total_memory_requested += byte_size;
+  total_memory_allocated += byte_size + sizeof(object_header) * 4;
   GC_Alloc_Calls++;
   if (GC_Alloc_Calls == GC_Last_Calls + 100000) {
     GC_Last_Calls = GC_Alloc_Calls;
@@ -188,39 +190,40 @@ bool isAmbiguousRoot(uint32_t *ptr) {
 // GREY set
 void forwardHeapPointers(Page *page) {
   assert(page->space == GREY);
-
   uint32_t *start = PAGE_DATA_START(page);
   uint32_t *end = start + page->usedWords;
   object_header *header = (object_header *) start;
 
-    while ((uint32_t *) header < end) {
-    if (header->typeInfo != NULL) {
-      type_info *typeInfo = header->typeInfo;
-      uint32_t *data = OBJECT_DATA_START(header);
-      if (typeInfo->isArray) {
-
-        uint32_t arraySize = *data;
-        data++; // Skip size field
-        for (int i = 0; i < arraySize; i++) {
-          if (typeInfo->elemIsPtr[0]) {
-            if (*(data + i) !=  NULL) {
-              *(data + i) = moveReference((uint32_t *) *(data + i));
+  while ((uint32_t *) header < end) {
+    if (header->forwardReference == NULL) {
+      if (header->typeInfo != NULL) {
+        type_info *typeInfo = header->typeInfo;
+        uint32_t *data = OBJECT_DATA_START(header);
+        if (typeInfo->isArray) {
+          uint32_t arraySize = *data;
+          data++; // Skip size field
+          for (int i = 0; i < arraySize; i++) {
+            if (typeInfo->elemIsPtr[0]) {
+              if (*(data + i) !=  NULL) {
+                *(data + i) = moveReference((uint32_t *) *(data + i));
+              }
+            }
+          }
+        } else {
+          for (int i = 0; i < typeInfo->nElem; i++) {
+            if (typeInfo->elemIsPtr[i]) {
+              if (*(data + i) !=  NULL) {
+                *(data + i) = moveReference((uint32_t *) *(data + i));
+              }
             }
           }
         }
       } else {
-        for (int i = 0; i < typeInfo->nElem; i++) {
-          if (typeInfo->elemIsPtr[i]) {
-            if (*(data + i) !=  NULL) {
-              *(data + i) = moveReference((uint32_t *) *(data + i));
-            }
-          }
-        }
+        // Async object 
       }
     }
     header = (object_header *) ( ((uint32_t *) header) + header->objWords);
   }
-
 }
 
 
