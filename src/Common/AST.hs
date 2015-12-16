@@ -152,7 +152,7 @@ instance Show Type where
   show (TyTuple ts) = "tuple(" ++ intercalate ", " (map show ts) ++ ")"
   show (TyArray t)  = show t ++ "[]"
   show (TyChan t)   = "chan(" ++ show t ++ ")"
-  show (TyStruct ts) = "struct{ " ++ concatMap (\(name, ty) -> show name ++ " " ++ show ty ++ "; ") (Map.assocs ts) ++ "}"
+  show (TyStruct ts) = "struct{ " ++ concatMap (\(name, ty) -> show ty ++ " " ++ name ++ "; ") (Map.assocs ts) ++ "}"
   show (TyName n)   = show n
   show (TyFFI n)    = n
   show TyAny        = "any"

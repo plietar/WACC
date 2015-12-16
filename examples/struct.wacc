@@ -1,11 +1,12 @@
 begin
   type point2d = struct { int x, int y };
+  type point3d = struct { int x, int y, int z };
 
   void print_point2d(point2d p) is
     println "point(", p.x, ", ", p.y, ")"
   end
 
-  void print_point3d(struct { int x, int y, int z } p) is
+  void print_point3d(point3d p) is
     println "point(", p.x, ", ", p.y, ", ", p.z, ")"
   end
 
@@ -20,8 +21,13 @@ begin
     z = 8
   };
 
+  let c : pair(pair, pair) = newpair(null, null);
+
+  let b2 : point2d = b;
+  #let a2 : point3d = a;
+
   call print_point2d(a);
-  #call print_point2d(b);
+  call print_point2d(b);
   #call print_point3d(a);
   call print_point3d(b)
 end
