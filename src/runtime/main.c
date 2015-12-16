@@ -20,6 +20,7 @@ void GCFree();
 
 uint32_t task_count = 0;
 list_head ready_tasks = NULL;
+list_head all_tasks = NULL;
 heap *sleep_tasks;
 int epoll_fd;
 
@@ -31,9 +32,16 @@ uint64_t millis() {
 
 void start_task(const char *name, task_entry entry, uint32_t argument) {
     wacc_task *task = task_create(name, entry, argument);
+    list_insert(&all_tasks, &task->all_list);
     list_insert(&ready_tasks, &task->current_list);
 
     task_count += 1;
+}
+
+void kill_task(wacc_task *task) {
+    list_remove(&all_tasks, &task->all_list);
+    task_destroy(task);
+    task_count -= 1;
 }
 
 void wacc_fire(task_entry entry, wacc_string *name, uint32_t argument) {
@@ -103,8 +111,7 @@ int main() {
 
             if (task->state == 0) {
                 list_remove(&ready_tasks, elem);
-                task_destroy(task);
-                task_count -= 1;
+                kill_task(task);
             } else {
                 switch (cmd->type) {
                     case CMD_YIELD:
