@@ -1,5 +1,6 @@
 CABAL=cabal
 RUNTIME=src/runtime/
+GC=src/GC/
 
 all: compiler
 
@@ -11,5 +12,11 @@ compiler:
 
 runtime:
 	$(MAKE) -C $(RUNTIME)
+gc:
+	$(MAKE) -C $(GC)
+clean:
+	cabal clean
+	$(MAKE) -C $(RUNTIME) clean
+	$(MAKE) -C $(GC) clean
 	
-.PHONY: all
+.PHONY: all clean

@@ -159,7 +159,7 @@ genBinOp op left right = do
 genAlloc :: Int -> Maybe Type -> CodeGen Var
 genAlloc size maybeTy = do
   sizeVar <- genLitInt size
-  ifM (lift $ getArgument runtimeEnabled)
+  ifM (lift $ getArgument gcEnabled)
     (do
       typeInfoVar <- case maybeTy of
         Just ty -> genGCTypeInfo ty
@@ -535,7 +535,7 @@ genStmt (_, StmtFree expr@(ty, _)) = do
         emitFeature CheckNullPointer
       _ -> return ()
 
-  unlessM (lift $ getArgument runtimeEnabled)
+  unlessM (lift $ getArgument gcEnabled)
     (genCall0 "free" [v])
 
 genStmt (_, StmtReturn expr) = do

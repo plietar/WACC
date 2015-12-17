@@ -21,6 +21,7 @@ data Feature = CheckDivideByZero
               | ThrowRuntimeError
               | ThrowOverflowError
               | NoRuntime
+              | NoRuntimeGC
               | StructVTable String [Int]
               | GCTypeInformation Type
               deriving (Show, Eq, Ord)
@@ -40,6 +41,7 @@ dependantOn ThrowOverflowError = Set.fromList [ThrowOverflowError,ThrowRuntimeEr
 dependantOn ThrowRuntimeError  = Set.fromList [ThrowRuntimeError, PrintString]
 dependantOn ThrowDoubleFreeError = Set.fromList [ThrowDoubleFreeError, PrintString]
 dependantOn NoRuntime          = Set.fromList [NoRuntime, ThrowDoubleFreeError, PrintString]
+dependantOn NoRuntimeGC          = Set.fromList [NoRuntimeGC, ThrowDoubleFreeError, PrintString]
 dependantOn feature            = Set.fromList [feature]
 
 genFeature :: Feature -> ([String], [String])
@@ -212,6 +214,21 @@ genFeature NoRuntime = ([],
                          , "LDR r1, =p_throw_double_free"
                          , "BL signal"
                          , "BL wacc_main" 
+                         , "POP {pc}" ])
+
+genFeature NoRuntimeGC = ([],
+                         [ ".global main"
+                         , "main:"
+                         , "PUSH {lr}"
+                         , "BL GCInit"
+                         , "MOV r0, #-5"
+                         , "MOV r1, #2"
+                         , "BL mallopt"
+                         , "MOV r0, #6"
+                         , "LDR r1, =p_throw_double_free"
+                         , "BL signal"
+                         , "BL wacc_main"
+                         , "BL GCFree"
                          , "POP {pc}" ])
 
 genFeature (StructVTable lbl offsets)

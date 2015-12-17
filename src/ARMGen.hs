@@ -62,7 +62,10 @@ genARM irs = snd <$> execRWST generation () (ARMState (map (("msg_" ++) . show) 
     generation :: ARMGen ()
     generation = do
       mapM genARMInstruction irs
-      unlessM (lift $ getArgument runtimeEnabled) (emitFeature NoRuntime)
+      unlessM (lift $ getArgument runtimeEnabled) 
+        (ifM (lift $ getArgument gcEnabled) 
+                (emitFeature NoRuntimeGC)
+                (emitFeature NoRuntime))
 
 genARMInstruction :: IR -> ARMGen ()
 genARMInstruction (ILiteral { iDest = dest, iLiteral = LitNull })

@@ -26,6 +26,7 @@ data OutputType = OutputTokens
 data Arguments = Arguments
                  { outputType :: OutputType
                  , runtimeEnabled :: Bool
+                 , gcEnabled :: Bool
                  , noNullPair :: Bool
                  , outputFile :: Maybe String
                  , sourceFile :: String
@@ -49,6 +50,7 @@ argumentList = Arguments
 #endif
                     <|> pure OutputASM)
                <*> switch (long "with-runtime")
+               <*> switch (long "with-gc")
                <*> switch (long "no-null-pair")
                <*> (optional (strOption (short 'o' <> metavar "OUTPUT")))
                <*> argument str (metavar "INPUT")

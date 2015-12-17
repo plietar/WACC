@@ -6,6 +6,18 @@ then debug=true; shift
 else debug=false
 fi
 
+if [[ $1 == --with-runtime ]]
+then runtime=true; shift
+else runtime=false
+fi
+
+if [[ $1 == --with-gc ]]
+then gc=true; shift
+else gc=false
+fi
+
+
+
 dir=$(dirname $1)
 filename=$(basename $1)
 name=${filename%.*}
@@ -15,15 +27,27 @@ if $debug; then
     CFLAGS="$CFLAGS -g"
 fi
 
-#RUNTIME="src/GC/GC.c src/GC/Page.c src/GC/PrintMethods.c src/runtime/main.c "
-#RUNTIME+="src/runtime/list.c src/runtime/task.c src/runtime/network.c "
-#RUNTIME+="src/runtime/async.c src/runtime/heap.c src/runtime/channel.c "
-RUNTIME="runtime"
+RUNTIME_LIB="runtime"
 RUNTIME_DIR="src/runtime"
+GC_LIB="waccgc"
+GC_DIR="src/GC"
+LIBS=""
+COMPILE_FLAGS=""
 
-./compile --with-runtime --no-null-pair ${1} -o dist/${name}.s
+if $runtime; then
+  COMPILE_FLAGS="$COMPILE_FLAGS --with-runtime"
+  LIBS="$LIBS -L${RUNTIME_DIR} -l${RUNTIME_LIB}"
+fi
+
+if $gc; then
+  COMPILE_FLAGS="$COMPILE_FLAGS --with-gc"
+  LIBS="$LIBS -L${GC_DIR} -l${GC_LIB}"
+fi
+
+./compile $COMPILE_FLAGS ${1} -o dist/${name}.s
+
 arm-linux-gnueabi-gcc $CFLAGS dist/${name}.s \
-  -L${RUNTIME_DIR} -l${RUNTIME} -o dist/$name
+  $LIBS -o dist/$name
 
 if $debug; then
     trap 'kill $(jobs -p)' EXIT

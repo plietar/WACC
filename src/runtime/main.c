@@ -15,8 +15,6 @@
 
 extern uint64_t wacc_main(uint32_t, uint32_t);
 
-void GCInit();
-void GCFree();
 
 uint32_t task_count = 0;
 list_head ready_tasks = NULL;
@@ -93,7 +91,6 @@ void throw_double_free() {
 }
 
 int main() {
-    GCInit();
     mallopt(M_CHECK_ACTION, 2);
     signal(SIGABRT, throw_double_free);
 
@@ -196,6 +193,5 @@ int main() {
             list_insert(&ready_tasks, &task->current_list);
         }
     }
-    GCFree();
 }
 
