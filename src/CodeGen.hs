@@ -374,8 +374,9 @@ genIndexingRead arrayVar (TyArray elemTy, indexExpr) = do
   genHeapRead offsetedArray (OperandVar indexVar (typeShift elemTy)) elemTy
 
 genIndexingRead tupleVar (TyTuple ts, (_, ExprLit (LitInt x))) = do
-  emitFeature CheckNullPointer
-  genCall0 "p_check_null_pointer" [tupleVar]
+  unlessM (lift (getArgument noNullPair)) $ do
+    emitFeature CheckNullPointer
+    genCall0 "p_check_null_pointer" [tupleVar]
 
   genHeapRead tupleVar (OperandLit (4 * fromInteger x)) TyInt
 
@@ -411,9 +412,9 @@ genIndexingWrite (TyArray elemTy) indexExpr arrayVar valueVar = do
   genHeapWrite offsetedBase (OperandVar indexVar (typeShift elemTy)) valueVar elemTy
 
 genIndexingWrite (TyTuple ts) (_, ExprLit (LitInt x)) tupleVar valueVar = do
-
-  emitFeature CheckNullPointer
-  genCall0 "p_check_null_pointer" [tupleVar]
+  unlessM (lift (getArgument noNullPair)) $ do
+    emitFeature CheckNullPointer
+    genCall0 "p_check_null_pointer" [tupleVar]
 
   genHeapWrite tupleVar (OperandLit (4 * fromInteger x)) valueVar TyInt
 
@@ -526,11 +527,13 @@ genStmt (_, StmtAssign lhs rhs) = do
 
 genStmt (_, StmtFree expr@(ty, _)) = do
   v <- genExpr expr
-  case ty of
-    TyTuple _  -> do
-      genCall0 "p_check_null_pointer" [v]
-      emitFeature CheckNullPointer
-    _ -> return ()
+
+  unlessM (lift (getArgument noNullPair)) $ do
+    case ty of
+      TyTuple _  -> do
+        genCall0 "p_check_null_pointer" [v]
+        emitFeature CheckNullPointer
+      _ -> return ()
 
   unlessM (lift $ getArgument runtimeEnabled)
     (genCall0 "free" [v])

@@ -21,7 +21,7 @@ fi
 RUNTIME="runtime"
 RUNTIME_DIR="src/runtime"
 
-./compile --with-runtime ${1} -o dist/${name}.s
+./compile --with-runtime --no-null-pair ${1} -o dist/${name}.s
 arm-linux-gnueabi-gcc $CFLAGS dist/${name}.s \
   -L${RUNTIME_DIR} -l${RUNTIME} -o dist/$name
 

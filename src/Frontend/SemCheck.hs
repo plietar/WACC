@@ -104,7 +104,8 @@ isSubtypeOf (TyArray t1) (TyArray t2)
 isSubtypeOf (TyChan t1) (TyChan t2)
   = isSubtypeOf t1 t2
 
-isSubtypeOf (TyTuple _) TyNull = return True
+isSubtypeOf (TyTuple _) TyNull = not <$> lift (lift (lift (getArgument noNullPair)))
+
 isSubtypeOf (TyTuple [_,_]) (TyTuple [TyAny, TyAny]) = return True
 isSubtypeOf (TyTuple ts1) (TyTuple ts2)
   = (&&) (length ts1 == length ts2) <$>
@@ -135,8 +136,17 @@ isStructSubtype ((n1, t1) : s1) ((n2, t2) : s2)
 intersectTypes :: Type -> Type -> SemCheck Type
 intersectTypes TyAny ty = return ty
 intersectTypes ty TyAny = return ty
-intersectTypes ty@(TyTuple _) TyNull = return ty
-intersectTypes TyNull ty@(TyTuple _) = return ty
+
+intersectTypes ty@(TyTuple _) TyNull
+  = ifM (lift (lift (lift (getArgument noNullPair))))
+        (semanticError "Null tuples are disabled")
+        (return ty)
+
+intersectTypes TyNull ty@(TyTuple _)
+  = ifM (lift (lift (lift (getArgument noNullPair))))
+        (semanticError "Null tuples are disabled")
+        (return ty)
+
 intersectTypes (TyTuple ts1) (TyTuple ts2)
   | length ts1 /= length ts2 = semanticError ("Tuples " ++ show ts1 ++ " and " ++ show ts2 ++ " have different lengths")
   | otherwise = TyTuple <$> zipWithM intersectTypes ts1 ts2
