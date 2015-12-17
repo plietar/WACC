@@ -453,8 +453,8 @@ genRHS (ty, RHSStructLit members) = do
 
   genHeapWrite structVar (OperandLit 0) vtableVar TyInt
 
-  forM (zip (Map.elems members) [0..]) $ \(memberRHS, index) -> do
-    memberVar <- genRHS memberRHS
+  forM (zip (Map.elems members) [0..]) $ \(memberExpr, index) -> do
+    memberVar <- genExpr memberExpr
     genHeapWrite structVar (OperandLit (4 + 4 * index)) memberVar TyInt
 
   return structVar

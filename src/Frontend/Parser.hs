@@ -232,7 +232,7 @@ assignRHS
 
       rhsStructLit = do
         -- FIXME(paul): Check for duplicated fields
-        values <- braces (sepEndBy ((,) <$> identifier <* equal <*> assignRHS) comma)
+        values <- braces (sepEndBy ((,) <$> identifier <* equal <*> expr) comma)
         return (RHSStructLit (Map.fromList values))
 
       rhsCall = do

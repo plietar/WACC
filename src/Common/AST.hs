@@ -53,7 +53,7 @@ data AssignLHS a
 data AssignRHS a
   = RHSExpr     (Annotated Expr a)
   | RHSArrayLit [Annotated Expr a]
-  | RHSStructLit (Map String (Annotated AssignRHS a))
+  | RHSStructLit (Map String (Annotated Expr a))
   | RHSNewTuple [Annotated Expr a]
   | RHSCall     Identifier [Annotated Expr a]
   | RHSAwait    Identifier [Annotated Expr a]

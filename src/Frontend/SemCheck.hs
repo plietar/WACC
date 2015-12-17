@@ -377,7 +377,7 @@ checkAssignRHS (_, RHSArrayLit exprs) = do
 checkAssignRHS (_, RHSStructLit values) = do
   tell (Set.fromList (Map.keys values))
 
-  values' <- mapM checkAssignRHS values
+  values' <- mapM checkExpr values
   let valuesTy = Map.map fst values'
 
   return (TyStruct valuesTy, RHSStructLit values')
