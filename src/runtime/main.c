@@ -30,8 +30,8 @@ uint64_t millis() {
     return ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 }
 
-void start_task(const char *name, task_entry entry, uint32_t argument) {
-    wacc_task *task = task_create(name, entry, argument);
+void start_task(task_entry entry, uint32_t argument) {
+    wacc_task *task = task_create(entry, argument);
     list_insert(&all_tasks, &task->all_list);
     list_insert(&ready_tasks, &task->current_list);
 
@@ -44,8 +44,8 @@ void kill_task(wacc_task *task) {
     task_count -= 1;
 }
 
-void wacc_fire(task_entry entry, wacc_string *name, uint32_t argument) {
-    start_task(name->data, entry, argument);
+void wacc_fire(task_entry entry, uint32_t argument) {
+    start_task(entry, argument);
 }
 
 void task_pause(wacc_task *task, list_head *new_list) {
@@ -100,7 +100,7 @@ int main() {
     epoll_fd = epoll_create(1);
     sleep_tasks = heap_create();
 
-    start_task("main", wacc_main, 0);
+    start_task(wacc_main, 0);
 
     for (;;) {
         for (list_elem *elem = ready_tasks; elem != NULL; ) {

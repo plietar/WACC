@@ -3,9 +3,8 @@
 
 #include <stdlib.h>
 
-wacc_task *task_create(const char *name, task_entry entry, uint32_t argument) {
+wacc_task *task_create(task_entry entry, uint32_t argument) {
     wacc_task *task = calloc(1, sizeof(wacc_task));
-    task->name = name;
     task->entry = entry;
     task->state = 0;
     task->argument = argument;

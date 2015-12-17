@@ -145,6 +145,15 @@ genHeapWrite baseVar operand elemVar ty =
                     , iOperand = operand
                     , iType = ty } ]
 
+genBinOp :: BinOp -> Var -> Var -> CodeGen Var
+genBinOp op left right = do
+  outVar <- allocateTemp
+  emit [ IBinOp { iBinOp = BinOpAdd
+                , iDest  = outVar
+                , iLeft  = left
+                , iRight = right } ]
+  return outVar
+
 genAlloc :: Int -> Maybe Type -> CodeGen Var
 genAlloc size maybeTy = do
   sizeVar <- genLitInt size
@@ -220,8 +229,7 @@ genAwait name argVars = do
   endLabel <- allocateLabel
 
   -- Initial call
-  nullVar <- allocateTemp
-  emit [ ILiteral { iDest = nullVar, iLiteral = LitInt 0 } ]
+  nullVar <- genLitInt 0
   (s, r) <- genCall2 name (nullVar : argVars)
   emit [ IMove { iDest = stateVar, iValue = s } ]
   emit [ IMove { iDest = resultVar, iValue = r } ]
@@ -269,10 +277,7 @@ genExpr2 expr1 expr2
 
 -- Literals
 genExpr :: Annotated Expr TypeA -> CodeGen Var
-genExpr (_ , ExprLit literal) = do
-  litVar <- allocateTemp
-  emit [ ILiteral { iDest = litVar, iLiteral = literal} ]
-  return litVar
+genExpr (_ , ExprLit literal) = genLiteral literal
 
 -- UnOp
 genExpr (_, ExprUnOp UnOpChr expr) =
@@ -350,35 +355,20 @@ genStructWrite baseVar name valueVar = do
 
 -- Read from Tuple/Array
 genIndexingRead :: Var -> (Type, Annotated Expr TypeA) -> CodeGen Var
-genIndexingRead arrayVar ((TyArray elemTy), indexExpr) = do
+genIndexingRead arrayVar (TyArray elemTy, indexExpr) = do
   emitFeature CheckArrayBounds
-  outVar         <- allocateTemp
-  arrayOffsetVar <- allocateTemp
-  offsetedArray  <- allocateTemp
   indexVar       <- genExpr indexExpr
-
   genCall0 "p_check_array_bounds" [indexVar, arrayVar]
-  emit [ ILiteral { iDest    = arrayOffsetVar
-                   , iLiteral = LitInt 4 }
-       , IBinOp { iBinOp = BinOpAdd
-                , iDest  = offsetedArray
-                , iLeft  = arrayOffsetVar
-                , iRight = arrayVar }
-       , IHeapRead { iHeapVar = offsetedArray
-                   , iDest    = outVar
-                   , iOperand = OperandVar indexVar (typeShift elemTy)
-                   , iType    = elemTy } ]
-  return outVar
 
-genIndexingRead tupleVar (elemTy@(TyTuple ts), (_, ExprLit (LitInt x))) = do
+  arrayOffsetVar <- genLitInt 4
+  offsetedArray  <- genBinOp BinOpAdd arrayVar arrayOffsetVar
+  genHeapRead offsetedArray (OperandVar indexVar (typeShift elemTy)) elemTy
+
+genIndexingRead tupleVar (TyTuple ts, (_, ExprLit (LitInt x))) = do
   emitFeature CheckNullPointer
   genCall0 "p_check_null_pointer" [tupleVar]
-  outVar   <- allocateTemp
-  emit [ IHeapRead { iHeapVar = tupleVar
-                   , iDest    = outVar
-                   , iOperand = OperandLit (4 * fromInteger x)
-                   , iType    = elemTy } ]
-  return outVar
+
+  genHeapRead tupleVar (OperandLit (4 * fromInteger x)) TyInt
 
 -- LHS Assign
 genAssign :: Annotated AssignLHS TypeA -> Var -> CodeGen ()
@@ -390,9 +380,9 @@ genAssign (_, LHSIndexingElem ((elemTy, ts), IndexingElem ident exprs)) valueVar
   let readIndexExprs = init exprs
       writeIndexExpr = last exprs
 
-  indexVar   <- genFrameRead ident
-  subIndexVar <- foldM genIndexingRead indexVar (zip ts readIndexExprs)
-  genIndexingWrite (last ts) writeIndexExpr subIndexVar valueVar
+  arrayVar   <- genFrameRead ident
+  subArrayVar <- foldM genIndexingRead arrayVar (zip ts readIndexExprs)
+  genIndexingWrite (last ts) writeIndexExpr subArrayVar valueVar
 
 genAssign (_, LHSStructElem (_, StructElem baseName members)) valueVar = do
   let readMembers = init members
@@ -403,30 +393,21 @@ genAssign (_, LHSStructElem (_, StructElem baseName members)) valueVar = do
   genStructWrite readVar writeMember valueVar
 
 genIndexingWrite :: Type -> Annotated Expr TypeA -> Var -> Var -> CodeGen ()
-genIndexingWrite (TyArray elemTy) writeIndexExpr subIndexVar valueVar = do
-
+genIndexingWrite (TyArray elemTy) indexExpr arrayVar valueVar = do
   emitFeature CheckArrayBounds
-  offsetedBase <- allocateTemp
-  writeIndexVar <- genExpr writeIndexExpr
-  arrayOffsetVar <- allocateTemp
+  indexVar <- genExpr indexExpr
+  genCall0 "p_check_array_bounds" [indexVar, arrayVar]
 
-  genCall0 "p_check_array_bounds" [writeIndexVar, subIndexVar]
-  emit [ILiteral { iDest = arrayOffsetVar, iLiteral = LitInt 4 }
-       , IBinOp { iBinOp = BinOpAdd, iDest = offsetedBase
-                , iLeft = arrayOffsetVar, iRight = subIndexVar }
-       , IHeapWrite { iHeapVar  = offsetedBase
-                    , iValue    = valueVar
-                    , iOperand  = OperandVar writeIndexVar (typeShift elemTy)
-                    , iType     = elemTy } ]
+  arrayOffsetVar <- genLitInt 4
+  offsetedBase <- genBinOp BinOpAdd arrayVar arrayOffsetVar
+  genHeapWrite offsetedBase (OperandVar indexVar (typeShift elemTy)) valueVar elemTy
 
-genIndexingWrite (TyTuple ts) (_, ExprLit (LitInt x)) subIndexVar valueVar = do
+genIndexingWrite (TyTuple ts) (_, ExprLit (LitInt x)) tupleVar valueVar = do
 
   emitFeature CheckNullPointer
-  genCall0 "p_check_null_pointer" [subIndexVar]
-  emit [ IHeapWrite { iHeapVar = subIndexVar
-                    , iValue  = valueVar
-                    , iOperand = OperandLit (4 * fromInteger x)
-                    , iType = TyInt } ]
+  genCall0 "p_check_null_pointer" [tupleVar]
+
+  genHeapWrite tupleVar (OperandLit (4 * fromInteger x)) valueVar TyInt
 
 -- Shift depending on size of type
 typeShift :: Type -> Int
@@ -488,10 +469,8 @@ genRHS (ty, RHSNewTuple exprs) = do
   tupleVar <- genAlloc size (Just ty)
   forM (zip exprs [0..]) $ \(expr, index) -> do
     elemVar <- genExpr expr
-    emit [ IHeapWrite  { iHeapVar = tupleVar
-                       , iValue = elemVar
-                       , iOperand = OperandLit (index * 4)
-                       , iType = TyInt } ]
+    genHeapWrite tupleVar (OperandLit (index * 4)) elemVar TyInt
+
   return tupleVar
     where
       size = length exprs * 4
@@ -633,13 +612,10 @@ genStmt (_, StmtAwait name exprs) = do
   return ()
 
 genStmt (_, StmtFire name exprs) = do
-  funcVar <- allocateTemp
-  nameVar <- allocateTemp
-  emit [ ILiteral { iDest = funcVar, iLiteral = LitLabel (NamedLabel name) } ]
-  emit [ ILiteral { iDest = nameVar, iLiteral = LitString name } ]
-
+  funcVar <- genLiteral (LitLabel (NamedLabel name))
   argVars <- mapM genExpr exprs
-  genCall0 "wacc_fire" (funcVar : nameVar : argVars)
+
+  genCall0 "wacc_fire" (funcVar : argVars)
 
 genStmt (_, StmtChanSend chanName elemRHS) = do
   chanVar <- genFrameRead chanName

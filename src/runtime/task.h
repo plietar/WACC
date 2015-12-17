@@ -11,7 +11,6 @@ typedef uint64_t (*task_entry)(uint32_t state, uint32_t argument);
 
 typedef struct wacc_task {
     task_entry entry;
-    const char *name;
     uint32_t state;
     uint32_t argument;
 
@@ -19,7 +18,7 @@ typedef struct wacc_task {
     list_elem all_list;
 } wacc_task;
 
-wacc_task *task_create(const char *name, task_entry entry, uint32_t argument);
+wacc_task *task_create(task_entry entry, uint32_t argument);
 void task_destroy(wacc_task *task);
 yield_cmd *task_execute(wacc_task *task);
 
