@@ -68,6 +68,8 @@ data Expr a
   | ExprUnOp      UnOp  (Annotated Expr a)
   | ExprBinOp     BinOp (Annotated Expr a) (Annotated Expr a)
 
+  | ExprPromote (Annotated Expr a) Type
+
 type Identifier = String
 
 data IndexingElem a

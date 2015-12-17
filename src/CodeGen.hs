@@ -333,6 +333,17 @@ genExpr (_, ExprStructElem (_, StructElem baseName members)) = do
   baseVar <- genFrameRead baseName
   foldM genStructRead baseVar members
 
+genExpr (_, ExprPromote expr baseTy) = do
+  exprVar <- genExpr expr
+  -- This has the same layout as a (int, baseTy) tuple
+  promotedVar <- genAlloc 8 (Just (TyTuple [TyInt, baseTy]))
+
+  tagVar <- genLitInt 0 -- FIXME(paul)
+  genHeapWrite promotedVar (OperandLit 0) tagVar TyInt
+  genHeapWrite promotedVar (OperandLit 4) exprVar TyInt
+
+  return promotedVar
+
 genStructOffset :: Var -> Identifier -> CodeGen Var
 genStructOffset baseVar name = do
   vtableVar <- genHeapRead baseVar (OperandLit 0) TyInt

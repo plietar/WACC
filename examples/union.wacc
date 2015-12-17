@@ -1,0 +1,16 @@
+begin
+  type intOrChar = (int | char);
+  type intOrCharOrString = (intOrChar | string);
+
+  let a : intOrChar = 'a';
+
+  a = 4;
+  a = 'c';
+
+  let b : intOrCharOrString = a;
+  b = "Hello";
+
+  println a;
+  println b
+end
+

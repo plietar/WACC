@@ -110,9 +110,6 @@ isSubtypeOf (TyStruct ts1) (TyStruct ts2)
 isSubtypeOf (TyUnion ts1) (TyUnion ts2)
   = return (Set.isSubsetOf ts1 ts1)
 
-isSubtypeOf (TyUnion ts) ty
-  = return (Set.member ty ts)
-
 isSubtypeOf t1 t2 = return (t1 == t2)
 
 checkIsSubtypeOf :: Type -> Type -> SemCheck ()
@@ -216,6 +213,7 @@ isAbstractType (TyTuple tys) = anyM isAbstractType tys
 isAbstractType (TyArray ty)  = isAbstractType ty
 isAbstractType (TyChan ty)   = isAbstractType ty
 isAbstractType (TyStruct tys) = anyM isAbstractType (Map.elems tys)
+isAbstractType (TyUnion tys) = anyM isAbstractType (Set.elems tys)
 isAbstractType _             = return False
 
 isVoidType :: Type -> SemCheck Bool
@@ -228,6 +226,32 @@ checkLiteral (LitBool _)   = TyBool
 checkLiteral (LitChar _)   = TyChar
 checkLiteral (LitString _) = TyArray TyChar
 checkLiteral  LitNull      = TyNull
+
+checkPromotion :: Type -> Annotated Expr TypeA -> SemCheck (Annotated Expr TypeA)
+checkPromotion lhsTy@(TyUnion _) (exprTy@(TyUnion _), expr) = do
+  checkIsSubtypeOf lhsTy exprTy
+  return (exprTy, expr)
+
+checkPromotion unionTy@(TyUnion memberTys) (tyExpr, expr)
+  = checkPromotion' (Set.elems memberTys)
+  where
+    checkPromotion' [] = semanticError "Foo"
+    checkPromotion' (ty:tys)
+      | ty == tyExpr = return (unionTy, ExprPromote (tyExpr, expr) tyExpr)
+      | otherwise    = checkPromotion' tys 
+
+checkPromotion lhsTy (exprTy, expr) = do
+  checkIsSubtypeOf lhsTy exprTy
+  return (exprTy, expr)
+
+checkPromotionRHS :: Type -> Annotated AssignRHS TypeA -> SemCheck (Annotated AssignRHS TypeA)
+checkPromotionRHS lhsType (_, RHSExpr expr) = do
+  (ty, expr') <- checkPromotion lhsType expr
+  return (ty, RHSExpr (ty, expr'))
+
+checkPromotionRHS lhsType (rhsType, rhs) = do
+  checkIsSubtypeOf lhsType rhsType
+  return (rhsType, rhs)
 
 checkIndexingElem :: Annotated IndexingElem SpanA -> SemCheck (Annotated IndexingElem TypeA)
 checkIndexingElem (_, IndexingElem varname exprs) = do
@@ -493,28 +517,28 @@ checkStmt (_, StmtVar varType varname rhs) = do
   varType' <- liftSemCheck $ checkType varType
   rhs'@(rhsType, _) <- liftSemCheck $ checkAssignRHS rhs
 
-  let ty = if varType' == TyAny
-           then rhsType
-           else varType'
+  let lhsType = if varType' == TyAny
+                then rhsType
+                else varType'
 
-  liftSemCheck $ withErrorContext "in assignment"
-                  (checkIsSubtypeOf ty rhsType)
-
-  whenM (liftSemCheck $ isAbstractType ty)
+  whenM (liftSemCheck $ isAbstractType lhsType)
         (semanticError ("Cannot declare variable " ++ varname
-                     ++ " of incomplete type " ++ show ty))
+                     ++ " of incomplete type " ++ show lhsType))
 
-  addVariable varname ty
-  return (False, StmtVar ty varname rhs')
+  promotedRHS <- liftSemCheck $ withErrorContext "in assignment"
+                                (checkPromotionRHS lhsType rhs')
+
+  addVariable varname lhsType
+  return (False, StmtVar lhsType varname promotedRHS)
 
 checkStmt (_, StmtAssign lhs rhs) = do
   lhs'@(lhsType, _) <- liftSemCheck $ checkAssignLHS lhs
-  rhs'@(rhsType, _) <- liftSemCheck $ checkAssignRHS rhs
+  rhs' <- liftSemCheck $ checkAssignRHS rhs
 
-  liftSemCheck $ withErrorContext "in assignment"
-                  (checkIsSubtypeOf lhsType rhsType)
+  promotedRHS <- liftSemCheck $ withErrorContext "in assignment"
+                                (checkPromotionRHS lhsType rhs')
 
-  return (False, StmtAssign lhs' rhs')
+  return (False, StmtAssign lhs' promotedRHS)
 
 checkStmt (_, StmtRead lhs) = do
   lhs'@(lhsType, _) <- liftSemCheck $ checkAssignLHS lhs
