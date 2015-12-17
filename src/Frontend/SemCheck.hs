@@ -251,12 +251,13 @@ checkPromotion lhsTy@(TyUnion _) (exprTy@(TyUnion _), expr) = do
 checkPromotion unionTy@(TyUnion memberTys) (tyExpr, expr)
   = checkPromotion' (Set.elems memberTys)
   where
-    checkPromotion' [] = semanticError "Foo"
+    checkPromotion' [] = semanticError ("Cannot promote type " ++ show tyExpr ++ " to " ++ show unionTy)
     checkPromotion' (ty:tys)
-      | ty == tyExpr = do
-        emitTypeTag tyExpr
-        return (unionTy, ExprPromote (tyExpr, expr) tyExpr)
-      | otherwise    = checkPromotion' tys 
+      = ifM (isSubtypeOf ty tyExpr)
+            (do
+              emitTypeTag ty
+              return (unionTy, ExprPromote (tyExpr, expr) ty))
+            (checkPromotion' tys)
 
 checkPromotion lhsTy (exprTy, expr) = do
   checkIsSubtypeOf lhsTy exprTy

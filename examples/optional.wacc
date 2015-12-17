@@ -1,16 +1,34 @@
 begin
+  type point2d = { int x, int y };
+  type maybePoint2d = (point2d | null);
+
   void print_optionalInt((int | null) x) is
     switch type(x)
     case int:
-      println "x = ", 5
+      println "x = ", x
     case null:
       println "x is null"
+    end
+  end
+
+  void print_optionalPoint2d(maybePoint2d p) is
+    switch type(p)
+    case null:
+      println "null"
+    case point2d:
+      println "{ x = ", p.x, ", y = ", p.y, " }"
     end
   end
 
   let x : (null | int) = null;
   call print_optionalInt(x);
   x = 5;
-  call print_optionalInt(x)
+  call print_optionalInt(x);
+
+  let p = { x = 1, y = 4, z = 5 };
+  let mp : maybePoint2d = p;
+  call print_optionalPoint2d(mp);
+  mp = null;
+  call print_optionalPoint2d(mp)
 end
 
