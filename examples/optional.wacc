@@ -1,0 +1,16 @@
+begin
+  void print_optionalInt((int | null) x) is
+    switch type(x)
+    case int:
+      println "x = ", 5
+    case null:
+      println "x is null"
+    end
+  end
+
+  let x : (null | int) = null;
+  call print_optionalInt(x);
+  x = 5;
+  call print_optionalInt(x)
+end
+
