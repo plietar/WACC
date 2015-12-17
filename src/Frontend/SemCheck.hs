@@ -87,64 +87,65 @@ newContext :: Context -> Context
 newContext parent
   = parent { variables = newScope (variables parent) }
 
-compatibleType :: Type -> Type -> SemCheck Bool
-compatibleType TyAny _ = return True
-compatibleType _ TyAny = return True
-compatibleType TyNull (TyTuple _) = return True
-compatibleType (TyTuple _) TyNull = return True
+isSubtypeOf :: Type -> Type -> SemCheck Bool
+isSubtypeOf TyAny _ = return True
 
-compatibleType (TyArray t1) (TyArray t2)
-  = compatibleType t1 t2
-compatibleType (TyTuple ts1) (TyTuple ts2)
-  = (andM (zipWith compatibleType ts1 ts2))
-    <^(&&)
-    (length ts1 == length ts2)
+isSubtypeOf (TyArray t1) (TyArray TyAny)
+  = return True
+isSubtypeOf (TyArray t1) (TyArray t2)
+  = isSubtypeOf t1 t2
 
-compatibleType (TyStruct ts1) (TyStruct ts2)
-  = all snd <$> mergeStructs compatibleType (Map.assocs ts1) (Map.assocs ts2)
+isSubtypeOf (TyChan t1) (TyChan t2)
+  = isSubtypeOf t1 t2
 
-compatibleType (TyChan t1) (TyChan t2)
-  = compatibleType t1 t2
+isSubtypeOf (TyTuple _) TyNull = return True
+isSubtypeOf (TyTuple [_,_]) (TyTuple [TyAny, TyAny]) = return True
+isSubtypeOf (TyTuple ts1) (TyTuple ts2)
+  = (&&) (length ts1 == length ts2) <$>
+    andM (zipWith isSubtypeOf ts1 ts2)
 
-compatibleType t1 t2 = return (t1 == t2)
+isSubtypeOf (TyStruct ts1) (TyStruct ts2)
+  = isStructSubtype (Map.assocs ts1) (Map.assocs ts2)
+isSubtypeOf t1 t2 = return (t1 == t2)
 
+checkIsSubtypeOf :: Type -> Type -> SemCheck ()
+checkIsSubtypeOf t1 t2
+  = unlessM (isSubtypeOf t1 t2) (semanticError (show t2 ++ " is not a subtype of " ++ show t1))
 
+-- Check if the second struct is a subtype of the first
+-- Make sure everyfield in the first type is present in
+-- the second
+isStructSubtype :: [(Identifier, Type)] -> [(Identifier, Type)] -> SemCheck Bool
+isStructSubtype []    _  = return True
+isStructSubtype (_:_) [] = return False
+isStructSubtype ((n1, t1) : s1) ((n2, t2) : s2)
+  | n1 == n2  = (&&) <$> isSubtypeOf t1 t2 <*> isStructSubtype s1 s2
+  | otherwise = isStructSubtype ((n1, t1) : s1) s2
 
-
-mergeTypes :: Type -> Type -> SemCheck Type
-mergeTypes t1 TyAny = return t1
-mergeTypes TyAny t2 = return t2
-mergeTypes TyNull (TyTuple tys)
-  = return (TyTuple tys)
-mergeTypes (TyTuple tys) TyNull
-  = return (TyTuple tys)
-
-mergeTypes (TyArray t1) (TyArray t2)
-  = TyArray <$> mergeTypes t1 t2
-mergeTypes t1@(TyTuple ts1) t2@(TyTuple ts2) = do
-  unless (length ts1 == length ts2)
-         (semanticError ("Tuples " ++ show t1 ++ " and " ++ show t2 ++ " are of different sizes"))
-  TyTuple <$> sequence (zipWith mergeTypes ts1 ts2)
-mergeTypes (TyChan t1) (TyChan t2)
-  = TyChan <$> mergeTypes t1 t2
-
-mergeTypes (TyStruct ts1) (TyStruct ts2)
-  = TyStruct <$> (Map.fromList <$> mergeStructs mergeTypes (Map.assocs ts1) (Map.assocs ts2))
-
-mergeTypes t1 t2
+intersectTypes :: Type -> Type -> SemCheck Type
+intersectTypes TyAny ty = return ty
+intersectTypes ty TyAny = return ty
+intersectTypes ty@(TyTuple _) TyNull = return ty
+intersectTypes TyNull ty@(TyTuple _) = return ty
+intersectTypes (TyTuple ts1) (TyTuple ts2)
+  | length ts1 /= length ts2 = semanticError ("Tuples " ++ show ts1 ++ " and " ++ show ts2 ++ " have different lengths")
+  | otherwise = TyTuple <$> zipWithM intersectTypes ts1 ts2
+intersectTypes (TyChan t1) (TyChan t2) = TyChan <$> (intersectTypes t1 t2)
+intersectTypes (TyStruct ts1) (TyStruct ts2)
+  = (TyStruct . Map.fromList) <$> intersectStructs (Map.assocs ts1) (Map.assocs ts2)
+intersectTypes t1 t2
   | t1 == t2  = return t1
-  | otherwise = semanticError ("Types " ++ show t1 ++ " and " ++ show t2 ++ " are not compatible")
+  | otherwise = semanticError ("Types " ++ show t1 ++ " and " ++ show t2 ++ " are incompatible.")
 
-mergeStructs :: (Type -> Type -> SemCheck a) -> [(Identifier, Type)] -> [(Identifier, Type)] -> SemCheck [(Identifier, a)]
-mergeStructs _ [] [] = return []
-mergeStructs _ ((n1, t1) : _) [] = semanticError ("Missing field " ++ n1)
-mergeStructs _ [] ((n2, t2) : _) = semanticError ("Missing field " ++ n2)
-mergeStructs f ((n1, t1) : ts1) ((n2, t2) : ts2) = do
-  unless (n1 == n2) (semanticError ("Field mismatch " ++ n1 ++ ", " ++ n2))
-  ty <- f t1 t2
-  tys <- mergeStructs f ts1 ts2
-  return ((n1,ty) : tys)
-
+intersectStructs :: [(Identifier, Type)] -> [(Identifier, Type)] -> SemCheck [(Identifier, Type)]
+intersectStructs [] [] = return []
+intersectStructs [] (_:_) = return []
+intersectStructs (_:_) [] = return []
+intersectStructs ((n1, t1) : s1) ((n2, t2) : s2)
+  | n1 < n2   = intersectStructs s1 ((n2, t2) : s2)
+  | n1 > n2   = intersectStructs ((n1, t1) : s1) s2
+  | otherwise = (:) <$> ((n1,) <$> intersectTypes t1 t2)
+                    <*> intersectStructs s1 s2
 
 checkType :: Type -> SemCheck Type
 checkType (TyArray elemTy)
@@ -160,10 +161,9 @@ checkType (TyStruct members) = do
   TyStruct <$> mapM checkType members
 checkType ty = return ty
 
+
 isArrayType :: Type -> SemCheck Bool
-isArrayType (TyArray _) = return True
-isArrayType TyAny       = return True
-isArrayType _           = return False
+isArrayType = isSubtypeOf (TyArray TyAny)
 
 isHeapType :: Type -> SemCheck Bool
 isHeapType (TyTuple _ ) = return True
@@ -186,6 +186,7 @@ isReadableType _      = return False
 isAbstractType :: Type -> SemCheck Bool
 isAbstractType TyAny         = return True
 isAbstractType TyVoid        = return True
+isAbstractType (TyName _)    = return True
 
 -- This is allowed when using nested pairs
 -- It leads to type unsafety, but is unfortunately
@@ -220,8 +221,8 @@ checkIndexingElem (_, IndexingElem varname exprs) = do
 
 checkIndexingElem' :: Type -> [Annotated Expr TypeA] -> SemCheck (Type, [Type])
 checkIndexingElem' baseType@(TyTuple ts) exprs@((ty, e):es) = do
-  compatible <- compatibleType TyInt ty
-  unless compatible (semanticError ("Cannot index tuple with variable of type " ++ show ty))
+  unlessM (isSubtypeOf TyInt ty)
+          (semanticError ("Cannot index tuple with variable of type " ++ show ty))
 
   index <- case e of
     ExprLit (LitInt i) -> return (fromInteger i)
@@ -234,8 +235,8 @@ checkIndexingElem' baseType@(TyTuple ts) exprs@((ty, e):es) = do
   return (elemType, baseType : baseTypes)
 
 checkIndexingElem' baseType@(TyArray t) exprs@((ty, e):es) = do
-  compatible <- compatibleType TyInt ty
-  unless compatible (semanticError ("Cannot index array with variable of type " ++ show ty))
+  unlessM (isSubtypeOf TyInt ty)
+          (semanticError ("Cannot index array with variable of type " ++ show ty))
   (elemType, baseTypes) <- checkIndexingElem' t es
   return (elemType, baseType : baseTypes)
 
@@ -283,10 +284,10 @@ checkExpr (_, ExprBinOp op e1 e2) = do
 
 
 unOpType :: UnOp -> (Type -> SemCheck Bool, Type)
-unOpType UnOpNot = (compatibleType TyBool, TyBool)
-unOpType UnOpNeg = (compatibleType TyInt, TyInt)
-unOpType UnOpOrd = (compatibleType TyChar, TyInt)
-unOpType UnOpChr = (compatibleType TyInt, TyChar)
+unOpType UnOpNot = (isSubtypeOf TyBool, TyBool)
+unOpType UnOpNeg = (isSubtypeOf TyInt, TyInt)
+unOpType UnOpOrd = (isSubtypeOf TyChar, TyInt)
+unOpType UnOpChr = (isSubtypeOf TyInt, TyChar)
 unOpType UnOpLen = (isArrayType, TyInt)
 
 checkUnOp :: UnOp -> Type -> SemCheck Type
@@ -312,21 +313,19 @@ binOpType op = case op of
   BinOpAnd -> booleanOp
   BinOpOr  -> booleanOp
   where
-    arithmeticOp = (\t1 t2 -> compatibleType TyInt t1
-                              <^(&&)^>
-                              compatibleType TyInt t2
+    arithmeticOp = (\t1 t2 -> (&&) <$> isSubtypeOf TyInt t1
+                                   <*> isSubtypeOf TyInt t2
                            , TyInt)
-    booleanOp    = (\t1 t2 -> compatibleType TyBool t1
-                              <^(&&)^>
-                              compatibleType TyBool t2
+    booleanOp    = (\t1 t2 -> (&&) <$> isSubtypeOf TyBool t1
+                                   <*> isSubtypeOf TyBool t2
                            , TyBool)
-    orderOp      = (\t1 t2 -> compatibleType t1 t2
+    orderOp      = (\t1 t2 -> (isSubtypeOf t1 t2 <^(||)^> isSubtypeOf t2 t1)
                               <^(&&)^>
                               isOrderedType t1
                               <^(&&)^>
                               isOrderedType t2
                            , TyBool)
-    equalityOp   = (compatibleType, TyBool)
+    equalityOp = (\a b -> return (a == b), TyBool)
 
 checkBinOp :: BinOp -> Type -> Type -> SemCheck Type
 checkBinOp op t1 t2 = do
@@ -355,7 +354,7 @@ checkAssignRHS (_, RHSExpr expr) = do
 
 checkAssignRHS (_, RHSArrayLit exprs) = do
   exprs' <- mapM checkExpr exprs
-  innerType <- foldM mergeTypes TyAny (map fst exprs')
+  innerType <- foldM intersectTypes TyAny (map fst exprs')
   return (TyArray innerType, RHSArrayLit exprs')
 
 checkAssignRHS (_, RHSStructLit values) = do
@@ -382,19 +381,23 @@ checkAssignRHS (_, RHSNewChan) = return (TyChan TyAny, RHSNewChan)
 
 checkAssignRHS (_, RHSChanRecv chanName) = do
   chanTy <- getVariable chanName
-  (TyChan elemTy) <- mergeTypes chanTy (TyChan TyAny)
+  elemTy <- case chanTy of
+            TyChan ty -> return ty
+            _         -> semanticError ("Cannot receive from non-channel " ++ show chanTy)
+
   unlessM (asks asyncContext)
           (semanticError ("Cannot receive from channel from within a synchronous function"))
+
   return (elemTy, RHSChanRecv chanName)
 
 checkArgs :: [Type] -> [Type] -> SemCheck ()
-checkArgs actual expected = checkArgs' 0 actual expected
+checkArgs expected actual = checkArgs' 0 expected actual
   where
     checkArgs' :: Int -> [Type] -> [Type] -> SemCheck ()
     checkArgs' _ [] [] = return ()
     checkArgs' n (a1:as1) (a2:as2) = do
       withErrorContext ("In argument " ++ show (n + 1))
-        (mergeTypes a1 a2)
+        (checkIsSubtypeOf a1 a2)
       checkArgs' (n+1) as1 as2
 
     checkArgs' n _ _
@@ -455,8 +458,9 @@ checkCaseArm :: Type -> Annotated CaseArm SpanA -> SemCheck (Annotated CaseArm T
 checkCaseArm expectedType (_,  CaseArm l b) = do
   b' <- checkBlock b
   let litType = checkLiteral l
-  ty <- mergeTypes litType expectedType
-  return (ty, CaseArm l b')
+  checkIsSubtypeOf expectedType litType
+
+  return (litType, CaseArm l b')
 
 checkPosStmt :: Annotated Stmt SpanA -> SemCheckState (Annotated Stmt TypeA)
 checkPosStmt stmt@(((line,column,fname),_), _)
@@ -472,7 +476,12 @@ checkStmt (_, StmtVar varType varname rhs) = do
   varType' <- liftSemCheck $ checkType varType
   rhs'@(rhsType, _) <- liftSemCheck $ checkAssignRHS rhs
 
-  ty <- liftSemCheck $ mergeTypes varType' rhsType
+  let ty = if varType' == TyAny
+           then rhsType
+           else varType'
+
+  liftSemCheck $ withErrorContext "in assignment"
+                  (checkIsSubtypeOf ty rhsType)
 
   whenM (liftSemCheck $ isAbstractType ty)
         (semanticError ("Cannot declare variable " ++ varname
@@ -485,9 +494,9 @@ checkStmt (_, StmtAssign lhs rhs) = do
   lhs'@(lhsType, _) <- liftSemCheck $ checkAssignLHS lhs
   rhs'@(rhsType, _) <- liftSemCheck $ checkAssignRHS rhs
 
-  unlessM (liftSemCheck $ compatibleType lhsType rhsType)
-          (semanticError ("Cannot assign RHS of type " ++ show rhsType
-                       ++ " to LHS of type " ++ show lhsType))
+  liftSemCheck $ withErrorContext "in assignment"
+                  (checkIsSubtypeOf lhsType rhsType)
+
   return (False, StmtAssign lhs' rhs')
 
 checkStmt (_, StmtRead lhs) = do
@@ -506,13 +515,14 @@ checkStmt (_, StmtFree expr) = do
 checkStmt (_, StmtReturn expr) = do
   expr'@(exprType, _) <- liftSemCheck $ checkExpr expr
   expectedReturnType <- gets returnType
-  retType <- liftSemCheck $ mergeTypes expectedReturnType exprType
+  liftSemCheck $ withErrorContext "in return statement"
+                  (checkIsSubtypeOf expectedReturnType exprType)
   return (True, StmtReturn expr')
 
 checkStmt (_, StmtExit expr) = do
   expr'@(exprType, _) <- liftSemCheck $ checkExpr expr
-  unlessM (liftSemCheck $ compatibleType TyInt exprType)
-       (lift (semanticError ("Expected int in exit statement, got " ++ show exprType)))
+  liftSemCheck $ withErrorContext "in exit statement"
+                  (checkIsSubtypeOf TyInt exprType)
   return (True, StmtExit expr')
 
 checkStmt (_, StmtPrint exprs ln) = do
@@ -521,8 +531,8 @@ checkStmt (_, StmtPrint exprs ln) = do
 
 checkStmt (_, StmtIf predicate b1 maybeB2) = do
   predicate'@(predicateType, _) <- liftSemCheck $ checkExpr predicate
-  unlessM (liftSemCheck $ compatibleType TyBool predicateType)
-       (lift (semanticError ("Condition cannot be of type " ++ show predicateType)))
+  liftSemCheck $ withErrorContext "in if statement"
+                  (checkIsSubtypeOf TyBool predicateType)
   case maybeB2 of
     Just b2 -> do
       b1'@((al1,_),_) <- liftSemCheck $ checkBlock b1
@@ -541,8 +551,8 @@ checkStmt (_, StmtSwitch value cs) = do
 
 checkStmt (_, StmtWhile predicate block) = do
   predicate'@(predicateType, _) <- liftSemCheck $ checkExpr predicate
-  unlessM (liftSemCheck $ compatibleType TyBool predicateType)
-       (lift (semanticError ("Condition cannot be of type " ++ show predicateType)))
+  liftSemCheck $ withErrorContext "in while statement"
+                  (checkIsSubtypeOf TyBool predicateType)
 
   block' <- liftSemCheck $ checkBlock block
   return (False, StmtWhile predicate' block')
@@ -567,7 +577,8 @@ checkStmt (_, StmtChanSend chanName rhs) = do
   chanTy <- liftSemCheck $ getVariable chanName
   rhs'@(rhsTy, _) <- liftSemCheck $ checkAssignRHS rhs
 
-  liftSemCheck $ mergeTypes chanTy (TyChan rhsTy)
+  liftSemCheck $ checkIsSubtypeOf chanTy (TyChan rhsTy)
+
   unlessM (gets asyncContext)
           (semanticError ("Cannot send to channel from within a synchronous function"))
 
