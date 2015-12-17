@@ -1,20 +1,20 @@
 begin
-  type point2d = struct { int x, int y };
+  type point2d = { int x, int y };
 
   void print_point2d(point2d p) is
     println "point(", p.x, ", ", p.y, ")"
   end
 
-  void print_point3d(struct { int x, int y, int z } p) is
+  void print_point3d({ int x, int y, int z } p) is
     println "point(", p.x, ", ", p.y, ", ", p.z, ")"
   end
 
-  let a = struct {
+  let a = {
     x = 4,
     y = 5
   };
 
-  let b = struct {
+  let b = {
     x = 6,
     y = 7,
     z = 8

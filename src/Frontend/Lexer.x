@@ -47,7 +47,6 @@ tokens :-
     | then | else | fi | while | do | done | newpair | call | fst | snd | int
     | bool | char | switch | case | string | pair | len | ord | chr | null | tuple | newtuple
     | let | ffi | void | async | await | fire | type | chan
-    | struct
                        { \(AlexPn _ line column) s-> ((line, column), TokKeyword s) }
 
   -- Operators

@@ -164,7 +164,6 @@ parseType = (do
     chanType = keyword "chan" >> (TyChan <$> parens parseType)
 
     structType = do
-      keyword "struct"
       -- FIXME(paul): Check for duplicated fields
       innerTypes <- braces (sepEndBy (swap <$> ((,) <$> parseType <*> identifier)) comma)
       return (TyStruct (Map.fromList innerTypes))
@@ -219,7 +218,6 @@ assignRHS
       rhsNewTuple = keyword "newtuple" *> parens (RHSNewTuple <$> (sepBy expr comma))
 
       rhsStructLit = do
-        keyword "struct"
         -- FIXME(paul): Check for duplicated fields
         values <- braces (sepEndBy ((,) <$> identifier <* equal <*> assignRHS) comma)
         return (RHSStructLit (Map.fromList values))
