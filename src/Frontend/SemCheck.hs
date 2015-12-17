@@ -30,8 +30,14 @@ data Context = Context
   , asyncContext :: Bool
   }
 
-type SemCheck = ReaderT Context (WriterT (Set Identifier) (WACCResultT WACCArguments))
-type SemCheckState = StateT Context (WriterT (Set Identifier) (WACCResultT WACCArguments))
+type SemCheck = ReaderT Context (WriterT (Set Identifier, Set Type) (WACCResultT WACCArguments))
+type SemCheckState = StateT Context (WriterT (Set Identifier, Set Type) (WACCResultT WACCArguments))
+
+emitMemberNames names
+  = tell (Set.fromList names, Set.empty)
+
+emitTypeTag ty
+  = tell (Set.empty, Set.singleton ty)
 
 liftSemCheck :: SemCheck a -> SemCheckState a
 liftSemCheck m = do
@@ -161,7 +167,7 @@ checkType (TyChan elemTy)
 checkType (TyName name)
   = getTypeAlias name
 checkType (TyStruct members) = do
-  tell (Set.fromList (Map.keys members))
+  emitMemberNames (Map.keys members)
   TyStruct <$> mapM checkType members
 checkType (TyUnion tys)
   = (TyUnion . Set.fromList) <$> checkUnion (Set.elems tys)
@@ -237,7 +243,9 @@ checkPromotion unionTy@(TyUnion memberTys) (tyExpr, expr)
   where
     checkPromotion' [] = semanticError "Foo"
     checkPromotion' (ty:tys)
-      | ty == tyExpr = return (unionTy, ExprPromote (tyExpr, expr) tyExpr)
+      | ty == tyExpr = do
+        emitTypeTag tyExpr
+        return (unionTy, ExprPromote (tyExpr, expr) tyExpr)
       | otherwise    = checkPromotion' tys 
 
 checkPromotion lhsTy (exprTy, expr) = do
@@ -399,7 +407,7 @@ checkAssignRHS (_, RHSArrayLit exprs) = do
   return (TyArray innerType, RHSArrayLit exprs')
 
 checkAssignRHS (_, RHSStructLit values) = do
-  tell (Set.fromList (Map.keys values))
+  emitMemberNames (Map.keys values)
 
   values' <- mapM checkExpr values
   let valuesTy = Map.map fst values'
@@ -684,11 +692,11 @@ defineDecl (_, DeclFunc f) = defineFunction f
 defineDecl (_, DeclType f) = defineTypeAlias f
 defineDecl (_, DeclFFIFunc f) = defineFFIFunc f
 
-checkProgram :: Annotated Program SpanA -> WriterT (Set Identifier) (WACCResultT WACCArguments) (Annotated Program TypeA)
+checkProgram :: Annotated Program SpanA -> WriterT (Set Identifier, Set Type) (WACCResultT WACCArguments) (Annotated Program TypeA)
 checkProgram (_, Program decls) = do
   context <- execStateT (forM_ decls defineDecl) emptyContext
   decls' <- runReaderT (forM decls checkDecl) context
   return ((), Program decls')
 
-waccSemCheck :: Annotated Program SpanA -> WACCResultT WACCArguments (Annotated Program TypeA, Set Identifier)
+waccSemCheck :: Annotated Program SpanA -> WACCResultT WACCArguments (Annotated Program TypeA, (Set Identifier, Set Type))
 waccSemCheck = runWriterT . checkProgram

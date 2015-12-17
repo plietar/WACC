@@ -116,7 +116,8 @@ data IR
 
 data CodeGenReader = CodeGenReader {
   asyncContext :: Bool,
-  vtableOffsets :: Map Identifier Int
+  vtableOffsets :: Map Identifier Int,
+  typeTags :: Map Type Int
 }
 
 data CodeGenState = CodeGenState {

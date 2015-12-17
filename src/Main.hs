@@ -51,9 +51,9 @@ compile filename contents output = do
   typeCheck <- runWACCResultT (waccSemCheck =<< waccResultT ast)
   let
     typedAst = fst <$> typeCheck
-    structMembers = snd <$> typeCheck
+    typeData = snd <$> typeCheck
 
-  codeGen   <- fmapM2 genProgram typedAst structMembers
+  codeGen   <- fmapM2 genProgram typedAst typeData
 
   let
     ir        = fst <$> codeGen

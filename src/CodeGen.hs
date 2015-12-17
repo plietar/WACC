@@ -26,23 +26,24 @@ emit xs = tell (CodeGenOutput xs Set.empty)
 emitFeature :: Feature -> CodeGen ()
 emitFeature f = tell (CodeGenOutput [] (Set.singleton f))
 
-genProgram :: Annotated Program TypeA -> Set Identifier -> WACCArguments ([[IR]], Set Feature)
-genProgram (_, Program fs) structMembers
+genProgram :: Annotated Program TypeA -> (Set Identifier, Set Type) -> WACCArguments ([[IR]], Set Feature)
+genProgram (_, Program fs) (structMembers, types)
   = let vtable = Map.fromList . map swap . zip [0,4..] . Set.elems $ structMembers
+        tags = Map.fromList . map swap . zip [0..] . Set.elems $ types
         labs = map UnnamedLabel [0..]
         generation = mapM genDecl fs
-    in snd <$> evalRWST generation vtable labs
+    in snd <$> evalRWST generation (vtable, tags) labs
 
-genDecl :: Annotated Decl TypeA -> RWST (Map Identifier Int) ([[IR]], Set Feature) [Label] WACCArguments ()
+genDecl :: Annotated Decl TypeA -> RWST (Map Identifier Int, Map Type Int) ([[IR]], Set Feature) [Label] WACCArguments ()
 genDecl (_, DeclFunc f) = genFunction f
 genDecl (_, DeclType f) = return ()
 genDecl (_, DeclFFIFunc f) = return ()
 
 -- Functions
-genFunction :: Annotated FuncDef TypeA -> RWST (Map Identifier Int) ([[IR]], Set Feature) [Label] WACCArguments ()
+genFunction :: Annotated FuncDef TypeA -> RWST (Map Identifier Int, Map Type Int) ([[IR]], Set Feature) [Label] WACCArguments ()
 genFunction (_, FuncDef _ async fname params body) = do
     labs <- get
-    vtable <- ask
+    (vtable, tags) <- ask
 
     let initialState = CodeGenState {
           localNames = map Local [0..],
@@ -53,7 +54,8 @@ genFunction (_, FuncDef _ async fname params body) = do
 
         reader = CodeGenReader {
             asyncContext = async,
-            vtableOffsets = vtable
+            vtableOffsets = vtable,
+            typeTags = tags
         }
 
         argRegSkip = if async then 1 else 0
@@ -338,7 +340,8 @@ genExpr (_, ExprPromote expr baseTy) = do
   -- This has the same layout as a (int, baseTy) tuple
   promotedVar <- genAlloc 8 (Just (TyTuple [TyInt, baseTy]))
 
-  tagVar <- genLitInt 0 -- FIXME(paul)
+  tag <- asks ((! baseTy) . typeTags)
+  tagVar <- genLitInt tag
   genHeapWrite promotedVar (OperandLit 0) tagVar TyInt
   genHeapWrite promotedVar (OperandLit 4) exprVar TyInt
 
