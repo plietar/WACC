@@ -150,7 +150,7 @@ genHeapWrite baseVar operand elemVar ty =
 genBinOp :: BinOp -> Var -> Operand -> CodeGen Var
 genBinOp op left right = do
   outVar <- allocateTemp
-  emit [ IBinOp { iBinOp = BinOpAdd
+  emit [ IBinOp { iBinOp = op
                 , iDest  = outVar
                 , iLeft  = left
                 , iOperand = right } ]
