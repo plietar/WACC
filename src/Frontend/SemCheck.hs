@@ -106,6 +106,13 @@ isSubtypeOf (TyTuple ts1) (TyTuple ts2)
 
 isSubtypeOf (TyStruct ts1) (TyStruct ts2)
   = isStructSubtype (Map.assocs ts1) (Map.assocs ts2)
+
+isSubtypeOf (TyUnion ts1) (TyUnion ts2)
+  = return (Set.isSubsetOf ts1 ts1)
+
+isSubtypeOf (TyUnion ts) ty
+  = return (Set.member ty ts)
+
 isSubtypeOf t1 t2 = return (t1 == t2)
 
 checkIsSubtypeOf :: Type -> Type -> SemCheck ()
@@ -159,8 +166,18 @@ checkType (TyName name)
 checkType (TyStruct members) = do
   tell (Set.fromList (Map.keys members))
   TyStruct <$> mapM checkType members
+checkType (TyUnion tys)
+  = (TyUnion . Set.fromList) <$> checkUnion (Set.elems tys)
 checkType ty = return ty
 
+checkUnion :: [Type] -> SemCheck [Type]
+checkUnion [] = return []
+checkUnion (ty:ts) = do
+  ty' <- checkType ty
+  case ty' of
+    TyUnion ts' -> (++) <$> checkUnion (Set.elems ts')
+                        <*> checkUnion ts
+    _           -> (:)  <$> checkType ty' <*> checkUnion ts
 
 isArrayType :: Type -> SemCheck Bool
 isArrayType = isSubtypeOf (TyArray TyAny)
