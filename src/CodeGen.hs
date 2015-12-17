@@ -632,6 +632,34 @@ genStmt (_, StmtChanSend chanName elemRHS) = do
   genAwait "wacc_channel_send" [chanVar, elemVar]
   return ()
 
+genStmt (_, StmtTypeSwitch varName cases) = do
+  unionVar <- genFrameRead varName
+  tagVar   <- genHeapRead unionVar (OperandLit 0) TyInt
+  valueVar <- genHeapRead unionVar (OperandLit 4) TyInt
+
+  endLabel <- allocateLabel
+
+  mapM_ (genTypeCase tagVar varName valueVar endLabel) cases
+
+  emit [ ILabel {iLabel = endLabel} ]
+
+
+genTypeCase :: Var -> Identifier -> Var -> Label -> Annotated TypeCase TypeA -> CodeGen ()
+genTypeCase tagVar varName valueVar endLabel (_, TypeCase ty body) = do
+  tag <- asks ((! ty) . typeTags)
+  nextCase <- allocateLabel
+
+  emit [ ICompare { iValue = tagVar, iOperand = OperandLit tag }
+       , ICondJump { iLabel = nextCase, iCondition = CondNE } ]
+
+  withChildFrame [varName] $ do
+    localVar <- gets (getFrameLocal varName . frame)
+    emit [ IMove { iDest = localVar, iValue = valueVar } ]
+    genBlock body
+
+  emit [ IJump {iLabel = endLabel}
+       , ILabel {iLabel = nextCase} ]
+
 -- Block code generation
 genBlock :: Annotated Block TypeA -> CodeGen ()
 genBlock ((_, locals), Block stmts)

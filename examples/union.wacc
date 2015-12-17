@@ -2,23 +2,27 @@ begin
   type intOrChar = (int | char);
   type intOrCharOrString = (intOrChar | string);
 
-  let a : intOrChar = 'a';
-
-  a = 4;
-  a = 'c';
-
-  let b : intOrCharOrString = a;
-  b = "Hello";
-
-  println a;
-  println b;
-
-  switch type(a)
-  case int:
-    print a + 5
-  case char:
-    print ord(a)
+  void print_intOrCharOrString(intOrCharOrString x) is
+      switch type(x)
+      case int:
+        println "int: ", x
+      case char:
+        println "char: ", x
+      case string:
+        println "string: ", x
+      end
   end
 
+  let a : intOrChar = 'a';
+  call print_intOrCharOrString(a);
+  a = 4;
+  call print_intOrCharOrString(a);
+
+  let b : intOrCharOrString = a;
+  call print_intOrCharOrString(b);
+  b = 'c';
+  call print_intOrCharOrString(b);
+  b = "Hello";
+  call print_intOrCharOrString(b)
 end
 
