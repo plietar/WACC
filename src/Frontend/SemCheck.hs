@@ -374,7 +374,9 @@ binOpType op = case op of
                               <^(&&)^>
                               isOrderedType t2
                            , TyBool)
-    equalityOp = (\a b -> return (a == b), TyBool)
+    equalityOp = (\t1 t2 -> (||) <$> isSubtypeOf t1 t2
+                                 <*> isSubtypeOf t2 t1
+                         , TyBool)
 
 checkBinOp :: BinOp -> Type -> Type -> SemCheck Type
 checkBinOp op t1 t2 = do
