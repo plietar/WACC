@@ -14,6 +14,7 @@ import Control.Monad.Trans
 import Data.Int
 import Data.Tuple (swap)
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 import Text.Parsec.Combinator
 import Text.Parsec.Expr
 import qualified Text.Parsec.Prim as P
@@ -146,7 +147,13 @@ parseType = (do
   return (arr t)
   ) <?> "type"
   where
-    notArrayType = baseType <|> pairType <|> tupleType <|> chanType <|> structType
+    notArrayType = baseType <|>
+                   pairType <|>
+                   tupleType <|>
+                   chanType <|>
+                   structType <|>
+                   unionType
+
     baseType = (keyword "int"    $> TyInt) <|>
                (keyword "bool"   $> TyBool) <|>
                (keyword "char"   $> TyChar) <|>
@@ -167,6 +174,12 @@ parseType = (do
       -- FIXME(paul): Check for duplicated fields
       innerTypes <- braces (sepEndBy (swap <$> ((,) <$> parseType <*> identifier)) comma)
       return (TyStruct (Map.fromList innerTypes))
+
+    unionType = (TyUnion . Set.fromList) <$> (parens $ do
+      fstTy <- parseType
+      op "|"
+      rest <- sepBy1 parseType (op "|")
+      return (fstTy : rest))
 
 voidType :: Parser Type
 voidType = keyword "void" $> TyVoid

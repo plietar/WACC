@@ -10,6 +10,8 @@ import Common.Span
 import Data.List
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Set (Set)
+import qualified Data.Set as Set
 
 data FuncName = FuncName Identifier | MainFunc
 data Program a = Program [Annotated Decl a]
@@ -116,6 +118,7 @@ data Type = TyInt
           | TyArray Type
           | TyChan Type
           | TyStruct (Map String Type)
+          | TyUnion (Set Type)
           | TyName Identifier
           | TyFFI Identifier
           | TyAny
@@ -153,6 +156,7 @@ instance Show Type where
   show (TyArray t)  = show t ++ "[]"
   show (TyChan t)   = "chan(" ++ show t ++ ")"
   show (TyStruct ts) = "struct{ " ++ concatMap (\(name, ty) -> show ty ++ " " ++ name ++ "; ") (Map.assocs ts) ++ "}"
+  show (TyUnion ts) = "(" ++ intercalate " | " (map show (Set.elems ts)) ++ ")"
   show (TyName n)   = show n
   show (TyFFI n)    = n
   show TyAny        = "any"

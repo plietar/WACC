@@ -51,7 +51,7 @@ tokens :-
 
   -- Operators
   "!" | "*" | "/" | "%" | "+" | "-" | ">" | ">=" | "<" | "<="
-    | "==" | "!=" | "&&" | "||" | "<-"
+    | "==" | "!=" | "&&" | "||" | "<-" | "|"
                        { \(AlexPn _ line column) s-> ((line, column), TokOp s) }
 
   -- Assign Operator
