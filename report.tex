@@ -95,8 +95,24 @@ If we were to do this lab again we would try and decide earlier on a more even d
 Design patterns used and design choices made throughout the project.
 
 \section{Extensions}
-\subsection{Register Spilling}
-\subsection{Concurrency}
+\subsection{Optimised Register Allocation}
+In our initial compiler, every local variable was stored on the stack, so were arguments. For each statement, required variables were loaded
+from the stack before executing it, and modified variables stored afterwards. Registers were only used for temporary values.
+
+As our first extension, we modified the register allocation to try to place as many local variables inside registers as possible.
+
+To begin with, the code generator generates an intermediate representation (IR) of the program which is an abstraction of the ARM assembly.
+It uses in that IR as many temporary variables as it needs.
+
+The compiler performs simple control flow analysis, splitting the IR into basic blocks, which have a single entry and exit point. It
+also determines connections between these blocks, resulting in a control flow graph for the function.
+
+INSERT CFG HERE
+
+Once the control flow graph is known, we are able to apply the data flow equations iteratively, resulting in information about each
+variable's liveness information. If at any point of the program, two variables are live simultaneously, then the two variables are marked
+as interfering. Based on all the liveness information, we construct the register interference graph for the function.
+
 \subsection{Garbage Collection}
 For our WACC compiler, we decided it would be very interesting to manage our own heap memory instead of needing explicit allocation and freeing of memory. In this way we researched the different types of Garbage Collectors that
 are commonly implemented. Our garbage collector is not any one of the following: Copying, Generational, Concurrent,
