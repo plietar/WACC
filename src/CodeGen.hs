@@ -145,13 +145,13 @@ genHeapWrite baseVar operand elemVar ty =
                     , iOperand = operand
                     , iType = ty } ]
 
-genBinOp :: BinOp -> Var -> Var -> CodeGen Var
+genBinOp :: BinOp -> Var -> Operand -> CodeGen Var
 genBinOp op left right = do
   outVar <- allocateTemp
   emit [ IBinOp { iBinOp = BinOpAdd
                 , iDest  = outVar
                 , iLeft  = left
-                , iRight = right } ]
+                , iOperand = right } ]
   return outVar
 
 genAlloc :: Int -> Maybe Type -> CodeGen Var
@@ -320,11 +320,7 @@ genExpr (_, ExprBinOp BinOpMul expr1 expr2) = do
 genExpr (_, ExprBinOp operator expr1 expr2) = do
   outVar <- allocateTemp
   (var1, var2) <- genExpr2 expr1 expr2
-  emit [ IBinOp { iBinOp = operator
-                , iDest = outVar
-                , iLeft = var1
-                , iRight = var2 } ]
-  return outVar
+  genBinOp operator var1 (OperandVar var2 0)
 
 -- Variable
 genExpr (ty, ExprVar ident) = genFrameRead ident
@@ -360,8 +356,7 @@ genIndexingRead arrayVar (TyArray elemTy, indexExpr) = do
   indexVar       <- genExpr indexExpr
   genCall0 "p_check_array_bounds" [indexVar, arrayVar]
 
-  arrayOffsetVar <- genLitInt 4
-  offsetedArray  <- genBinOp BinOpAdd arrayVar arrayOffsetVar
+  offsetedArray  <- genBinOp BinOpAdd arrayVar (OperandLit 4)
   genHeapRead offsetedArray (OperandVar indexVar (typeShift elemTy)) elemTy
 
 genIndexingRead tupleVar (TyTuple ts, (_, ExprLit (LitInt x))) = do
@@ -398,8 +393,7 @@ genIndexingWrite (TyArray elemTy) indexExpr arrayVar valueVar = do
   indexVar <- genExpr indexExpr
   genCall0 "p_check_array_bounds" [indexVar, arrayVar]
 
-  arrayOffsetVar <- genLitInt 4
-  offsetedBase <- genBinOp BinOpAdd arrayVar arrayOffsetVar
+  offsetedBase <- genBinOp BinOpAdd arrayVar (OperandLit 4)
   genHeapWrite offsetedBase (OperandVar indexVar (typeShift elemTy)) valueVar elemTy
 
 genIndexingWrite (TyTuple ts) (_, ExprLit (LitInt x)) tupleVar valueVar = do

@@ -81,44 +81,42 @@ genARMInstruction (ILiteral { iDest = dest, iLiteral = LitString str } ) = do
 genARMInstruction (ILiteral { iDest = dest, iLiteral = LitLabel lab } ) = do
   emit ["LDR " ++ show dest ++ ", =" ++ show lab]
 --BinOp
-genARMInstruction (IBinOp { iBinOp = op, iDest = dest,
-        iLeft  = left, iRight = right } )
-  = case op of
+genARMInstruction IBinOp {..}
+  = case iBinOp of
       BinOpAdd -> do
-                  emit [ "ADDS " ++ show dest ++
-                         ", " ++ show left ++
-                         ", " ++ show right
+                  emit [ "ADDS " ++ show iDest ++
+                         ", " ++ show iLeft ++
+                         ", " ++ show iOperand
                        , "BLVS p_throw_overflow_error"]
                   emitFeature ThrowOverflowError
       BinOpSub -> do
-                  emit [ "SUBS " ++ show dest ++
-                         ", " ++ show left ++
-                         ", " ++ show right
+                  emit [ "SUBS " ++ show iDest ++
+                         ", " ++ show iLeft ++
+                         ", " ++ show iOperand
                        , "BLVS p_throw_overflow_error"]
                   emitFeature ThrowOverflowError
-      BinOpGT  -> emit ["CMP " ++ show left ++ ", " ++ (show right),
-                        "MOVGT " ++ show dest ++ ", #1",
-                        "MOVLE " ++ show dest ++ ", #0"]
-      BinOpGE  -> emit ["CMP " ++ show left ++ ", " ++ (show right),
-                       "MOVGE " ++ show dest ++ ", #1",
-                       "MOVLT " ++ show dest ++ ", #0"]
-      BinOpLT  -> emit ["CMP " ++ show left ++ ", " ++ (show right),
-                        "MOVLT " ++ show dest ++ ", #1",
-                        "MOVGE " ++ show dest ++ ", #0"]
-      BinOpLE  -> emit ["CMP " ++ show left ++ ", " ++ (show right),
-                        "MOVLE " ++ show dest ++ ", #1",
-                        "MOVGT " ++ show dest ++ ", #0"]
-      BinOpEQ  -> emit ["CMP " ++ show left ++ ", " ++ (show right),
-                        "MOVEQ " ++ show dest ++ ", #1",
-                        "MOVNE " ++ show dest ++ ", #0"]
-      BinOpNE  -> emit ["CMP " ++ show left ++ ", " ++ (show right),
-                        "MOVNE " ++ show dest ++ ", #1",
-                        "MOVEQ " ++ show dest ++ ", #0"]
-      BinOpAnd -> emit ["AND " ++ show dest ++ ", " ++
-                        (show left) ++ ", " ++ (show right) ]
-      BinOpOr  -> emit ["ORR " ++ show dest ++ ", " ++
-                        (show left) ++ ", " ++ (show right) ]
-
+      BinOpGT  -> emit ["CMP " ++ show iLeft ++ ", " ++ show iOperand,
+                        "MOVGT " ++ show iDest ++ ", #1",
+                        "MOVLE " ++ show iDest ++ ", #0"]
+      BinOpGE  -> emit ["CMP " ++ show iLeft ++ ", " ++ show iOperand,
+                       "MOVGE " ++ show iDest ++ ", #1",
+                       "MOVLT " ++ show iDest ++ ", #0"]
+      BinOpLT  -> emit ["CMP " ++ show iLeft ++ ", " ++ show iOperand,
+                        "MOVLT " ++ show iDest ++ ", #1",
+                        "MOVGE " ++ show iDest ++ ", #0"]
+      BinOpLE  -> emit ["CMP " ++ show iLeft ++ ", " ++ show iOperand,
+                        "MOVLE " ++ show iDest ++ ", #1",
+                        "MOVGT " ++ show iDest ++ ", #0"]
+      BinOpEQ  -> emit ["CMP " ++ show iLeft ++ ", " ++ show iOperand,
+                        "MOVEQ " ++ show iDest ++ ", #1",
+                        "MOVNE " ++ show iDest ++ ", #0"]
+      BinOpNE  -> emit ["CMP " ++ show iLeft ++ ", " ++ show iOperand,
+                        "MOVNE " ++ show iDest ++ ", #1",
+                        "MOVEQ " ++ show iDest ++ ", #0"]
+      BinOpAnd -> emit ["AND " ++ show iDest ++ ", " ++
+                        (show iLeft) ++ ", " ++ show iOperand ]
+      BinOpOr  -> emit ["ORR " ++ show iDest ++ ", " ++
+                        (show iLeft) ++ ", " ++ show iOperand ]
       -- Division and remainder are handled by CodeGen
 
 genARMInstruction IMul{..} = do
@@ -146,12 +144,7 @@ genARMInstruction IMove { iDest = dest, iValue = value }
 
 --Jumps
 genARMInstruction ICompare{..}
-  = emit ["CMP " ++ show iValue ++ ", " ++ operand]
-  where
-    operand = case iOperand of
-      OperandVar op shift -> let scaling = if shift /= 0 then ", lsl #" ++ show shift else ""
-                             in show op ++ scaling
-      OperandLit lit -> "#" ++ show lit
+  = emit ["CMP " ++ show iValue ++ ", " ++ show iOperand]
 
 genARMInstruction ICondJump{..}
   = emit [ "B" ++ show iCondition ++ " " ++ show iLabel ]
@@ -202,19 +195,12 @@ genARMInstruction (IFrameWrite {iOffset = offset, iValue = value, iType = ty} )
   = emit [strInstr ty ++ " " ++ show value ++ ", [sp, #" ++ show offset ++ "]"]
 
 -- Heap Read (i.e Pairs and Arrays)
-genARMInstruction (IHeapRead { iHeapVar = heapVar, iDest = dest, iOperand = OperandVar offset shift, iType = ty })
-  = emit [ldrInstr ty ++ " " ++ show dest ++ ", [" ++ show heapVar ++ ", " ++ show offset ++ scaling ++ "]"]
-    where scaling = if shift /= 0 then ", lsl #" ++ show shift else ""
-genARMInstruction (IHeapRead { iHeapVar = heapVar, iDest = dest, iOperand = OperandLit offset, iType = ty })
-  = emit [ldrInstr ty ++ " " ++ show dest ++ ", [" ++ show heapVar ++ ", #" ++ show offset ++ "]"]
-
+genARMInstruction IHeapRead {..}
+  = emit [ldrInstr iType ++ " " ++ show iDest ++ ", [" ++ show iHeapVar ++ ", " ++ show iOperand ++ "]"]
 
 -- Heap Write (i.e Pairs and Arrays)
-genARMInstruction (IHeapWrite { iHeapVar = heapVar, iValue = value, iOperand = OperandVar offset shift, iType = ty })
-  = emit [strInstr ty ++ " " ++ show value ++ ", [" ++ show heapVar ++ ", " ++ show offset ++ scaling ++ "]"]
-    where scaling = if shift /= 0 then ", lsl #" ++ show shift else ""
-genARMInstruction (IHeapWrite { iHeapVar = heapVar, iValue = value, iOperand = OperandLit offset, iType = ty })
-  = emit [strInstr ty ++ " " ++ show value ++ ", [" ++ show heapVar ++ ", #" ++ show offset ++ "]"]
+genARMInstruction IHeapWrite {..}
+  = emit [strInstr iType ++ " " ++ show iValue ++ ", [" ++ show iHeapVar ++ ", " ++ show iOperand ++ "]"]
 
 -- Function
 genARMInstruction IFunctionBegin {..}

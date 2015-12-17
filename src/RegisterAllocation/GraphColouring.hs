@@ -292,7 +292,7 @@ mapIR colouring IBinOp{..}
   = IBinOp { iBinOp = iBinOp
            , iDest  = colouring iDest
            , iLeft  = colouring iLeft
-           , iRight = colouring iRight }
+           , iOperand = mapOperand colouring iOperand }
 
 mapIR colouring IMul{..}
   = IMul { iHigh  = colouring iHigh
@@ -322,33 +322,21 @@ mapIR colouring IFrameWrite{..}
 mapIR colouring IHeapRead{..}
   = IHeapRead { iHeapVar = colouring iHeapVar
               , iDest    = colouring iDest
-              , iOperand = operand
+              , iOperand = mapOperand colouring iOperand
               , iType    = iType }
-  where
-    operand = case iOperand of
-      OperandLit x -> OperandLit x
-      OperandVar v s -> OperandVar (colouring v) s
 
 mapIR colouring IHeapWrite{..}
     = IHeapWrite { iHeapVar = colouring iHeapVar
                  , iValue = colouring iValue
-                 , iOperand = operand
+                 , iOperand = mapOperand colouring iOperand
                  , iType = iType}
-    where
-      operand = case iOperand of
-        OperandLit x -> OperandLit x
-        OperandVar v s -> OperandVar (colouring v) s
 
 mapIR colouring IPushArg{..}
   = IPushArg { iValue = colouring iValue }
 
 mapIR colouring ICompare{..}
   = ICompare { iValue   = colouring iValue
-             , iOperand = operand }
-  where
-    operand = case iOperand of
-      OperandLit x -> OperandLit x
-      OperandVar v s -> OperandVar (colouring v) s
+             , iOperand = mapOperand colouring iOperand }
 
 mapIR colouring IJumpReg{..}
   = IJumpReg { iValue = colouring iValue }
@@ -364,6 +352,11 @@ mapIR colouring IRestore{..}
 
 -- Base Case
 mapIR colouring x = x
+
+mapOperand :: (Var -> Var) -> Operand -> Operand
+mapOperand colouring (OperandLit x) = OperandLit x
+mapOperand colouring (OperandVar var shift) = OperandVar (colouring var) shift
+
 
 simplifyMoves :: [IR] -> [IR]
 simplifyMoves = filter (not . isUselessMove)

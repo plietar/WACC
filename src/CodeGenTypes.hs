@@ -60,7 +60,11 @@ instance Show Var where
   show GeneratorState = "generator"
 
 data Operand = OperandVar Var Int | OperandLit Int
-  deriving (Show)
+
+instance Show Operand where
+  show (OperandVar var 0) = show var
+  show (OperandVar var n) = show var ++ ", lsl #" ++ show n
+  show (OperandLit n)     = "#" ++ show n
 
 data Condition = CondEQ | CondNE
 
@@ -74,7 +78,7 @@ data IR
 
   | ILiteral { iDest :: Var, iLiteral :: Literal }
   | IMul { iHigh :: Var, iLow :: Var, iLeft :: Var, iRight :: Var }
-  | IBinOp { iDest :: Var, iBinOp :: BinOp, iLeft :: Var, iRight :: Var }
+  | IBinOp { iDest :: Var, iBinOp :: BinOp, iLeft :: Var, iOperand :: Operand }
   | IUnOp { iDest :: Var, iUnOp :: UnOp, iValue :: Var }
   | IMove { iDest :: Var, iValue :: Var }
 

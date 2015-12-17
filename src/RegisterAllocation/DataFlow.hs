@@ -140,7 +140,10 @@ irDef _                  = Set.empty
 
 irUse :: IR -> Set Var
 irUse IReturn{..}        = Set.fromList iArgs
-irUse IBinOp{..}         = Set.fromList [ iRight, iLeft ]
+irUse IBinOp{..}
+  = case iOperand of
+    OperandVar v _ -> Set.fromList [ iLeft, v ]
+    OperandLit x -> Set.fromList [ iLeft ]
 irUse IMul{..}           = Set.fromList [ iRight, iLeft ]
 irUse IUnOp{..}          = Set.singleton iValue
 irUse IMove{..}          = Set.singleton iValue
