@@ -176,13 +176,22 @@ parseType = (do
       return (TyStruct (Map.fromList innerTypes))
 
     unionType = (TyUnion . Set.fromList) <$> (parens $ do
-      fstTy <- parseType
+      fstTy <- nullOrType
       op "|"
-      rest <- sepBy1 parseType (op "|")
+      rest <- sepBy1 nullOrType (op "|")
       return (fstTy : rest))
 
 voidType :: Parser Type
 voidType = keyword "void" $> TyVoid
+
+nullType :: Parser Type
+nullType = keyword "null" $> TyNull
+
+nullOrType :: Parser Type
+nullOrType = nullType <|> parseType
+
+voidOrType :: Parser Type
+voidOrType = voidType <|> parseType
 
 pairElem :: Parser (Annotated IndexingElem SpanA)
 pairElem = spanned $ do
@@ -337,7 +346,7 @@ typeSwitchStmt = spanned $ do
 typeCase :: Parser (Annotated TypeCase SpanA)
 typeCase = spanned $ do
   keyword "case"
-  ty <- parseType
+  ty <- nullOrType
   colon
   body <- block
   return (TypeCase ty body)
@@ -450,7 +459,7 @@ function :: Parser (Annotated Decl SpanA)
 function = wrapSpan DeclFunc <$> (spanned $ do
   async <- option False (keyword "async" >> return True)
   (returnType, functionName) <- P.try $ do
-    t <- parseType <|> voidType
+    t <- voidOrType
     i <- identifier
     lookAhead (token TokLParen)
     return (t, i)
@@ -474,7 +483,7 @@ typeDecl = wrapSpan DeclType <$> (spanned $ do
 ffiFunction :: Parser (Annotated Decl SpanA)
 ffiFunction = wrapSpan DeclFFIFunc <$> (spanned $ do
   async <- option False (keyword "async" >> return True)
-  returnType <- parseType <|> voidType
+  returnType <- voidOrType
   functionName <- identifier
   args <- parens (sepBy parseType comma)
   symbolName <- (equal >> identifier) <|> return functionName
