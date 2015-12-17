@@ -166,7 +166,7 @@ int main() {
             wacc_sock *sock = evs[i].data.ptr;
 
             if (evs[i].events & EPOLLIN) {
-                for (list_elem *elem = ready_tasks; elem != NULL; ) {
+                for (list_elem *elem = sock->recv_list; elem != NULL; ) {
                     wacc_task *task = list_get(elem, wacc_task, current_list);
                     list_elem *next = elem->next;
 
@@ -177,7 +177,7 @@ int main() {
             }
 
             if (evs[i].events & EPOLLOUT) {
-                for (list_elem *elem = ready_tasks; elem != NULL; ) {
+                for (list_elem *elem = sock->send_list; elem != NULL; ) {
                     wacc_task *task = list_get(elem, wacc_task, current_list);
                     list_elem *next = elem->next;
 
