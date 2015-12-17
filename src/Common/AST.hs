@@ -25,6 +25,7 @@ data TypeDef a = TypeDef Identifier Type
 
 data Block a = Block [Annotated Stmt a]
 data CaseArm a = CaseArm Literal (Annotated Block a)
+data TypeCase a = TypeCase Type (Annotated Block a)
 
 data Stmt a
   = StmtSkip
@@ -44,6 +45,7 @@ data Stmt a
   | StmtAwait  Identifier [Annotated Expr a]
   | StmtFire   Identifier [Annotated Expr a]
   | StmtChanSend Identifier (Annotated AssignRHS a)
+  | StmtTypeSwitch Identifier [Annotated TypeCase a]
 
 data AssignLHS a
   = LHSVar       Identifier
@@ -177,6 +179,7 @@ class ( Show (Ann a Program)
       , Show (Ann a FFIFunc)
       , Show (Ann a Block)
       , Show (Ann a CaseArm)
+      , Show (Ann a TypeCase)
       , Show (Ann a Stmt)
       , Show (Ann a Expr)
       , Show (Ann a AssignLHS)
@@ -193,6 +196,7 @@ deriving instance Annotation a => Show (TypeDef a)
 deriving instance Annotation a => Show (FFIFunc a)
 deriving instance Annotation a => Show (Block a)
 deriving instance Annotation a => Show (CaseArm a)
+deriving instance Annotation a => Show (TypeCase a)
 deriving instance Annotation a => Show (Stmt a)
 deriving instance Annotation a => Show (Expr a)
 deriving instance Annotation a => Show (AssignLHS a)
@@ -216,6 +220,7 @@ instance Annotation TypeA where
   type Ann TypeA FFIFunc = ()
   type Ann TypeA Block = (Bool, [(String, Type)])
   type Ann TypeA CaseArm = Type
+  type Ann TypeA TypeCase = Type
   type Ann TypeA Stmt = Bool
   type Ann TypeA Expr = Type
   type Ann TypeA AssignLHS = Type

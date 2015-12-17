@@ -326,6 +326,22 @@ caseArm = spanned $ do
   b <- block
   return (CaseArm i b)
 
+typeSwitchStmt :: Parser (Annotated Stmt SpanA)
+typeSwitchStmt = spanned $ do
+  P.try (keyword "switch" >> keyword "type")
+  var <- parens identifier
+  cases <- many1 typeCase
+  keyword "end"
+  return (StmtTypeSwitch var cases)
+
+typeCase :: Parser (Annotated TypeCase SpanA)
+typeCase = spanned $ do
+  keyword "case"
+  ty <- parseType
+  colon
+  body <- block
+  return (TypeCase ty body)
+
 scopeStmt :: Parser (Annotated Stmt SpanA)
 scopeStmt = spanned $ do
   _ <- keyword "begin"
@@ -407,6 +423,7 @@ stmt :: Parser (Annotated Stmt SpanA)
 stmt = skipStmt    <|>
        whileStmt   <|>
        ifStmt      <|>
+       typeSwitchStmt <|>
        switchStmt  <|>
        scopeStmt   <|>
        printStmt   <|>

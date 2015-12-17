@@ -11,6 +11,14 @@ begin
   b = "Hello";
 
   println a;
-  println b
+  println b;
+
+  switch type(a)
+  case int:
+    print a + 5
+  case char:
+    print ord(a)
+  end
+
 end
 
