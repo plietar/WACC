@@ -447,4 +447,14 @@ In the runtime, channels are similar to sockets. Each channel has two task lists
 The main difference with sockets is that no file descriptor is used. A receiving task is woken up when another task sends
 a value, and vice-versa.
 
+\section{Backwards Compatibility}
+While implementing the various extensions, we have strived to keep backwards compatibility with the original WACC language,
+as well as making the new features as integrated as possible. For instance, rather than having both pairs and arbitrary length
+tuples, we've made one a superset of the other, and make it a single functionality, when keeping the previous syntax.
+
+As a result, only two tests on fail on LabTS. The first one, $ifNoelse.wacc$, enforces an else block after an if, but this
+is one of our extension, so this is the expected behaviour. The second one, $printAllTypes.wacc$, times out on LabTS but
+produces the correct result when run locally. This is due to the optimised register allocation algorithm, which consumes a
+lot of time when many local variables are live simultaneously.
+
 \end{document}
