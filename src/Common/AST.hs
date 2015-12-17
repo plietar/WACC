@@ -220,7 +220,7 @@ instance Annotation TypeA where
   type Ann TypeA FFIFunc = ()
   type Ann TypeA Block = (Bool, [(String, Type)])
   type Ann TypeA CaseArm = Type
-  type Ann TypeA TypeCase = Type
+  type Ann TypeA TypeCase = ()
   type Ann TypeA Stmt = Bool
   type Ann TypeA Expr = Type
   type Ann TypeA AssignLHS = Type

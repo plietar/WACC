@@ -633,6 +633,30 @@ checkStmt (_, StmtChanSend chanName rhs) = do
 
   return (False, StmtChanSend chanName rhs')
 
+checkStmt (_, StmtTypeSwitch varName cases) = do
+  varTy <- liftSemCheck $ getVariable varName
+  members <- case varTy of
+    TyUnion m -> return m
+    _         -> semanticError ("Variable " ++ show varName ++ " of type " ++ show varTy ++ " is not a union")
+
+  cases' <- liftSemCheck $ mapM (checkTypeCase varName members) cases
+  return (False, StmtTypeSwitch varName cases')
+
+checkTypeCase :: Identifier -> Set Type -> Annotated TypeCase SpanA -> SemCheck (Annotated TypeCase TypeA)
+checkTypeCase varName members (_, TypeCase ty body) = do
+  ty' <- checkType ty
+  unless (Set.member ty' members)
+         (semanticError (show ty' ++ " is not a member of union type " ++ show (TyUnion members)))
+
+  emitTypeTag ty'
+
+  context <- ask
+  childContext <- lift $ execStateT (addVariable varName ty') (newContext context)
+
+  body' <- local (const childContext) (checkBlock body)
+
+  return ((), TypeCase ty' body')
+
 checkFunction :: Annotated FuncDef SpanA -> SemCheck (Annotated FuncDef TypeA)
 checkFunction (_, FuncDef expectedReturnType async name args block)
   = withErrorContext ("In function " ++ show name) $ do
