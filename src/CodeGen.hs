@@ -627,7 +627,7 @@ genStmt (_, StmtFor ident arr@(baseTy@(TyArray elemTy), _) block) = do
 
     localVar <- gets (getFrameLocal ident . frame)
     offsetedVar <- genBinOp BinOpAdd arrVar (OperandLit 4)
-    emit [ IHeapRead { iHeapVar = offsetedVar, iDest = localVar, iOperand = OperandVar indexVar (typeShift elemTy) 
+    emit [ IHeapRead { iHeapVar = offsetedVar, iDest = localVar, iOperand = OperandVar indexVar (typeShift elemTy)
                      , iType = elemTy } ]
     genBlock block
     emit [ IBinOp { iDest = indexVar, iBinOp = BinOpAdd, iLeft = indexVar, iOperand = OperandLit 1 } ]
