@@ -100,8 +100,9 @@ genFunction (_, FuncDef _ async fname params body) = do
 
             emit [ ILabel { iLabel = startLabel } ]
 
-            setupArguments
-
+            emit [ IMove { iDest = Reg 4, iValue = Reg 1 }
+                 , IMove { iDest = Reg 5, iValue = Reg 2 }
+                 , IMove { iDest = Reg 6, iValue = Reg 3 }]
 
             sizeVar <- allocateTemp
             -- The IGeneratorSize IR gets replace by an ILiteral once
@@ -109,6 +110,12 @@ genFunction (_, FuncDef _ async fname params body) = do
             emit [ IGeneratorSize { iDest = sizeVar } ]
             stateVar <- genAllocVariable sizeVar Nothing
             emit [ IMove { iDest = GeneratorState, iValue = stateVar } ]
+
+            emit [ IMove { iDest = Reg 1, iValue = Reg 4 }
+                 , IMove { iDest = Reg 2, iValue = Reg 5 }
+                 , IMove { iDest = Reg 3, iValue = Reg 6 }]
+
+            setupArguments
 
           else setupArguments
 
