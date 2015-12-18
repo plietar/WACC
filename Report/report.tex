@@ -64,25 +64,22 @@
 \maketitle
 
 \section{Product}
-Here follows an analytic and critical evaluation of our WACC compiler, which we have written in Haskell. Haskell has allowed us to use powerful pattern matching and monads to write our compiler. Being extremely critical, we think we have built a fantastic compiler; standing not just up to the expectations of the test cases, but with good code design and a lot of extended and additional fuctionality.
+Here follows an analytic and critical evaluation of our WACC compiler, which we have written in Haskell. Haskell has allowed us to use powerful monads, pattern matching, user defined data types and many other features and abstractions that object oriented languages lack. Our compiler does not merely stand up to the expectations of the test cases, it has a clear separation of behaviour amongst its constituent components, good code design and a lot of extended and additional fuctionality.
 
-The layout of our WACC compiler is very clear and concise, within our source folder you can easily see what is required for the Frontend, the Backend and the extension. Each file has one meaningful purpose e.g. our Parser.hs parses input, our SemCheck.hs carries out semantic checking. 
 
-The fact that our compiler is well formatted means that it is quite easily extendible if you wanted to add to the WACC language. Adding additional statements would not cause any conflicts with the existing program; all you need to do is add it to the parser, add the correct semantic check and then add how you want the code to be generated using the IR (Intermediate Representation) we have already defined. 
+Thanks to the code design and separation of behaviour, adding new features to the WACC language and compiler is a relatively easy task. As an example, we were able to add enhanced for loops in little more than one hour. The process of adding new statements or syntax simply requires adding it to the lexer, creating a parser function, adding the correct semantic check and then adding how you want the code to be generated using the IR (Intermediate Representation) we have already defined. 
 
-We changed the register allocation in our extension to produce better code. This, however, means that our final register allocation is a bit slower than what we initially committed for the backend. This slowdown actually causes LabTS to timeout on one of our test cases so this is definitely something we would need to address if rebuilding the compiler.  
+We changed the register allocation in our extension to produce better code. This, however, means that our final register allocation is a bit slower than what we initially committed for the backend. This slowdown actually causes LabTS to timeout on one of our test cases so this is definitely something we would need to address to improve the compiler.  
 
 \section{Project Management}
 
 \subsection{Organisation}
-The way our group kept organised throughout this project was through Git and WhatsApp. 
-
-The organisation of our group got better and smoother as the project advanced. At the beginning the division of the Frontend was between the three parts: lexer, 
-parser, and semantic checker. However, we weren't fully aware that each were not equivalent in terms of work, so for example the team members that worked on the parser worked harder than the ones that worked on the lexer. However we changed that on the Backend. Although inevitably we couldn't all contribute to the Backend in the same degree (as the expertise of some team members were far beyond others), we did know how to push each of the team members to work their hardest on each assignment. By the start of the extension, we were all on the same page and very organised. We decided to part ways on the extension and assigned a particular extension to each team member according to our level. This made the extension part of the project very pleasant to work on, as each team member had 
-free room to play around but forced to learn more from the code written by others, since most extensions need the team member to modify many files. Hence Paul worked on concurrency and register spilling, Jaime worked on garbage collection, Ignacio worked on extending pairs to tuples, and Leanne improved the if statements, adding a switch statement. 
+The way our group kept organised throughout this project was through Git and WhatsApp. The organisation of our group got better and smoother as the project advanced. At the beginning the division of the Frontend was between the three parts: lexer, 
+parser, and semantic checker. However, we weren't fully aware that each were not equivalent in terms of work, so for example the team members that worked on the parser worked harder than the ones that worked on the lexer. However we changed that on the Backend. Although inevitably we couldn't all contribute to the Backend in the same degree (as the expertise of some team members was far beyond others), we did know how to push each of the team members to work their hardest on each assignment. By the start of the extension, we were all on the same page and very organised. We decided to part ways on the extension and assigned a particular extension to each team member according to our level. This made the extension part of the project very pleasant to work on, as each team member had 
+free room to play around but was forced to learn more from the code written by others, since most extensions need the team member to modify many files. Hence Paul worked on concurrency and register spilling, Jaime worked on garbage collection, Ignacio worked on extending pairs to tuples, and Leanne improved the if statements, adding a switch statement. 
 
 \subsection{Use of Git}
-Our use of git definitely improved as the project advanced. We tried our best to always have meaningful commit messages and we would also include the initials of anyone that helped with that commit. For each milestone of the compiler we had several different branches. For example, our Frontend had separate branches for the parser, lexer and semantic checker, our backend had separate branches for code generation and ARM generation and for our extension we had separate branches for each individual extension. This made it very easy to keep track of what everyone had done and it also meant that our master branch would always successfully build since we did not push to master until our respective branches behaved correctly. Paul's invaluable knowledge and experience with git helped the other team members become very much more fluent in it and we have all undoubtedly become much more acquainted with Git than we did with any other small lab project.
+Our use of git definitely improved as the project advanced. During the Frontend we commonly used rebasing instead of simply merging, since this resulted in a cleaner commit history, but in the code review this was misinterpreted as a bad use of git since it appeared as if we had used less branches than we really had. From that point onwards we avoided modifying our git history as much as possible, so the graphs of the branches faithfully represent the development of each part. We also tried our best to always have meaningful commit messages and to include the initials of the contributors to each commit. At all times we followed the guideline of not pushing into the master branch the code compiled, which made it more pleasant to work in group. 
 
 \subsection{Communication}
 The communication in our group was excellent from the beginning to the end. With the aid of WhatsApp we were able to organise our meetings and at each meeting we would generally all work beside each other but on different parts. This was useful in that if anyone had any issues they could easily seek help from another teammate. 
@@ -90,13 +87,11 @@ The communication in our group was excellent from the beginning to the end. With
 \subsection{Group Structure}
 Our group lacked a rigid structure in that someone would just decide to do something and work on it by themselves rather than coordinating the task between a couple group members. However, throughout the project, the distribution of work did improve so that one or two people were not doing the majority of the work.
 
-\subsection{What we would do differently}
-If we were to do this lab again we would try and decide earlier on a more even distribution of work taking in to account each person's different programming ability. We also think it would be important to have a distinct team leader to delegate tasks.
-
-\section{Design Choices}
-Design patterns used and design choices made throughout the project.
 
 \section{Extensions}
+\subsection{Improving If Statements}
+We decided to extend the WACC language with additional conditional branching statements; `if' statements without an `else' branch and `switch' statements. Initially to implement the `if' statements without an `else' branch we defined a new data type called `StmtIfNoElse' which had only the condition and the `then' branch associated with it but this added a lot of repetitive code as it was extremely similar to our `StmtIf'. To overcome this problem, we made use of Haskell's Maybe monad to  define `if' statements to have a Maybe block. We then had to change Parser.hs to allow this new syntax and then we had to add the new semantics to SemCheck.hs. The difference in semantic checking between an `if' statement with an `else' branch and one without was that in the case where the `else' block was empty we had to show that the `if' statement never necessarily returns a value.  Finally we had to ensure the correct assembly code was generated which meant changing CodeGen.hs to have a case expression to deal with if the block contained a value (Just b) or was empty (Nothing).
+For `switch' statements we had to define new keywords in lexer.x for `switch' and `case'. Then, similarly we had to add switch statements to our semantic checker and parser and edit how the assembly code is generated.
 \subsection{Optimised Register Allocation}
 In our initial compiler, every local variable was stored on the stack, so were arguments. For each statement, required variables were loaded
 from the stack before executing it, and modified variables stored afterwards. Registers were only used for temporary values.
@@ -115,88 +110,6 @@ Once the control flow graph is known, we are able to apply the data flow equatio
 variable's liveness information. If at any point of the program, two variables are live simultaneously, then the two variables are marked
 as interfering. Based on all the liveness information, we construct the register interference graph for the function.
 
-\subsection{Garbage Collection}
-For our WACC compiler, we decided it would be very interesting to manage our own heap memory instead of needing explicit allocation and freeing commands. Thus, we researched the different types of Garbage Collectors that
-are commonly implemented. We discarded Reference Counting garbage collectors since they cannot free cyclic objects. Then we looked at different implementations of Mark-Sweep and Copying Collectors and we chose to design a Copying Collector that required less frequent calls to copy. This is how the Mostly-Copying Collector came into play; a more efficient version of the Copying Collector that minimises the number of copy calls. Our garbage collector is not Generational and does not Compact elements in the heap. Also instead of an Incremental collector, ours requires a Stop The World (STW) pause. However, the biggest defficiency that our WACC Collector has is the fact that it cannot interact with resumable (i.e asyncronous) functions properly. The collector is fully precise on the heap, where as resumable functions allocate space on the heap without type information, which means garbage collection is not correct when both of them interact. As a result of the small time frame within which we have worked, we have not been able to join these two components together. Thus, Gargage Collection and resumable functions need to work independently. 
-
-
-
-We have based our design on a paper by Antony L Hosking ``Portable, Mostly-Concurrent, Mostly-Copying Garbage Collection for Multi-Processors''. A pseudocode fragment from that paper follows. 
-
-\noindent\begin{minipage}{.46\textwidth}
-\begin{lstlisting}[caption=code 1,frame=tlrb, mathescape]{Name}
-proc promote(p,color) ≡ 
-  white := white \{p}; 
-  color := color $\cup$ {p}.
-
-proc move(l) ≡ 
-  r := l$\uparrow$; // r is the object pointed to by l
-  if page (r) $\in$ white then 
-    if r' = nil then  // Forward Ref. 
-      r' := copy(r);
-      grey := grey $ \cup $ {page(r′)}
-    end;
-  l$\uparrow$ := r′
-  end.
-
-
-\end{lstlisting}
-\end{minipage}\hfill
-\begin{minipage}{.45\textwidth}
-\begin{lstlisting}[caption=code 2,frame=tlrb, mathescape]{Name}
-proc trace() ≡ 
-  foreach p $\in$ grey do
-    grey := grey\{p};
-    foreach l $\in$ pointer locations(p) do
-      move (l)
-    end;
-    black := black $ \cup $ {p}
-  end.
-
-proc gc() ≡
-  white := black; grey := {}; black := {}; 
-  foreach r $\in$ AR where page(r) $\in$ white do
-    promote(page(r), grey);
-  end;
-  trace();
-  foreach p $\in$ white do free(p) end.
-\end{lstlisting}
-\end{minipage}
-
-The heap is a blocked of aligned memory requested to the operating system. We divide the heap into Pages of a fixed
-size. We chose the alignment boundary for the allocated memory to be the same as the page size, which allows us
-to easily determine the page in which an object is allocated, given the object pointer (simply by rounding the pointer
-down to the boundary alignment). In each page, we allocate objects until the page is full. In addition to the space 
-to allocate the object, each object requires a header, where we keep vital information about it. The header includes the size of the object, information about its type which the compiler needs to generate and a forward reference for when the object is copied. This of course causes an overhead in the memory usage that is usually unnecessary in Non Garbage-Collected languages. 
-
-
-The aforementioned paper and algorithm build up on Joel Bartlett's Mostly-Copying Garbage Collector. Instead of 
-Bartlett's original Generational Collector we mostly followed the pseudocode design. This implementation uses Dijkstra's tricolouring 
-abstraction to explain the classification of allocated pages in the heap. During normal allocation, only Black pages 
-exist. All objects are thus allocated into Black pages. During Collection, all Black pages are firstly converted into White 
-pages, which can be considered the ``condemned pages'', since all the remaining White pages at the end of the collection 
-process will be collected and freed. Collection starts by scanning the stack and registers and promoting all the pages 
-that are ambiguously referenced from them into the Grey set. The collector gains access to the stack and registers by pushing all registers into the stack and then calling the allocator with the stack pointer as a parameter. The Garbage Collector must be initialised at the beginning of the program by giving it the top stack pointer. This defines the portion of the stack that must be scanned. After the stack and registers are scanned, Grey pages are scanned for pointer references to other heap objects. When one such pointer is found, if it references a White page, then the object is copied into a Grey page to avoid it getting destroyed, otherwise the reference is already in a Grey page and nothing needs to be done. After a full page is scanned, it is promoted to a Black (stable) page, representing that it contains live objects with no pointers to a White page. When the Grey Set is empty, all objects that are still ``alive'' or are referenced by ``alive'' objects are in Black pages. We thus free all remaining White pages and proceed with normal allocation. 
-
-
-If we had more time we would have liked to upgrade the GC into an Incremental Collector, since the STW pause is quite noticeable when the memory demands are very large, such as in the TicTacToe WACC program. Nonetheless, the real time to run TicTacToe is 7 seconds faster using Garbage Collection than not using it, although the memory usage is much higher. 
-
-% \begin{figure}    
-%   \textbf{Gargage Collected}
-%   \begin{minipage}{.49\textwidth}
-%      \includegraphics[width=\linewidth]{TicTacToeGC.png}
-%   \end{minipage}
-
-%   \textbf{Non-Gargage Collected}
-%   \begin{minipage}{.49\textwidth}
-%       \includegraphics[width=\linewidth]{TicTacToeNoGC.png}
-%   \end{minipage}
-% \end{figure}
-
-
-\subsection{Improving If Statements}
-We decided to extend the WACC language with additional conditional branching statements; `if' statements without an `else' branch and `switch' statements. Initially to implement the `if' statements without an `else' branch we defined a new data type called `StmtIfNoElse' which had only the condition and the `then' branch associated with it but this added a lot of repetitive code as it was extremely similar to our `StmtIf'. To overcome this problem, we made use of Haskell's Maybe monad to  define `if' statements to have a Maybe block. We then had to change Parser.hs to allow this new syntax and then we had to add the new semantics to SemCheck.hs. The difference in semantic checking between an `if' statement with an `else' branch and one without was that in the case where the `else' block was empty we had to show that the `if' statement never necessarily returns a value.  Finally we had to ensure the correct assembly code was generated which meant changing CodeGen.hs to have a case expression to deal with if the block contained a value (Just b) or was empty (Nothing).
-For `switch' statements we had to define new keywords in lexer.x for `switch' and `case'. Then, similarly we had to add switch statements to our semantic checker and parser and edit how the assembly code is generated.
 \subsection{Type System improvements}
 \subsubsection{Extending Pairs to Tuples}
 One limited feature of WACC was the ability to deal with pairs instead of arbitrarily sized tuples. So a nice extension was to expand WACC to support tuples. The first step in this extension was to control the would-be redundancy if we kept all the code handling pairs and creating new code for tuples. So what was done was to naturally consider pairs as a subset of tuples. The only difference in code then would be on the lexer and the parser, but from the parser on we considered pairs as tuples and we only wrote code regarding tuples. The only problem then was accessing a pair with \texttt{fst} and \texttt{snd}. We made the decision that tuples were to be accesed in the same manner as arrays (i.e. \texttt{a[1]}), so then it  was an easy fix as we just considered \texttt{fst p = p[0]} and \texttt{snd p = p[1]}.
@@ -211,13 +124,13 @@ end
 \end{lstlisting}
 
 The second problem we encountered was that now arrays and tuples are accessed in the same manner. However, tuples can only be accesed with literal integers (so
-then \texttt{int b = 2; println tup[b]} is ilegal but \texttt{int b = 2; println tup[2]} is legal in our extension) while arrays can be indexed with expressions. So we changed our design of arrays and merged the two into an IndexingElem instead of having TupleElem and ArrayElem. This helped solved the problem because now it was a matter of just pattern matching in the appropiate moment as we always carry around the type of the IndexingElem; either a tuple or an array.
+then \texttt{int b = 2; println tup[b]} is ilegal but \texttt{println tup[2]} is legal in our extension) while arrays can be indexed with expressions. So we changed our design of arrays and merged the two into an IndexingElem instead of having TupleElem and ArrayElem. This helped solved the problem because now it was a matter of just pattern matching in the appropiate moment as we always carry around the type of the IndexingElem; either a tuple or an array.
 
 
 \subsubsection{Structure Types}
 We have extended the type system by adding both product (structs) and sum (tagged union) types.
-These types work in a structural way, ie two type are equivalent is their members are the same,
-rather whether their name matches.
+These types work in a structural way, ie two types are equivalent if their members are the same,
+rather than if their name matches.
 
 Moreover a variable can be assigned any value which is a sub-type of the variable's type. A
 sub-type is a type which exposes at least all of it's parent's behaviours. For example, for structs
@@ -260,13 +173,13 @@ data   = object[offset]
 \end{lstlisting}
 
 This makes field access more expensive than direct offsetting, as three memory accesses are required each time.
-This is however a constant and moderate cost, as opposed to performing a map lookup, as dynamically typed languages.
+This is however a constant and moderate cost, as opposed to performing a map lookup, as dynamically typed languages do.
 
 While multiple optimisation could be added, we did not have time to implement them.
 For example, the compiler could save the pointer to the vtable in a register between field accesses, reducing the
 number of memory access to only 2. It could even save the offset itself if a single field is accessed multiple
 times (in a loop for example), resulting in a single memory access. Additionally, in many cases, the compiler
-has enough information the determine the structure's actual type, and compute the offsets at runtime
+has enough information to determine the structure's actual type, and compute the offsets at runtime.
 
 \subsubsection{Union Types}
 Variable of union types may take any value of the types that compose it.
@@ -303,7 +216,7 @@ When assigning a union value to a union variable, the same two word object is si
 Type switching is done by comparing the tag in the union value with the one corresponding to the type we match to.
 The value is then extracted, and made available inside the block.
 
-While not normally a valid type, $null$ is allowed within union types. This permits nullable values for any type.
+While not normally a valid type, $null$ is allowed within union types. This permits nullable values for any type, similar to the Maybe data type in Haskell.
 \begin{lstlisting}
 void print_maybeInt((int|null) x) is
   switch type(x)
@@ -382,14 +295,14 @@ have been added as well.
 
 \subsubsection{Resumable functions}
 As the first step torwards concurrency, resumable functions have been added to the WACC language.
-Resumable functions run normally until they reach a wait point, in which case the local variables live at this point,
+Resumable functions run normally until they reach a wait point, in which case the local variables live at this point
 (liveness information produced by the register allocator is used at this effect) are saved to a block of memory allocated
-on the heap, and yield by return a pointer to that block to their caller. When called again with this pointer as an argument,
+on the heap, and yield by returning a pointer to that block to their caller. When called again with this pointer as an argument,
 they restore the local variables and resume from the wait point.
 Such a function is declared as $async$.
 
 The only possible wait point is an $await$ statement to another $async$ function. When reaching an $await$ statement,
-the function is called as usual, but if the called functions yields, the state block it returned is saved along with the
+the function is called as usual, but if the called function yields, the state block it returned is saved along with the
 other locals, and the current function yields as well, so will it's parent, and so on, unwinding the entire call stack.
 When resumed, the current function calls the function again with it's saved state, waiting for it to produce a return value.
 A function may yield multiple times before producing such value, and the call stack gets unwinded everytime.
@@ -404,8 +317,8 @@ caller, typically some C runtime.
 
 \subsubsection{Cooperative Scheduling}
 The runtime keeps a list of tasks, essentially paused functions, and executes each until it yields. The yielded value
-informs the runtime onto what should be done with the task. It may for example, remove the task from the ready list for
-a certain amount time while running the other ready tasks in the meantime. This effectively allows for multiple tasks to
+informs the runtime about what should be done with the task. It may for example, remove the task from the ready list for
+a certain amount of time while running the other ready tasks in the meantime. This effectively allows for multiple tasks to
 appear to be running simultaneously, where one runs while the others are paused.
 
 It is important to note that this represents cooperative scheduling, which alleviates the usual problems arised by
@@ -481,6 +394,81 @@ possible. As a consequence, channel operations must be done within $async$ funct
 In the runtime, channels are similar to sockets. Each channel has two task lists, for receiving and sending tasks.
 The main difference with sockets is that no file descriptor is used. A receiving task is woken up when another task sends
 a value, and vice-versa.
+
+\subsubsection{Example Program}
+While building the compiler, our stress test was the Tic Tac Toe WACC program. Thus in order to thoroughly test our Concurrency features, we built a
+Tic Tac Toe Server in our examples folder. The server starts on local port 5050 and several people can telnet into it and play simultaneously, each against its
+own AI instance. 
+
+
+\subsection{Garbage Collection}
+For our WACC compiler, we decided it would be very interesting to manage our own heap memory instead of needing explicit allocation and freeing commands. Thus, we researched the different types of Garbage Collectors that
+are commonly implemented. We discarded Reference Counting garbage collectors since they cannot free cyclic objects. Then we looked at different implementations of Mark-Sweep and Copying Collectors and we chose to design a Copying Collector that required less frequent calls to copy. This is how the Mostly-Copying Collector came into play; a more efficient version of the Copying Collector that minimises the number of copy calls. Our garbage collector is not Generational and does not Compact elements in the heap. Also instead of an Incremental collector, ours requires a Stop The World (STW) pause. However, the biggest defficiency that our WACC Collector has is the fact that it cannot interact with resumable (i.e asyncronous) functions properly. The collector is fully precise on the heap, where as resumable functions allocate space on the heap without type information, which means garbage collection is not correct when both of them interact. As a result of the small time frame within which we have worked, we have not been able to join these two components together. Thus, Gargage Collection and resumable functions need to work independently. 
+
+
+
+We have based our design on a paper by Antony L Hosking ``Portable, Mostly-Concurrent, Mostly-Copying Garbage Collection for Multi-Processors''. A pseudocode fragment from that paper follows. 
+
+\noindent\begin{minipage}{.46\textwidth}
+\begin{lstlisting}[caption=code 1,frame=tlrb, mathescape]{Name}
+proc promote(p,color) ≡ 
+  white := white \{p}; 
+  color := color $\cup$ {p}.
+
+proc move(l) ≡ 
+  r := l$\uparrow$; // r is the object pointed to by l
+  if page (r) $\in$ white then 
+    if r' = nil then  // Forward Ref. 
+      r' := copy(r);
+      grey := grey $ \cup $ {page(r′)}
+    end;
+  l$\uparrow$ := r′
+  end.
+
+
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}{.45\textwidth}
+\begin{lstlisting}[caption=code 2,frame=tlrb, mathescape]{Name}
+proc trace() ≡ 
+  foreach p $\in$ grey do
+    grey := grey\{p};
+    foreach l $\in$ pointer locations(p) do
+      move (l)
+    end;
+    black := black $ \cup $ {p}
+  end.
+
+proc gc() ≡
+  white := black; grey := {}; black := {}; 
+  foreach r $\in$ AR where page(r) $\in$ white do
+    promote(page(r), grey);
+  end;
+  trace();
+  foreach p $\in$ white do free(p) end.
+\end{lstlisting}
+\end{minipage}
+
+The heap is a blocked of aligned memory requested to the operating system. We divide the heap into Pages of a fixed
+size. We chose the alignment boundary for the allocated memory to be the same as the page size, which allows us
+to easily determine the page in which an object is allocated, given the object pointer (simply by rounding the pointer
+down to the boundary alignment). In each page, we allocate objects until the page is full. In addition to the space 
+to allocate the object, each object requires a header, where we keep vital information about it. The header includes the size of the object, information about its type which the compiler needs to generate and a forward reference for when the object is copied. This of course causes an overhead in the memory usage that is usually unnecessary in Non Garbage-Collected languages. 
+
+
+The aforementioned paper and algorithm build up on Joel Bartlett's Mostly-Copying Garbage Collector. Instead of 
+Bartlett's original Generational Collector we mostly followed the pseudocode design. This implementation uses Dijkstra's tricolouring 
+abstraction to explain the classification of allocated pages in the heap. During normal allocation, only Black pages 
+exist. All objects are thus allocated into Black pages. During Collection, all Black pages are firstly converted into White 
+pages, which can be considered the ``condemned pages'', since all the remaining White pages at the end of the collection 
+process will be collected and freed. Collection starts by scanning the stack and registers and promoting all the pages 
+that are ambiguously referenced from them into the Grey set. The collector gains access to the stack and registers by pushing all registers into the stack and then calling the allocator with the stack pointer as a parameter. The Garbage Collector must be initialised at the beginning of the program by giving it the top stack pointer. This defines the portion of the stack that must be scanned. After the stack and registers are scanned, Grey pages are scanned for pointer references to other heap objects. When one such pointer is found, if it references a White page, then the object is copied into a Grey page to avoid it getting destroyed, otherwise the reference is already in a Grey page and nothing needs to be done. After a full page is scanned, it is promoted to a Black (stable) page, representing that it contains live objects with no pointers to a White page. When the Grey Set is empty, all objects that are still ``alive'' or are referenced by ``alive'' objects are in Black pages. We thus free all remaining White pages and proceed with normal allocation. 
+
+
+If we had more time we would have liked to upgrade the GC into an Incremental Collector, since the STW pause is quite noticeable when the memory demands are very large, such as in the TicTacToe WACC program. Nonetheless, the real time to run TicTacToe is 7 seconds faster using Garbage Collection than not using it, although the memory usage is much higher. 
+
+
+
 
 \section{Backwards Compatibility}
 While implementing the various extensions, we have strived to keep backwards compatibility with the original WACC language,
