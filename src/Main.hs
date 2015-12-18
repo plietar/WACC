@@ -15,9 +15,10 @@ import Features
 import Frontend.Tokens
 import Common.Span
 
-import Data.List (zipWith4)
+import Data.List (zipWith5)
 import Data.Maybe (fromMaybe)
 import Data.Tuple (swap)
+import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 
@@ -56,16 +57,27 @@ compile filename contents output = do
   codeGen   <- fmapM2 genProgram typedAst typeData
 
   let
-    ir        = fst <$> codeGen
+    irFunctions :: WACCResult [(Bool, [IR])]
+    irFunctions = fst <$> codeGen
+
+    async     = map fst <$> irFunctions
+    ir        = map snd <$> irFunctions
+
+    irFeatures :: WACCResult (Set Feature)
     irFeatures = snd <$> codeGen
-    cfg       = map (deadCodeElimination . basicBlocks) <$> ir :: WACCResult [Gr [IR] ()]
+
+    cfg       :: WACCResult [Gr [IR] ()]
+    cfg       = map (deadCodeElimination . basicBlocks) <$> ir
+
+    flow      :: WACCResult [Gr ([IR], FlowInfo) ()]
     flow      = map blockDataFlow <$> cfg
+
     allVars   = map allVariables <$> cfg
     live      = map liveVariables <$> flow
     rig       = zipWith interferenceGraph <$> allVars <*> live :: WACCResult [Gr Var ()]
     moves     = zipWith movesGraph <$> allVars <*> cfg
 
-    allocation = join (sequence <$> (zipWith4 allocateRegisters <$> allVars <*> live <*> rig <*> moves))
+    allocation = join (sequence <$> (zipWith5 allocateRegisters <$> async <*> allVars <*> live <*> rig <*> moves))
     cfgFinal  = map fst <$> allocation
     colouring = map snd <$> allocation
 

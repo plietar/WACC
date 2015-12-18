@@ -5,6 +5,7 @@ module RegisterAllocation.GraphColouring
   (allocateRegisters) where
 import Common.WACCResult
 import Common.AST
+import Common.Stuff
 import RegisterAllocation.DataFlow
 
 import Data.Graph.Inductive (Graph, DynGraph, Node)
@@ -35,6 +36,7 @@ isSpillable v
     (Reg _) -> False
     GeneratorState -> False
     _ -> True
+
 spillNode :: DynGraph gr => Map Var Int -> Map Int Var -> gr [IRL] () -> gr Var () -> gr Var () -> gr Var () -> [Var -> Var]
              -> (Var, Map Var Int, Map Int Var, gr [IRL] (), gr Var (), gr Var (), gr Var (), [Var -> Var])
 spillNode allVars allNodes cfg oRig rig moves spill
@@ -78,18 +80,6 @@ spillNode allVars allNodes cfg oRig rig moves spill
           tell [(s, Set.delete spilledVar (addLI (addLO (Set.empty))))]
 
           return (mapIRL (\x -> if x == spilledVar then s else x) irl)
-
-          {-
-          let addLoad = if Set.member spilledVar (irUse ir)
-                        then ((IFrameRead { iDest = s, iOffset = frameOffset, iType = TyInt }, (Set.delete s lI', lI')):)
-                        else id
-
-          let addStore = if Set.member spilledVar (irDef ir)
-                         then ((IFrameWrite { iValue = s, iOffset = frameOffset, iType = TyInt }, (lO', Set.delete s lO')):)
-                         else id
-
-          addLoad <$> ((ir', (lI', lO')) :) <$> addStore <$> findUses irs
-          -}
         else return irl
 
 addLoadStoreSpilled :: Map Var Int -> [IR] -> [IR]
@@ -106,38 +96,88 @@ addLoadStoreSpilled offsets (ir:irs)
     addStore v@(Spilled _ spilledVar) = Just (IFrameWrite { iValue = v, iOffset = offsets ! spilledVar, iType = TyInt })
     addStore _ = Nothing
 
-allocateRegisters :: DynGraph gr => Map Var Int -> gr [IRL] () -> gr Var () -> gr Var () -> WACCResult (gr [IR] (), Map Var Var)
-allocateRegisters allVars cfg rig moves = maybe (codegenError "Graph Colouring failed") OK $ do
+addLoadStoreSpilledGenerator :: Int -> Map Var Int -> [IR] -> [IR]
+addLoadStoreSpilledGenerator _ _ [] = []
+addLoadStoreSpilledGenerator generatorOffset offsets (ir:irs)
+  = mapMaybe addLoad (Set.elems (irUse ir)) ++
+    [ir] ++
+    mapMaybe addStore (Set.elems (irDef ir)) ++
+    addLoadStoreSpilledGenerator generatorOffset offsets irs
+  where
+    addLoad v@(Spilled _ spilledVar)
+      = Just (IHeapRead { iHeapVar = GeneratorState
+                        , iDest = v
+                        , iOperand = OperandLit (generatorOffset + offsets ! spilledVar)
+                        , iType = TyInt })
+    addLoad _ = Nothing
+
+    addStore v@(Spilled _ spilledVar)
+      = Just (IHeapWrite { iHeapVar = GeneratorState
+                         , iValue = v
+                         , iOperand = OperandLit (generatorOffset + offsets ! spilledVar)
+                         , iType = TyInt })
+    addStore _ = Nothing
+
+allocateRegisters :: DynGraph gr => Bool -> Map Var Int -> gr [IRL] () -> gr Var () -> gr Var () -> WACCResult (gr [IR] (), Map Var Var)
+allocateRegisters async allVars cfg rig moves = maybe (codegenError "Graph Colouring failed") OK $ do
   (cfg', colouring, spilledVars) <- colourGraph allRegs allVars cfg rig moves
   let spilledOffsets = Map.fromList (zip spilledVars [0,4..])
-      frameSize = 4 * length spilledVars
+      spilledSize    = 4 * length spilledVars
+      frameSize      = if async then 0 else spilledSize
 
-      usedRegs = Set.fromList (Map.elems colouring)
-      savedRegs = filter (`Set.member` usedRegs) calleeSaveRegs
-      saveSize = 4 * length savedRegs
+      usedRegs       = Set.fromList (Map.elems colouring)
+      savedRegs      = filter (`Set.member` usedRegs) calleeSaveRegs
+      saveSize       = 4 * length savedRegs
 
+      yieldSize      = 4 + 4 * (maximum (concatMap (map yieldSize' . snd) (Graph.labNodes cfg')))
+
+      yieldSize' :: IRL -> Int
+      yieldSize' (IYield{},   (lI, _)) = Set.size (Set.delete GeneratorState lI)
+      yieldSize' (IRestore{}, (_, lO)) = Set.size (Set.delete GeneratorState lO)
+      yieldSize' _ = 0
+
+      generatorSize  = yieldSize + spilledSize
+
+      fixSavedRegisters :: IR -> IR
       fixSavedRegisters ir@IFunctionBegin{..} = ir { iSavedRegs = savedRegs }
       fixSavedRegisters ir@IReturn{..}        = ir { iSavedRegs = savedRegs }
       fixSavedRegisters ir@IYield{..}         = ir { iSavedRegs = savedRegs }
       fixSavedRegisters ir = ir
 
+      fixFrameSize :: IR -> IR
       fixFrameSize ir@IFrameAllocate{..} = ir { iSize   = iSize + frameSize }
       fixFrameSize ir@IFrameFree{..}     = ir { iSize   = iSize + frameSize }
       fixFrameSize ir@IFrameRead{..}     = ir { iOffset = iOffset + frameSize + saveSize }
       fixFrameSize ir@IFrameWrite{..}    = ir { iOffset = iOffset + frameSize + saveSize }
       fixFrameSize ir = ir
 
-      fixYield (ir@IYield{..}, (lI, lO))   = (ir { iSavedContext = Set.elems (Set.delete GeneratorState lO) }, (lI, lO))
-      fixYield (ir@IRestore{..}, (lI, lO))   = (ir { iSavedContext = Set.elems (Set.delete GeneratorState lI) }, (lI, lO))
+      fixGeneratorSize IGeneratorSize{..}
+        = ILiteral { iDest = iDest, iLiteral = LitInt (fromIntegral generatorSize) }
+      fixGeneratorSize ir = ir
+
+
+      fixYield :: IRL -> IRL
+      fixYield (ir@IYield{..}, (lI, lO))   = let context = Set.elems (Set.delete GeneratorState lO)
+                                             in  ( ir { iSavedContext = context }
+                                                 , (lI, lO) )
+      fixYield (ir@IRestore{..}, (lI, lO)) = let context = Set.elems (Set.delete GeneratorState lI)
+                                             in  ( ir { iSavedContext = context }
+                                                 , (lI, lO) )
       fixYield irl = irl
 
-  return (Graph.nmap ( simplifyMoves .
-                      applyColouring colouring .
-                      addLoadStoreSpilled spilledOffsets .
-                      map fixFrameSize .
-                      map fixSavedRegisters .
-                      map fst .
-                      map fixYield) cfg', colouring)
+      fixIR :: [IRL] -> [IR]
+      fixIR = simplifyMoves .
+              applyColouring colouring .
+              (if async
+               then addLoadStoreSpilledGenerator yieldSize spilledOffsets
+               else addLoadStoreSpilled spilledOffsets) .
+              map fixFrameSize .
+              map fixGeneratorSize .
+              map fixSavedRegisters .
+              map fst .
+              map fixYield
+
+  return (Graph.nmap fixIR cfg', colouring)
   where
 
 -- Merge nodes X and Y, using X's label
@@ -229,8 +269,12 @@ tryMergeNodes maxR allVars allNodes cfg oRig rig moves x y = do
 
   (a, b, la, lb) <- case (lx, ly) of
     (Reg _, Reg _) -> Nothing
+    (GeneratorState, _) -> Nothing
+    (_, GeneratorState) -> Nothing
     (Reg _, _    ) -> Just (x, y, lx, ly)
     (_    , Reg _) -> Just (y, x, ly, lx)
+--    (GeneratorState, _) -> Just (x, y, lx, ly)
+--    (_, GeneratorState) -> Just (y, x, ly, lx)
     (_    , _    ) -> Just (x, y, lx, ly)
 
   let allVars'  = Map.delete lb allVars
@@ -355,6 +399,9 @@ mapIR colouring IYield{..}
 mapIR colouring IRestore{..}
   = IRestore { iValue = colouring iValue
              , iSavedContext = map colouring iSavedContext }
+
+mapIR colouring IGeneratorSize {..}
+  = IGeneratorSize { iDest = colouring iDest }
 
 -- Base Case
 mapIR colouring x = x
