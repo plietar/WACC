@@ -205,7 +205,6 @@ begin
     let moveRowStr = call intToString(moveRow);
     let moveColStr = call intToString(moveColumn);
     outCh <- moveRowStr;
-		print moveRow ;
 		outCh <- " column " ;
     outCh <- moveColStr 
 	end
@@ -1138,44 +1137,6 @@ begin
     fi
    
   end
-  #async void count() is
-  #  let x = 0;
-  #  while true do
-  #    println x;
-  #    x = x + 1;
-  #    await sleep_ms(1000)
-  #  done
-  #end
-
-  #async void handle(socket connection) is
-  #  println "New connection.";
-  #  await send(connection, "Welcome !\r\n");
-
-  #  await send(connection, "> ");
-  #  let msg = await recv(connection);
-
-  #  while len msg > 0 do
-  #    await send(connection, msg);
-  #    await send(connection, "> ");
-  #    msg = await recv(connection)
-  #  done;
-
-  #  println "Connection closed."
-  #end
-
-  #fire count();
-
-  #socket fd = call socket();
-  #call bind(fd, 5050);
-  #call listen(fd);
-
-  #println "Waiting for connections";
-
-  #while true do
-  #  let connection = await accept(fd);
-  #  fire handle(connection)
-  #done
-
 
   async void sender(communication comm) is
     let connection = comm.connection;
