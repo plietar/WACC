@@ -89,6 +89,7 @@ data IR
   | ICall { iLabel :: Label, iArgs :: [Var] }
   | ILabel { iLabel :: Label }
 
+  | IGeneratorSize { iDest :: Var }
   | IFrameAllocate { iSize :: Int }
   | IFrameFree { iSize :: Int }
 

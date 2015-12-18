@@ -56,7 +56,8 @@ compile filename contents output = do
   codeGen   <- fmapM2 genProgram typedAst typeData
 
   let
-    ir        = fst <$> codeGen
+    irFunctions = fst <$> codeGen
+    ir = fst <$> irFunctions
     irFeatures = snd <$> codeGen
     cfg       = map (deadCodeElimination . basicBlocks) <$> ir :: WACCResult [Gr [IR] ()]
     flow      = map blockDataFlow <$> cfg
@@ -65,7 +66,7 @@ compile filename contents output = do
     rig       = zipWith interferenceGraph <$> allVars <*> live :: WACCResult [Gr Var ()]
     moves     = zipWith movesGraph <$> allVars <*> cfg
 
-    allocation = join (sequence <$> (zipWith4 allocateRegisters <$> allVars <*> live <*> rig <*> moves))
+    allocation = join (sequence <$> (zipWith5 allocateRegisters <$> undefined <*> allVars <*> live <*> rig <*> moves))
     cfgFinal  = map fst <$> allocation
     colouring = map snd <$> allocation
 

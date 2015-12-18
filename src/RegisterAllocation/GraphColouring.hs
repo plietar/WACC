@@ -78,18 +78,6 @@ spillNode allVars allNodes cfg oRig rig moves spill
           tell [(s, Set.delete spilledVar (addLI (addLO (Set.empty))))]
 
           return (mapIRL (\x -> if x == spilledVar then s else x) irl)
-
-          {-
-          let addLoad = if Set.member spilledVar (irUse ir)
-                        then ((IFrameRead { iDest = s, iOffset = frameOffset, iType = TyInt }, (Set.delete s lI', lI')):)
-                        else id
-
-          let addStore = if Set.member spilledVar (irDef ir)
-                         then ((IFrameWrite { iValue = s, iOffset = frameOffset, iType = TyInt }, (lO', Set.delete s lO')):)
-                         else id
-
-          addLoad <$> ((ir', (lI', lO')) :) <$> addStore <$> findUses irs
-          -}
         else return irl
 
 addLoadStoreSpilled :: Map Var Int -> [IR] -> [IR]
@@ -106,8 +94,8 @@ addLoadStoreSpilled offsets (ir:irs)
     addStore v@(Spilled _ spilledVar) = Just (IFrameWrite { iValue = v, iOffset = offsets ! spilledVar, iType = TyInt })
     addStore _ = Nothing
 
-allocateRegisters :: DynGraph gr => Map Var Int -> gr [IRL] () -> gr Var () -> gr Var () -> WACCResult (gr [IR] (), Map Var Var)
-allocateRegisters allVars cfg rig moves = maybe (codegenError "Graph Colouring failed") OK $ do
+allocateRegisters :: DynGraph gr => Bool -> Map Var Int -> gr [IRL] () -> gr Var () -> gr Var () -> WACCResult (gr [IR] (), Map Var Var)
+allocateRegisters async allVars cfg rig moves = maybe (codegenError "Graph Colouring failed") OK $ do
   (cfg', colouring, spilledVars) <- colourGraph allRegs allVars cfg rig moves
   let spilledOffsets = Map.fromList (zip spilledVars [0,4..])
       frameSize = 4 * length spilledVars
@@ -127,11 +115,12 @@ allocateRegisters allVars cfg rig moves = maybe (codegenError "Graph Colouring f
       fixFrameSize ir@IFrameWrite{..}    = ir { iOffset = iOffset + frameSize + saveSize }
       fixFrameSize ir = ir
 
+      fixYield :: IRL -> IRL
       fixYield (ir@IYield{..}, (lI, lO))   = (ir { iSavedContext = Set.elems (Set.delete GeneratorState lO) }, (lI, lO))
       fixYield (ir@IRestore{..}, (lI, lO))   = (ir { iSavedContext = Set.elems (Set.delete GeneratorState lI) }, (lI, lO))
       fixYield irl = irl
 
-  return (Graph.nmap ( simplifyMoves .
+  return (Graph.nmap (simplifyMoves .
                       applyColouring colouring .
                       addLoadStoreSpilled spilledOffsets .
                       map fixFrameSize .

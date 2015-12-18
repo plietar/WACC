@@ -26,7 +26,7 @@ emit xs = tell (CodeGenOutput xs Set.empty)
 emitFeature :: Feature -> CodeGen ()
 emitFeature f = tell (CodeGenOutput [] (Set.singleton f))
 
-genProgram :: Annotated Program TypeA -> (Set Identifier, Set Type) -> WACCArguments ([[IR]], Set Feature)
+genProgram :: Annotated Program TypeA -> (Set Identifier, Set Type) -> WACCArguments ([(Bool, [IR])], Set Feature)
 genProgram (_, Program fs) (structMembers, types)
   = let vtable = Map.fromList . map swap . zip [0,4..] . Set.elems $ structMembers
         tags = Map.fromList . map swap . zip [0..] . Set.elems $ types
@@ -34,13 +34,13 @@ genProgram (_, Program fs) (structMembers, types)
         generation = mapM genDecl fs
     in snd <$> evalRWST generation (vtable, tags) labs
 
-genDecl :: Annotated Decl TypeA -> RWST (Map Identifier Int, Map Type Int) ([[IR]], Set Feature) [Label] WACCArguments ()
+genDecl :: Annotated Decl TypeA -> RWST (Map Identifier Int, Map Type Int) ([(Bool, [IR])], Set Feature) [Label] WACCArguments ()
 genDecl (_, DeclFunc f) = genFunction f
 genDecl (_, DeclType f) = return ()
 genDecl (_, DeclFFIFunc f) = return ()
 
 -- Functions
-genFunction :: Annotated FuncDef TypeA -> RWST (Map Identifier Int, Map Type Int) ([[IR]], Set Feature) [Label] WACCArguments ()
+genFunction :: Annotated FuncDef TypeA -> RWST (Map Identifier Int, Map Type Int) ([(Bool, [IR])], Set Feature) [Label] WACCArguments ()
 genFunction (_, FuncDef _ async fname params body) = do
     labs <- get
     (vtable, tags) <- ask
@@ -102,8 +102,12 @@ genFunction (_, FuncDef _ async fname params body) = do
 
             setupArguments
 
-            -- FIXME(paul) allocate the correct amount of memory
-            stateVar <- genAlloc 64 Nothing
+
+            sizeVar <- allocateTemp
+            -- The IGeneratorSize IR gets replace by an ILiteral once
+            -- graph colouring is complete
+            emit [ IGeneratorSize { iDest = sizeVar } ]
+            stateVar <- genAllocVariable sizeVar Nothing
             emit [ IMove { iDest = GeneratorState, iValue = stateVar } ]
 
           else setupArguments
@@ -116,7 +120,7 @@ genFunction (_, FuncDef _ async fname params body) = do
     (endState, result) <- lift (execRWST generation reader initialState)
 
     put (labels endState)
-    tell ([instructions result], features result)
+    tell ([(async, instructions result)], features result)
 
 genLiteral :: Literal -> CodeGen Var
 genLiteral lit = do
@@ -159,6 +163,10 @@ genBinOp op left right = do
 genAlloc :: Int -> Maybe Type -> CodeGen Var
 genAlloc size maybeTy = do
   sizeVar <- genLitInt size
+  genAllocVariable sizeVar maybeTy
+
+genAllocVariable :: Var -> Maybe Type -> CodeGen Var
+genAllocVariable sizeVar maybeTy = do
   ifM (lift $ getArgument gcEnabled)
     (do
       typeInfoVar <- case maybeTy of
