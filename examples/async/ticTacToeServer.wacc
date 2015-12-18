@@ -10,7 +10,6 @@
 	  #
 	  # As many people as you want!!!!!! (Disclaimer: Memory limitations might apply)
 	  #
-	  #   
 
 begin
   ffi type socket;
