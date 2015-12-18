@@ -1,40 +1,18 @@
-# This is a program that allows a human to play Tic Tac Toe with a smart AI. 
-# The AI is implemented using minimax approach. The AI is a perfect one, meaning 
-# that it will never lose and if there is an immediate win, it will play that. 
-#
-# It takes quite a long time to initialise and free up the memory for the AI. 
-# All observed bugs have been fixed.
-#
-# In this program, we are very often need the memory from the heap. 
-# But because a pair is the only data type allocated on the heap, 
-# we have to use it. We very often need a data structure to store 
-# a set of 3 objects. We will use the format below. 
-# 
-#  root --\
-#         |
-#        \|/
-#          
-#  +----------+----------+
-#  |          |          |
-#  |  front   | object 3 |
-#  |          |          |
-#  +----------+----------+ 
-#       |
-#       |
-#      \|/
-#          
-#  +----------+----------+
-#  |          |          |
-#  | object 1 | object 2 |
-#  |          |          |
-#  +----------+----------+ 
-# 
-# We call this structure Pair4Three.
-
-# Program:
+	  ######################### Tic Tac Toe Async Server ########################
+	  #
+	  # To Start the server:
+	  #   make 
+	  #   make runtime
+	  #   ./execute.sh --with-runtime examples/ticTacToeServer.wacc
+	  #
+	  # To Play:
+	  #   telnet 127.0.0.1 5050
+	  #
+	  # As many people as you want!!!!!! (Disclaimer: Memory limitations might apply)
+	  #
+	  #   
 
 begin
-	  ######################### Tic Tac Toe Async Server ########################
   ffi type socket;
 
   ffi async void   sleep_ms(int)     = wacc_sleep_ms;
