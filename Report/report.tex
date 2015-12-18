@@ -89,9 +89,31 @@ Our group lacked a rigid structure in that someone would just decide to do somet
 
 
 \section{Extensions}
-\subsection{Improving If Statements}
-We decided to extend the WACC language with additional conditional branching statements; `if' statements without an `else' branch and `switch' statements. Initially to implement the `if' statements without an `else' branch we defined a new data type called `StmtIfNoElse' which had only the condition and the `then' branch associated with it but this added a lot of repetitive code as it was extremely similar to our `StmtIf'. To overcome this problem, we made use of Haskell's Maybe monad to  define `if' statements to have a Maybe block. We then had to change Parser.hs to allow this new syntax and then we had to add the new semantics to SemCheck.hs. The difference in semantic checking between an `if' statement with an `else' branch and one without was that in the case where the `else' block was empty we had to show that the `if' statement never necessarily returns a value.  Finally we had to ensure the correct assembly code was generated which meant changing CodeGen.hs to have a case expression to deal with if the block contained a value (Just b) or was empty (Nothing).
-For `switch' statements we had to define new keywords in lexer.x for `switch' and `case'. Then, similarly we had to add switch statements to our semantic checker and parser and edit how the assembly code is generated.
+\subsection{Syntax Additions}
+\subsubsection{If Statements without else branch}
+Initially to implement the `if' statements without an `else' branch we defined a new data type called `StmtIfNoElse' which had only the condition and the `then' branch associated with it but this added a lot of repetitive code as it was extremely similar to our `StmtIf'. To overcome this problem, we made use of Haskell's Maybe monad to  define `if' statements to have a Maybe block. Finally we had to ensure the correct assembly code was generated which meant changing CodeGen.hs to have a case expression to deal with whether the block contained a value (Just b) or was empty (Nothing).
+\begin{lstlisting}
+bool b = true;
+if b then
+  println "No else branch!"
+end
+
+\end{lstlisting}
+\subsection{Switch statements}
+
+\begin{lstlisting}
+int b = 5;
+switch b
+  case 1: println "Surprise!"
+  case 2: println "Something else"
+  case 3: skip
+  case 4: skip
+  case 5: println "Correct!"
+end
+
+\end{lstlisting}
+
+
 \subsection{Optimised Register Allocation}
 In our initial compiler, every local variable was stored on the stack, so were arguments. For each statement, required variables were loaded
 from the stack before executing it, and modified variables stored afterwards. Registers were only used for temporary values.
@@ -231,7 +253,7 @@ end
 \subsubsection{Type synonyms}
 With the new features, types can become long and cumbersome to type. To solve that, we've added type synonyms. Type synonyms
 create exact aliases between a name and a type. The name is not used when checking type equality, only the structural typing
-rules described above.
+rules described above. 
 
 \begin{lstlisting}
 type point = { int x, int y };
@@ -245,11 +267,22 @@ void print_intOrChar(intOrChar x) is
 end
 
 let p : point = { x = 5, y = 6 };
+
 \end{lstlisting}
+
 
 Type synonyms may be used whereever a usual type would appear.
 Types must be defined before they can be referenced. This ensures that recursive types cannot be created, as this would make
 probably type equality checking equivalent to checking for graph isomorphism, and would make type checking much more complex.
+
+\subsubsection{Let statements}
+Let statements allow you to omit the type of the variable you are declaring as long as the right hand side has enough information for the compiler to determine the full type.
+\begin{lstlisting}
+
+let p = newtuple(10, 20, "Hello!", True);
+# let q = []  # This is not valid. Ambiguous type of the array.
+\end{lstlisting}
+
 
 \subsection{Foreign Function Interface}
 While building more complex programs, the WACC language often turns up to be impractical or incapable of doing some tasks
@@ -363,8 +396,8 @@ done
 
 \subsubsection{Channels}
 As the last concurrency feature, we have added channels, analogous to the ones present in Go.
-Channels allow values to read and written to it. They are unbuffered, implying that writing to a channel will block
-until another task reads from it. Channels are created using the $chan()$ right hand side, and using the $<-$ operator
+Channels allow values to be read from it and written to it. They are unbuffered, implying that writing to a channel will block
+until another task reads from it. Channels are created using the $chan()$ right hand side, and using the $\leftarrow$ operator
 to send and receive values.
 
 \begin{lstlisting}
@@ -389,14 +422,14 @@ fire receiver(ch);
 \end{lstlisting}
 
 Channels are implemented using FFI async functions, but require special language support as polymorphism is not generally
-possible. As a consequence, channel operations must be done within $async$ functions.
+available. As a consequence, channel operations must be done within $async$ functions.
 
 In the runtime, channels are similar to sockets. Each channel has two task lists, for receiving and sending tasks.
 The main difference with sockets is that no file descriptor is used. A receiving task is woken up when another task sends
 a value, and vice-versa.
 
 \subsubsection{Example Program}
-While building the compiler, our stress test was the Tic Tac Toe WACC program. Thus in order to thoroughly test our Concurrency features, we built a
+While building the compiler, our stress test was the Tic Tac Toe WACC program. Similarly in order to thoroughly test our Concurrency features, we built a
 Tic Tac Toe Server in our examples folder. The server starts on local port 5050 and several people can telnet into it and play simultaneously, each against its
 own AI instance. 
 
@@ -410,7 +443,7 @@ are commonly implemented. We discarded Reference Counting garbage collectors sin
 We have based our design on a paper by Antony L Hosking ``Portable, Mostly-Concurrent, Mostly-Copying Garbage Collection for Multi-Processors''. A pseudocode fragment from that paper follows. 
 
 \noindent\begin{minipage}{.46\textwidth}
-\begin{lstlisting}[caption=code 1,frame=tlrb, mathescape]{Name}
+\begin{lstlisting}[frame=tlrb, mathescape]{Name}
 proc promote(p,color) ≡ 
   white := white \{p}; 
   color := color $\cup$ {p}.
@@ -429,7 +462,7 @@ proc move(l) ≡
 \end{lstlisting}
 \end{minipage}\hfill
 \begin{minipage}{.45\textwidth}
-\begin{lstlisting}[caption=code 2,frame=tlrb, mathescape]{Name}
+\begin{lstlisting}[frame=tlrb, mathescape]{Name}
 proc trace() ≡ 
   foreach p $\in$ grey do
     grey := grey\{p};
@@ -465,7 +498,7 @@ process will be collected and freed. Collection starts by scanning the stack and
 that are ambiguously referenced from them into the Grey set. The collector gains access to the stack and registers by pushing all registers into the stack and then calling the allocator with the stack pointer as a parameter. The Garbage Collector must be initialised at the beginning of the program by giving it the top stack pointer. This defines the portion of the stack that must be scanned. After the stack and registers are scanned, Grey pages are scanned for pointer references to other heap objects. When one such pointer is found, if it references a White page, then the object is copied into a Grey page to avoid it getting destroyed, otherwise the reference is already in a Grey page and nothing needs to be done. After a full page is scanned, it is promoted to a Black (stable) page, representing that it contains live objects with no pointers to a White page. When the Grey Set is empty, all objects that are still ``alive'' or are referenced by ``alive'' objects are in Black pages. We thus free all remaining White pages and proceed with normal allocation. 
 
 
-If we had more time we would have liked to upgrade the GC into an Incremental Collector, since the STW pause is quite noticeable when the memory demands are very large, such as in the TicTacToe WACC program. Nonetheless, the real time to run TicTacToe is 7 seconds faster using Garbage Collection than not using it, although the memory usage is much higher. 
+If we had more time we would have liked to upgrade the GC into an Incremental Collector, since the STW pause is quite noticeable when the memory demands are very large, such as in the TicTacToe WACC program. Nonetheless, the real time to run TicTacToe is 7 seconds faster using Garbage Collection than not using it, although the memory usage is much higher. Finally, we would have liked to integrate resumable functions with gargage collection. 
 
 
 
@@ -473,11 +506,13 @@ If we had more time we would have liked to upgrade the GC into an Incremental Co
 \section{Backwards Compatibility}
 While implementing the various extensions, we have strived to keep backwards compatibility with the original WACC language,
 as well as making the new features as integrated as possible. For instance, rather than having both pairs and arbitrary length
-tuples, we've made one a superset of the other, and make it a single functionality, when keeping the previous syntax.
+tuples, we've made one a superset of the other, having a single functionality that keeps the previous syntax.
 
 As a result, only two tests on fail on LabTS. The first one, $ifNoelse.wacc$, enforces an else block after an if, but this
 is one of our extension, so this is the expected behaviour. The second one, $printAllTypes.wacc$, times out on LabTS but
 produces the correct result when run locally. This is due to the optimised register allocation algorithm, which consumes a
 lot of time when many local variables are live simultaneously.
+
+It is worth noting that some other extensions functions of type void, enhanced for loops, 
 
 \end{document}
