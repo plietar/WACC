@@ -618,6 +618,15 @@ checkStmt (_, StmtWhile predicate block) = do
   block' <- liftSemCheck $ checkBlock block
   return (False, StmtWhile predicate' block')
 
+checkStmt (_, StmtFor ident arr block) = do
+  arr'@(arrType@(TyArray ty), _) <- liftSemCheck $ checkExpr arr
+  context <- get
+  childContext <- lift $ execStateT (addVariable ident ty) (newContext context)
+  block' <- liftSemCheck $ local (const childContext) (checkBlock block) 
+  liftSemCheck $ withErrorContext "in for statement"
+                (checkIsSubtypeOf (TyArray TyAny) arrType)
+  return (False, StmtFor ident arr' block')
+
 checkStmt (_, StmtScope block) = do
   block'@((al, _),_) <- liftSemCheck $ checkBlock block
   return (al, StmtScope block')

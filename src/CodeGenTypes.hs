@@ -66,11 +66,13 @@ instance Show Operand where
   show (OperandVar var n) = show var ++ ", lsl #" ++ show n
   show (OperandLit n)     = "#" ++ show n
 
-data Condition = CondEQ | CondNE
+data Condition = CondEQ | CondNE | CondGE
 
 instance Show Condition where
   show CondEQ = "EQ"
   show CondNE = "NE"
+  show CondGE = "GE"
+
 
 data IR
   = IFunctionBegin { iSavedRegs :: [Var], iArgs :: [Var] }

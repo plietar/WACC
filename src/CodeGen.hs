@@ -591,7 +591,7 @@ genStmt (_, StmtIf condition thenBlock elseBlock) = do
       emit [ ILabel { iLabel = elseLabel } ]
 
 
-genStmt (_, StmtWhile condition block ) = do
+genStmt (_, StmtWhile condition block) = do
   startLabel <- allocateLabel
   endLabel <- allocateLabel
 
@@ -604,6 +604,36 @@ genStmt (_, StmtWhile condition block ) = do
   condVar <- genExpr condition
   emit [ ICompare { iValue = condVar, iOperand = OperandLit 0 }
        , ICondJump { iLabel = startLabel, iCondition = CondNE } ]
+
+genStmt (_, StmtFor ident arr@(baseTy@(TyArray elemTy), _) block) = do
+  arrVar     <- genExpr arr
+  lengthVar  <- allocateTemp
+  indexVar   <- allocateTemp
+  startLabel <- allocateLabel
+  endLabel   <- allocateLabel
+
+  emit [ IHeapRead { iHeapVar = arrVar, iDest = lengthVar, iOperand = OperandLit 0, iType = TyInt } ]
+  emit [ ILiteral { iDest = indexVar, iLiteral = LitInt 0 } ]
+ 
+  emit [ IBinOp { iDest = arrVar, iBinOp = BinOpAdd, iLeft = arrVar, iOperand = OperandLit 4 } ]
+
+  emit [ ILabel { iLabel = startLabel } ]
+  emit [ ICompare { iValue = indexVar, iOperand = OperandVar lengthVar 0 },
+         ICondJump { iLabel = endLabel, iCondition = CondGE } ]
+  
+  withChildFrame [ident] $ do
+    initFrame <- gets frame
+    let newFrame = initFrame { definedLocals = Set.insert ident (definedLocals initFrame) }
+    modify (\s -> s { frame = newFrame })
+
+    localVar <- gets (getFrameLocal ident . frame)
+    emit [ IHeapRead { iHeapVar = arrVar, iDest = localVar, iOperand = OperandVar indexVar (typeShift elemTy), 
+                       iType = elemTy } ]
+    genBlock block
+    emit [ IBinOp { iDest = indexVar, iBinOp = BinOpAdd, iLeft = indexVar, iOperand = OperandLit 1 } ]
+    emit [ IJump { iLabel = startLabel } ]
+
+  emit [ ILabel { iLabel = endLabel } ]
 
 genStmt (_, StmtSwitch expr cs) = do
   e <- genExpr expr

@@ -302,12 +302,13 @@ whileStmt = spanned $ do
 forStmt :: Parser (Annotated Stmt SpanA)
 forStmt = spanned $ do
   _ <- keyword "for"
-  i <- expr
-  _ <- semi
+  i <- identifier
+  _ <- keyword "in"
   c <- expr
-  e <- expr
+  _ <- keyword "do"
   b <- block
-  return (StmtFor i c e b)
+  _ <- keyword "done"
+  return (StmtFor i c b)
 
 ifStmt :: Parser (Annotated Stmt SpanA)
 ifStmt = spanned $ do
@@ -431,6 +432,7 @@ chanSendStmt = spanned $ do
 stmt :: Parser (Annotated Stmt SpanA)
 stmt = skipStmt    <|>
        whileStmt   <|>
+       forStmt     <|>
        ifStmt      <|>
        typeSwitchStmt <|>
        switchStmt  <|>

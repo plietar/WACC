@@ -44,7 +44,7 @@ tokens :-
 
   -- Program Keywords
   begin | end | is | skip | read | free | return | exit | print | println | if
-    | then | else | fi | while | do | done | newpair | call | fst | snd | int
+    | then | else | fi | while | do | done | newpair | call | fst | snd | int | for | in
     | bool | char | switch | case | string | pair | len | ord | chr | null | tuple | newtuple
     | let | ffi | void | async | await | fire | type | chan
                        { \(AlexPn _ line column) s-> ((line, column), TokKeyword s) }
