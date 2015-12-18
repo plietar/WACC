@@ -206,7 +206,8 @@ begin
     let moveColStr = call intToString(moveColumn);
     outCh <- moveRowStr;
 		outCh <- " column " ;
-    outCh <- moveColStr 
+    outCh <- moveColStr ;
+		outCh <- "\n"
 	end
 	
 	############################### AI Functions #########################################

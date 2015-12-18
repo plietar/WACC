@@ -199,9 +199,13 @@ genReturn :: Var -> CodeGen ()
 genReturn retVal = do
   ifM (asks asyncContext)
     (do
+      emit [ IMove { iDest = Reg 4, iValue = retVal } ]
+      unlessM (lift $ getArgument gcEnabled)
+        (genCall0 "free" [GeneratorState])
+
       zeroVal <- genLitInt 0
       emit [ IMove { iDest = Reg 0, iValue = zeroVal }
-           , IMove { iDest = Reg 1, iValue = retVal }
+           , IMove { iDest = Reg 1, iValue = Reg 4 }
            , IFrameFree { iSize = 0 }
            , IReturn { iArgs = [ Reg 0, Reg 1 ], iSavedRegs = [] } ]
     )

@@ -135,6 +135,8 @@ int main() {
                 }
             }
 
+            free(cmd);
+
             elem = next;
         }
 
