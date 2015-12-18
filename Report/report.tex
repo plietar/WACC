@@ -6,6 +6,7 @@
 \usepackage{multicol}
 \usepackage{courier}
 \usepackage{subcaption}
+\usepackage{float}
 \graphicspath{ {Images/} }
 
 \topmargin0.0cm
@@ -97,22 +98,40 @@ bool b = true;
 if b then
   println "No else branch!"
 end
-
 \end{lstlisting}
-\subsection{Switch statements}
-
+\subsubsection{Switch statements}
 \begin{lstlisting}
 int b = 5;
 switch b
   case 1: println "Surprise!"
   case 2: println "Something else"
-  case 3: skip
-  case 4: skip
   case 5: println "Correct!"
 end
-
 \end{lstlisting}
 
+\subsubsection{Void Type Functions}
+For convenience we also added functions with void return type.
+\begin{lstlisting}
+begin
+  void noReturn(int x) is
+    println x
+  end
+  call noReturn(10) # Prints 10
+end
+\end{lstlisting}
+\subsubsection{Enhanced For Loops}
+\begin{lstlisting}
+begin
+  let ascending = [1,2,3,4];
+  for x in ascending do
+    println x
+  done;
+  let str = "Hello World!";
+  for c in str do
+    print c
+  done
+end
+\end{lstlisting}
 
 \subsection{Optimised Register Allocation}
 In our initial compiler, every local variable was stored on the stack, so were arguments. For each statement, required variables were loaded
@@ -128,6 +147,7 @@ also determines connections between these blocks, resulting in a control flow gr
 
 \begin{figure}
   \centering
+  %\includegraphics[width=.7\textwidth]{max-cfg.pdf}
   \includegraphics[width=.7\textwidth]{max-cfg.pdf}
   \caption{Control flow graph for the $max.wacc$ file}
 \end{figure}
@@ -167,7 +187,6 @@ begin
   println tup[3][2] # Prints 4.
 end
 \end{lstlisting}
-
 The second problem we encountered was that now arrays and tuples are accessed in the same manner. However, tuples can only be accesed with literal integers (so
 then \texttt{int b = 2; println tup[b]} is ilegal but \texttt{println tup[2]} is legal in our extension) while arrays can be indexed with expressions. So we changed our design of arrays and merged the two into an IndexingElem instead of having TupleElem and ArrayElem. This helped solved the problem because now it was a matter of just pattern matching in the appropiate moment as we always carry around the type of the IndexingElem; either a tuple or an array.
 
@@ -535,7 +554,5 @@ As a result, only two tests on fail on LabTS. The first one, $ifNoelse.wacc$, en
 is one of our extension, so this is the expected behaviour. The second one, $printAllTypes.wacc$, times out on LabTS but
 produces the correct result when run locally. This is due to the optimised register allocation algorithm, which consumes a
 lot of time when many local variables are live simultaneously.
-
-It is worth noting that some other extensions functions of type void, enhanced for loops, 
 
 \end{document}
