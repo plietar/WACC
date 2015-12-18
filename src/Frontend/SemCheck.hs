@@ -33,9 +33,11 @@ data Context = Context
 type SemCheck = ReaderT Context (WriterT (Set Identifier, Set Type) (WACCResultT WACCArguments))
 type SemCheckState = StateT Context (WriterT (Set Identifier, Set Type) (WACCResultT WACCArguments))
 
+emitMemberNames :: [String] -> SemCheck ()
 emitMemberNames names
   = tell (Set.fromList names, Set.empty)
 
+emitTypeTag :: Type -> SemCheck ()
 emitTypeTag ty
   = tell (Set.empty, Set.singleton ty)
 

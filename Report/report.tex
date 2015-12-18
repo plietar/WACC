@@ -104,11 +104,34 @@ It uses in that IR as many temporary variables as it needs.
 The compiler performs simple control flow analysis, splitting the IR into basic blocks, which have a single entry and exit point. It
 also determines connections between these blocks, resulting in a control flow graph for the function.
 
-INSERT CFG HERE
+\begin{figure}
+  \centering
+  \includegraphics[width=.7\textwidth]{max-cfg.pdf}
+  \caption{Control flow graph for the $max.wacc$ file}
+\end{figure}
 
 Once the control flow graph is known, we are able to apply the data flow equations iteratively, resulting in information about each
 variable's liveness information. If at any point of the program, two variables are live simultaneously, then the two variables are marked
 as interfering. Based on all the liveness information, we construct the register interference graph for the function.
+We also create a move graph, which keeps track of which variables are involved in a move instruction.
+
+\begin{figure}
+  \centering
+  \includegraphics[width=.7\textwidth]{max-rig.pdf}
+  \caption{Register interference graph for the $max.wacc$ file}
+\end{figure}
+
+Finally, we apply graph colouring to the register interference graph to assign each variable as register. The basic colouring algorithm
+is supplemented with a couple of features. Precoloured nodes are used to map the arguments to the correct register following ARM's calling
+conventions. Node coalescing, where two variables involved in a move will if possible assigned to the same register, allows the compiler
+to eliminate the vast majority of move instructions. Finally, if allocation fails, variables are spilled to the stack, which require them
+to be loaded and/or stored after each instruction which uses them.
+
+\begin{figure}
+  \centering
+  \includegraphics[width=.7\textwidth]{max-colouring.pdf}
+  \caption{Coloured and coaleced register interference graph for the $max.wacc$ file}
+\end{figure}
 
 \subsection{Type System improvements}
 \subsubsection{Extending Pairs to Tuples}

@@ -118,9 +118,9 @@ addLoadStoreSpilledGenerator generatorOffset offsets (ir:irs)
                          , iType = TyInt })
     addStore _ = Nothing
 
-allocateRegisters :: DynGraph gr => Bool -> Map Var Int -> gr [IRL] () -> gr Var () -> gr Var () -> WACCResult (gr [IR] (), Map Var Var)
+allocateRegisters :: DynGraph gr => Bool -> Map Var Int -> gr [IRL] () -> gr Var () -> gr Var () -> WACCResult (gr [IR] (), gr Var (), Map Var Var)
 allocateRegisters async allVars cfg rig moves = maybe (codegenError "Graph Colouring failed") OK $ do
-  (cfg', colouring, spilledVars) <- colourGraph allRegs allVars cfg rig moves
+  (cfg', rig', colouring, spilledVars) <- colourGraph allRegs allVars cfg rig moves
   let spilledOffsets = Map.fromList (zip spilledVars [0,4..])
       spilledSize    = 4 * length spilledVars
       frameSize      = if async then 0 else spilledSize
@@ -177,7 +177,7 @@ allocateRegisters async allVars cfg rig moves = maybe (codegenError "Graph Colou
               map fst .
               map fixYield
 
-  return (Graph.nmap fixIR cfg', colouring)
+  return (Graph.nmap fixIR cfg', rig', colouring)
   where
 
 -- Merge nodes X and Y, using X's label
@@ -190,7 +190,7 @@ mergeNodes x y g = Graph.insEdges edges (Graph.delNode y g)
 
 -- Colour a graph such that no to vertices in the same edge share
 -- the same colour
-colourGraph :: DynGraph gr => [Var] -> Map Var Int -> gr [IRL] () -> gr Var () -> gr Var () -> Maybe (gr [IRL] (), Map Var Var, [Var])
+colourGraph :: DynGraph gr => [Var] -> Map Var Int -> gr [IRL] () -> gr Var () -> gr Var () -> Maybe (gr [IRL] (), gr Var (), Map Var Var, [Var])
 colourGraph colours allVars cfg rig moves = do
   let allNodes = Map.fromList (Graph.labNodes rig)
 
@@ -198,7 +198,7 @@ colourGraph colours allVars cfg rig moves = do
     <- buildStack allVars allNodes cfg rig rig moves [] (Spilled <$> [0..]) [] (length colours)
 
   colouring <- augmentColouring rig' colours precolouring stack
-  return (cfg', Map.mapKeys (allNodes' !) colouring, spilledVars)
+  return (cfg', rig', Map.mapKeys (allNodes' !) colouring, spilledVars)
 
 showRIG :: Graph gr => gr Var () -> [String]
 showRIG rig = execWriter $ do

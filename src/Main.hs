@@ -78,8 +78,9 @@ compile filename contents output = do
     moves     = zipWith movesGraph <$> allVars <*> cfg
 
     allocation = join (sequence <$> (zipWith5 allocateRegisters <$> async <*> allVars <*> live <*> rig <*> moves))
-    cfgFinal  = map fst <$> allocation
-    colouring = map snd <$> allocation
+    cfgFinal  = map (\(x, _, _) -> x) <$> allocation
+    rigFinal  = map (\(_, y, _) -> y) <$> allocation
+    colouring = map (\(_, _, z) -> z) <$> allocation
 
     irFinal :: WACCResult [IR]
     irFinal   = concatMap (concatMap snd . Graph.labNodes) <$> cfgFinal
@@ -109,7 +110,7 @@ compile filename contents output = do
 #if WITH_GRAPHVIZ
     OutputDotCFG       -> concatMap showDotCFG <$> cfg
     OutputDotRIG       -> concatMap showDotRIG <$> rig
-    OutputDotColouring -> concat <$> (zipWith showDotColouring <$> rig <*> colouring)
+    OutputDotColouring -> concat <$> (zipWith showDotColouring <$> rigFinal <*> colouring)
 #endif
 
 main :: IO ()
