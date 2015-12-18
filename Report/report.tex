@@ -4,7 +4,7 @@
 \usepackage{color}
 \usepackage{listings}
 \usepackage{multicol}
-\graphicspath{ {Report/Images} }
+\graphicspath{ {report/images} }
 
 
 \topmargin0.0cm
@@ -167,8 +167,6 @@ that are ambiguously referenced from them into the Grey set. The collector gains
 If we had more time we would have liked to upgrade the GC into an Incremental Collector, since the STW pause is quite noticeable when the memory demands are very large, such as in the TicTacToe WACC program. None the less, the total time to run TicTacToe is still less with Garbage Collection than without it, although the memory usage is much higher.
 
 
-\includegraphics{Report/Images/TicTacToeGC.png}
-\includegraphics{Report/Images/TicTacToeNoGC.png}
 
 \subsection{Improving If Statements}
 We decided to extend the WACC language with additional conditional branching statements; `if' statements without an `else' branch and `switch' statements. Initially to implement the `if' statements without an `else' branch we defined a new data type called `StmtIfNoElse' which had only the condition and the `then' branch associated with it but this added a lot of repetitive code as it was extremely similar to our `StmtIf'. To overcome this problem, we made use of Haskell's Maybe monad to  define `if' statements to have a Maybe block. We then had to change Parser.hs to allow this new syntax and then we had to add the new semantics to SemCheck.hs. The difference in semantic checking between an `if' statement with an `else' branch and one without was that in the case where the `else' block was empty we had to show that the `if' statement never necessarily returns a value.  Finally we had to ensure the correct assembly code was generated which meant changing CodeGen.hs to have a case expression to deal with if the block contained a value (Just b) or was empty (Nothing).

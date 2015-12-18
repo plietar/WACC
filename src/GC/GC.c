@@ -113,11 +113,14 @@ uint32_t *GCInternalAlloc(uint byte_size, type_info *type_information, uint32_t 
   total_memory_requested += byte_size;
   total_memory_allocated += byte_size + sizeof(object_header) * 4;
   GC_Alloc_Calls++;
-  if (GC_Alloc_Calls == GC_Last_Calls + 100000) {
+  // Debug purposes
+  /*
+   if (GC_Alloc_Calls == GC_Last_Calls + 100000) {
     GC_Last_Calls = GC_Alloc_Calls;
     printMemoryUsage();
     printf("Number of pages to allocate next time: %d\n", NUMBER_PAGES_TO_ALLOCATE);
   }
+  */
   if (allocated_pages >= 5 * total_pages_handled / 6) {
     GCCollect(bottom_stack);
   }

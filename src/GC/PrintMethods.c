@@ -2,7 +2,7 @@
 
 
 void printMemoryUsage() {
-  printf("-------------------------Memory Usage Summary-----------------------\n");
+  printf("---------------------Garbage Collector Memory Usage Summary-------------------\n");
   printf("Total Memory used from the OS: \t%d bytes\n", total_pages_handled * PAGE_WORDS * 4);
   printf("Total Memory requested: \t%d bytes\n", total_memory_requested);
   printf("Total Memory allocated: \t%d bytes\n", total_memory_allocated);
