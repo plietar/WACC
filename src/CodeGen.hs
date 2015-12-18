@@ -615,7 +615,6 @@ genStmt (_, StmtFor ident arr@(baseTy@(TyArray elemTy), _) block) = do
   emit [ IHeapRead { iHeapVar = arrVar, iDest = lengthVar, iOperand = OperandLit 0, iType = TyInt } ]
   emit [ ILiteral { iDest = indexVar, iLiteral = LitInt 0 } ]
  
-  emit [ IBinOp { iDest = arrVar, iBinOp = BinOpAdd, iLeft = arrVar, iOperand = OperandLit 4 } ]
 
   emit [ ILabel { iLabel = startLabel } ]
   emit [ ICompare { iValue = indexVar, iOperand = OperandVar lengthVar 0 },
@@ -627,8 +626,9 @@ genStmt (_, StmtFor ident arr@(baseTy@(TyArray elemTy), _) block) = do
     modify (\s -> s { frame = newFrame })
 
     localVar <- gets (getFrameLocal ident . frame)
-    emit [ IHeapRead { iHeapVar = arrVar, iDest = localVar, iOperand = OperandVar indexVar (typeShift elemTy), 
-                       iType = elemTy } ]
+    offsetedVar <- genBinOp BinOpAdd arrVar (OperandLit 4)
+    emit [ IHeapRead { iHeapVar = offsetedVar, iDest = localVar, iOperand = OperandVar indexVar (typeShift elemTy) 
+                     , iType = elemTy } ]
     genBlock block
     emit [ IBinOp { iDest = indexVar, iBinOp = BinOpAdd, iLeft = indexVar, iOperand = OperandLit 1 } ]
     emit [ IJump { iLabel = startLabel } ]
