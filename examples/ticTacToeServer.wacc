@@ -47,7 +47,9 @@ begin
   ffi async string recv(socket)         = wacc_recv;
   ffi async bool   send(socket, string) = wacc_send;
   ffi       string intToString(int)     = wacc_int_to_string;
+  ffi       int    stringToInt(string)  = wacc_string_to_int;
 
+  type communication = { socket connection, chan(string) ch };
   ##############################################
   string charToString(char c) is
     string res = " ";
@@ -58,6 +60,7 @@ begin
   char stringToChar(string s) is
     return s[0]
   end 
+  
   #####################################################	
 
 
@@ -158,7 +161,7 @@ begin
 
 	# Ask for a move from the human player. The valid move is then stored in the given move array. 
 	# The row number is stored at move[0], the column number is stored at move[1]. Return true.
-	async bool askForAMoveHuman(pair(pair, pair) board, int[] move, socket connection, chan(string) ch) is
+	async void askForAMoveHuman(pair(pair, pair) board, int[] move, chan(string) ch) is
 		bool success = false ;
 		int row = 0 ;
 		int column = 0 ;
@@ -166,23 +169,22 @@ begin
 		while !success do
       ch <- "What is your next move?\n";
       ch <- " row (1-3): ";
-      let row = <- ch;
+      let rowStr = <- ch;
+      row = call stringToInt(rowStr);
       ch <- " column (1-3): ";
       let columnStr = <- ch;
-      let column = call stringToInt(columnStr);
+      column = call stringToInt(columnStr);
 
 			success = call validateMove(board, row, column) ;
 			
 			if success then
         ch <- "\n";
 				move[0] = row ;
-				move[1] = column ;
-				return true
+				move[1] = column 
 			else
         ch <- "Your move is invalid. Please try again.\n"
 			fi			
-		done ; 
-		return true
+		done 
 	end
 	
 	# Validate that the give move is valid. Returns true iff it is valid.
@@ -210,7 +212,7 @@ begin
 	############################### AI Functions #########################################
 	
 	# Initialise an AI data.
-	pair(pair, pair) initAI(char aiSymbol, chan(string) ch) is
+	async pair(pair, pair) initAI(char aiSymbol, chan(string) ch) is
 		
 		pair(char, pair) info = newpair(aiSymbol, null) ; # Don't know yet how to use the second element.
  		pair(pair, int) stateTree = call generateAllPossibleStates(aiSymbol) ;
@@ -382,7 +384,7 @@ begin
 	# Otherwise, combine the values from the next states.
 	# If this state is null, then return -101 if it is a max state, 101 if it is a min state (thus those values will not be picked).
 	# Return the value.
-	int setValuesForAllStates(pair(pair, int) state, char aiSymbol, char currentPlayer, chan(string) ch) is
+	int setValuesForAllStates(pair(pair, int) state, char aiSymbol, char currentPlayer) is
 		int outValue = 0 ;
 		if state == null then
 			# The current state is impossible to reach.
@@ -401,7 +403,7 @@ begin
 			pair(pair, pair) board = fst front ;
 			pair(pair, pair) pointers = snd front ;
 			
-			char anotherPlayer = call oppositeSymbol(currentPlayer, ch) ;
+			char anotherPlayer = call oppositeSymbol(currentPlayer) ;
 			
 			# The current player is about to play. So if another player has won it already, the current player cannot play it.
 			bool won = call hasWon(board, anotherPlayer) ;
@@ -526,7 +528,7 @@ begin
 	end
 	
 	# Ask the AI for a new move. Return true.
-	bool askForAMoveAI(pair(pair, pair) board, char currentTurn, char playerSymbol, pair(pair, pair) aiData, int[] move) is
+	async void askForAMoveAI(pair(pair, pair) board, char currentTurn, char playerSymbol, pair(pair, pair) aiData, int[] move, chan(string) ch) is
 		
 		pair(char, pair) info = fst aiData ;
  		pair(pair, int) stateTree = snd aiData ;
@@ -538,12 +540,11 @@ begin
 		
 		bool _ = call findTheBestMove(pointers, stateValue, move) ;		
 		
-		println "AI is cleaning up its memory..." ;
+		ch <- "AI is cleaning up its memory...\n" ;
 		# Update the state tree by using the new move.
 		snd aiData = call deleteAllOtherChildren(pointers, move[0], move[1]) ;
 	
-		_ = call deleteThisStateOnly(stateTree) ;
-		return true
+		_ = call deleteThisStateOnly(stateTree) 
 	end
 	
 	# Given the pointers to all next states, pick the first one with the given stateValue and store the move in the the given array.
@@ -644,7 +645,7 @@ begin
 	end
 	
 	# Notify a move made by a human player to the AI. Return true.
-	bool notifyMoveAI(pair(pair, pair) board, char currentTurn, char playerSymbol, pair(pair, pair) aiData, int moveRow, int moveColumn, chan(string) ch) is
+	async bool notifyMoveAI(pair(pair, pair) board, char currentTurn, char playerSymbol, pair(pair, pair) aiData, int moveRow, int moveColumn, chan(string) ch) is
 		
 		#pair(char, pair) info = fst aiData ; #unused
 		pair(pair, int) stateTree = snd aiData ;
@@ -818,13 +819,12 @@ begin
 	############################### Game Engine Functions ##################################
 	
 	# Ask for a move from the current player. The valid move is stored in the move array. Return true.
-	bool askForAMove(pair(pair, pair) board, char currentTurn, char playerSymbol, pair(pair, pair) aiData, int[] move) is
+	async void askForAMove(pair(pair, pair) board, char currentTurn, char playerSymbol, pair(pair, pair) aiData, int[] move, chan(string) ch) is
 		if currentTurn == playerSymbol then
-			bool _ = call askForAMoveHuman(board, move, ch)
+			await askForAMoveHuman(board, move, ch)
 		else 
-			bool _ = call askForAMoveAI(board, currentTurn, playerSymbol, aiData, move)
-		fi ;
-		return true
+			await askForAMoveAI(board, currentTurn, playerSymbol, aiData, move, ch)
+		fi 
 	end
 	
 	# Place the given move of the currentTurn in the board. Return true.
@@ -869,8 +869,7 @@ begin
 			await notifyMoveAI(board, currentTurn, playerSymbol, aiData, moveRow, moveColumn, ch)
 		else 
 			await notifyMoveHuman(board, currentTurn, playerSymbol, moveRow, moveColumn, ch)
-		fi ;
-		return true
+		fi 
 	end
 	
 	# Given either 'x' or 'o', returns another one.
@@ -1027,19 +1026,18 @@ begin
 	end
 	
 	# For debugging purpose.
-	bool printAiData(pair(pair, pair) aiData) is
+	async void printAiData(pair(pair, pair) aiData, chan(string) ch) is
 		
 		pair(char, pair) info = fst aiData ;
 		pair(pair, int) stateTree = snd aiData ;
 		
-		bool _ = call printStateTreeRecursively(stateTree) ;
+		await printStateTreeRecursively(stateTree, ch) ;
 		exit 0
 	end
 	
-	bool printStateTreeRecursively(pair(pair, int) stateTree) is
-		if stateTree == null then
-			return true 
-		else 
+	async void printStateTreeRecursively(pair(pair, int) stateTree, chan(string) ch) is
+
+		if stateTree != null then
 			pair(pair, pair) front = fst stateTree ;
 			
 			pair(pair, pair) board = fst front ;
@@ -1047,43 +1045,43 @@ begin
 			int value = snd stateTree ;
 			
 			# Print the value
-			print 'v' ;
-			print '=' ;
-			println value ;
+			ch <- "v" ;
+			ch <- "=" ;
+      let valueStr = call intToString(value);
+			ch <- valueStr ;
 			
-			bool _ = call printBoard(board) ;
-			_ = call printChildrenStateTree(pointers) ;
+			await printBoard(board, ch) ;
+			await printChildrenStateTree(pointers, ch) ;
 			
-			println 'p' ;
-			return true
+			ch <- "p" 
+		else 
+      skip
 		fi
 	end
 	
-	bool printChildrenStateTree(pair(pair, pair) pointers) is
+	async void printChildrenStateTree(pair(pair, pair) pointers, chan(string) ch) is
 		pair(pair, pair) front = fst pointers ;
 		
 		pair(pair, pair) row1 = fst front ;
 		pair(pair, pair) row2 = snd front ;
 		pair(pair, pair) row3 = snd pointers ;
 		
-		bool _ = call printChildrenStateTreeRow(row1) ;
-		_ = call printChildrenStateTreeRow(row2) ;
-		_ = call printChildrenStateTreeRow(row3) ;
-		return true
+		await printChildrenStateTreeRow(row1, ch) ;
+		await printChildrenStateTreeRow(row2, ch) ;
+		await printChildrenStateTreeRow(row3, ch) 
 	end
 	
-	bool printChildrenStateTreeRow(pair(pair, pair) rowPointers) is
+  async void printChildrenStateTreeRow(pair(pair, pair) rowPointers, chan(string) ch) is
 		pair(pair, pair) front = fst rowPointers ;
 		
 		pair(pair, int) cell1 = fst front ;
 		pair(pair, int) cell2 = snd front ;
 		pair(pair, int) cell3 = snd rowPointers ;
 		
-		bool _ = call printStateTreeRecursively(cell1) ;
-		_ = call printStateTreeRecursively(cell2) ;
-		_ = call printStateTreeRecursively(cell3) ;
+		await printStateTreeRecursively(cell1, ch) ;
+		await printStateTreeRecursively(cell2, ch) ;
+		await printStateTreeRecursively(cell3, ch) 
 		
-		return true
 	end
   	
 
@@ -1097,7 +1095,7 @@ begin
     pair(pair, pair) board = call allocateNewBoard() ;
     
     ch <- "Initialising AI. Please wait, this may take a few minutes.\n" ;
-    pair(pair, pair) aiData = call initAI(aiSymbol) ;
+    pair(pair, pair) aiData = await initAI(aiSymbol, ch) ;
    
     int turnCount = 0 ;
     char winner = '\0' ;
@@ -1135,8 +1133,44 @@ begin
     fi
    
   end
+  #async void count() is
+  #  let x = 0;
+  #  while true do
+  #    println x;
+  #    x = x + 1;
+  #    await sleep_ms(1000)
+  #  done
+  #end
 
-  type communication = { socket connection, chan(string) ch };
+  #async void handle(socket connection) is
+  #  println "New connection.";
+  #  await send(connection, "Welcome !\r\n");
+
+  #  await send(connection, "> ");
+  #  let msg = await recv(connection);
+
+  #  while len msg > 0 do
+  #    await send(connection, msg);
+  #    await send(connection, "> ");
+  #    msg = await recv(connection)
+  #  done;
+
+  #  println "Connection closed."
+  #end
+
+  #fire count();
+
+  #socket fd = call socket();
+  #call bind(fd, 5050);
+  #call listen(fd);
+
+  #println "Waiting for connections";
+
+  #while true do
+  #  let connection = await accept(fd);
+  #  fire handle(connection)
+  #done
+
 
   async void sender(communication comm) is
     let connection = comm.connection;
@@ -1158,11 +1192,22 @@ begin
     done
   end
 
+  async void count() is
+    let x = 0;
+    while true do
+      println x;
+      x = x + 1;
+      await sleep_ms(1000)
+    done
+  end
+
+
   socket fd = call socket();
   call bind(fd, 5050);
   call listen(fd);
 
   while true do
+    fire count();
     let con = await accept(fd);
     let channel : chan(string) = chan();
     let comm = {

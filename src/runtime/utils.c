@@ -13,3 +13,8 @@ wacc_string *wacc_int_to_string(int x) {
   sprintf(string->data, "%d", x);
   return string;
 }
+
+
+int wacc_string_to_int(wacc_string *str) {
+  return atoi(str->data);
+}
