@@ -273,7 +273,7 @@ showDotColouring cfg colouring
 dotColouringParams :: (Eq a, Ord a, Show a) => Map Var a -> GraphViz.GraphvizParams Int Var () () Var
 dotColouringParams colouring = dotRIGParams { GraphViz.fmtNode = fn }
   where
-    fn (_, l) = [(GraphViz.toLabel . show) (l, colouring ! l)
+    fn (_, l) = [(GraphViz.toLabel . show) l
                 , GraphViz.FillColor (GraphViz.toColorList [colourMap ! l])]
 
     colours = Map.fromList (zip (nub (Map.elems colouring)) (map colour [0..]))

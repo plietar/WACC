@@ -31,13 +31,13 @@ argPassingRegs :: [Var]
 argPassingRegs = Reg <$> [0..3]
 
 callerSaveRegs :: [Var]
-callerSaveRegs = Reg <$> ([0..3] ++ [12, 14])
+callerSaveRegs = Reg <$> ([0..3] ++ [14])
 
 calleeSaveRegs :: [Var]
 calleeSaveRegs = Reg <$> ([4..11] ++ [14])
 
 allRegs :: [Var]
-allRegs = Reg <$> ([0..12] ++ [14])
+allRegs = Reg <$> ([0..11] ++ [14])
 
 spReg :: Var
 spReg = Reg 13
@@ -91,6 +91,7 @@ data IR
   | ICall { iLabel :: Label, iArgs :: [Var] }
   | ILabel { iLabel :: Label }
 
+  | IGeneratorSize { iDest :: Var }
   | IFrameAllocate { iSize :: Int }
   | IFrameFree { iSize :: Int }
 

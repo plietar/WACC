@@ -49,7 +49,8 @@ begin
   ffi       string intToString(int)     = wacc_int_to_string;
   ffi       int    stringToInt(string)  = wacc_string_to_int;
 
-  type communication = { socket connection, chan(string) ch };
+  type communication = { socket connection, chan(string) inCh, chan(string) outCh };
+
   ##############################################
   string charToString(char c) is
     string res = " ";
@@ -68,23 +69,23 @@ begin
 	
 	# Print greeting message and ask the player to choose their symbol.
 	# Return either 'x' or 'o'. 'x' plays first.
-	async char chooseSymbol(chan(string) ch) is
-		ch <- "========= Tic Tac Toe ================\n" ;
-		ch <- "=  Because we know you want to win   =\n" ;
-		ch <- "======================================\n" ;
-		ch <- "=                                    =\n" ;
-		ch <- "= Who would you like to be?          =\n" ;
-		ch <- "=   x  (play first)                  =\n" ;
-		ch <- "=   o  (play second)                 =\n" ;
-		ch <- "=   q  (quit)                        =\n" ;
-		ch <- "=                                    =\n" ;
-		ch <- "======================================\n" ;
+	async char chooseSymbol(chan(string) inCh, chan(string) outCh) is
+		outCh <- "========= Tic Tac Toe ================\n" ;
+		outCh <- "=  Because we know you want to win   =\n" ;
+		outCh <- "======================================\n" ;
+		outCh <- "=                                    =\n" ;
+		outCh <- "= Who would you like to be?          =\n" ;
+		outCh <- "=   x  (play first)                  =\n" ;
+		outCh <- "=   o  (play second)                 =\n" ;
+		outCh <- "=   q  (quit)                        =\n" ;
+		outCh <- "=                                    =\n" ;
+		outCh <- "======================================\n" ;
 		
 		char chosen = '\0' ;
 		while chosen == '\0' do 
-			ch <- "Which symbol you would like to choose: " ;
+			outCh <- "Which symbol you would like to choose: " ;
 			char c = '\0' ;
-      let cStr = <- ch;
+      let cStr = <- inCh;
       c = call stringToChar(cStr);
 			if c == 'x' || c == 'X' then
 				chosen = 'x'
@@ -93,25 +94,25 @@ begin
 					chosen = 'o'
 				else
 					if c == 'q' || c == 'Q' then
-						ch <- "Goodbye safety.\n" ;
+						outCh <- "Goodbye safety.\n" ;
 						exit 0
 					else
-						ch <- "Invalid symbol: " ;
-            ch <- cStr;
-						ch <- "Please try again.\n"
+						outCh <- "Invalid symbol: " ;
+            outCh <- cStr;
+						outCh <- "Please try again.\n"
 					fi 
 				fi
 			fi
 		done ;
     let chosenStr = call charToString(chosen);
-		ch <- "You have chosen: " ;
-		ch <- chosenStr ;
-    ch <- "\n";
+		outCh <- "You have chosen: " ;
+		outCh <- chosenStr ;
+    outCh <- "\n";
 		return chosen
 	end
 	
 	# Print the board out to the screen.
-	async void printBoard(pair(pair, pair) board, chan(string) ch) is
+	async void printBoard(pair(pair, pair) board, chan(string) inCh, chan(string) outCh) is
     # Async version
 
 		pair(pair, pair) front = fst board ;
@@ -120,69 +121,69 @@ begin
 		pair(pair, char) row3 = snd board ;
 
         
-    ch <- " 1 2 3\n";
-    ch <- "1";
-		await printRow(row1, ch) ;
-    ch <- " -+-+-\n";
-    ch <- "2";
-		await printRow(row2, ch) ;
-    ch <- " -+-+-\n";
-    ch <- "3";
-		await printRow(row3, ch) ;
-    ch <- "\n"
+    outCh <- " 1 2 3\n";
+    outCh <- "1";
+		await printRow(row1, inCh, outCh) ;
+    outCh <- " -+-+-\n";
+    outCh <- "2";
+		await printRow(row2, inCh, outCh) ;
+    outCh <- " -+-+-\n";
+    outCh <- "3";
+		await printRow(row3, inCh, outCh) ;
+    outCh <- "\n"
 	end
 	
 	# Print a row with a newline to the screen.
-	async void printRow(pair(pair, char) row, chan(string) ch) is
+	async void printRow(pair(pair, char) row, chan(string) inCh, chan(string) outCh) is
 		pair(char, char) front = fst row ;
 		
 		char cell1 = fst front ;
 		char cell2 = snd front ;
 		char cell3 = snd row ;
 		
-		await printCell(cell1, ch) ;
-    ch <- "|";
-		await printCell(cell2, ch) ;
-    ch <- "|";
-		await printCell(cell3, ch) ;
-    ch <-"\n"
+		await printCell(cell1, inCh, outCh) ;
+    outCh <- "|";
+		await printCell(cell2, inCh, outCh) ;
+    outCh <- "|";
+		await printCell(cell3, inCh, outCh) ;
+    outCh <-"\n"
 	end 
 
 
 	# Print a given cell. Print an empty space if it is empty. Return true.
-	async void printCell(char cell, chan(string) ch) is
+	async void printCell(char cell, chan(string) inCh, chan(string) outCh) is
 		if cell == '\0' then
-      ch <- " "
+      outCh <- " "
 		else
       let cellStr = call charToString(cell);
-      ch <- cellStr
+      outCh <- cellStr
 		fi 
 	end
 
 	# Ask for a move from the human player. The valid move is then stored in the given move array. 
 	# The row number is stored at move[0], the column number is stored at move[1]. Return true.
-	async void askForAMoveHuman(pair(pair, pair) board, int[] move, chan(string) ch) is
+	async void askForAMoveHuman(pair(pair, pair) board, int[] move, chan(string) inCh, chan(string) outCh) is
 		bool success = false ;
 		int row = 0 ;
 		int column = 0 ;
 			
 		while !success do
-      ch <- "What is your next move?\n";
-      ch <- " row (1-3): ";
-      let rowStr = <- ch;
+      outCh <- "What is your next move?\n";
+      outCh <- " row (1-3): ";
+      let rowStr = <- inCh;
       row = call stringToInt(rowStr);
-      ch <- " column (1-3): ";
-      let columnStr = <- ch;
+      outCh <- " column (1-3): ";
+      let columnStr = <- inCh;
       column = call stringToInt(columnStr);
 
 			success = call validateMove(board, row, column) ;
 			
 			if success then
-        ch <- "\n";
+        outCh <- "\n";
 				move[0] = row ;
 				move[1] = column 
 			else
-        ch <- "Your move is invalid. Please try again.\n"
+        outCh <- "Your move is invalid. Please try again.\n"
 			fi			
 		done 
 	end
@@ -199,23 +200,23 @@ begin
 	end
 	
 	# Print out to the screen about a recent move maid by the AI. Return true.
-	async void notifyMoveHuman(pair(pair, pair) board, char currentTurn, char playerSymbol, int moveRow, int moveColumn, chan(string) ch) is
-    ch <- "The AI played at row ";
+	async void notifyMoveHuman(pair(pair, pair) board, char currentTurn, char playerSymbol, int moveRow, int moveColumn, chan(string) inCh, chan(string) outCh) is
+    outCh <- "The AI played at row ";
     let moveRowStr = call intToString(moveRow);
     let moveColStr = call intToString(moveColumn);
-    ch <- moveRowStr;
-		print moveRow ;
-		ch <- " column " ;
-    ch <- moveColStr 
+    outCh <- moveRowStr;
+		outCh <- " column " ;
+    outCh <- moveColStr ;
+		outCh <- "\n"
 	end
 	
 	############################### AI Functions #########################################
 	
 	# Initialise an AI data.
-	async pair(pair, pair) initAI(char aiSymbol, chan(string) ch) is
+	async pair(pair, pair) initAI(char aiSymbol, chan(string) inCh, chan(string) outCh) is
 		
 		pair(char, pair) info = newpair(aiSymbol, null) ; # Don't know yet how to use the second element.
- 		pair(pair, int) stateTree = call generateAllPossibleStates(aiSymbol) ;
+ 		pair(pair, int) stateTree = await generateAllPossibleStates(aiSymbol) ;
 		int value = call setValuesForAllStates(stateTree, aiSymbol, 'x') ;
 		
 		pair(pair, pair) aiData = newpair(info, stateTree) ;
@@ -223,10 +224,10 @@ begin
 	end
 	
 	# Generate the whole tree of all states. Then return the tree.
-  pair(pair, int) generateAllPossibleStates(char aiSymbol) is
+  async pair(pair, int) generateAllPossibleStates(char aiSymbol) is
 		pair(pair, pair) board = call allocateNewBoard() ;
 		pair(pair, int) rootState = call convertFromBoardToState(board) ;
-		rootState = call generateNextStates(rootState, 'x') ;
+		rootState = await generateNextStates(rootState, 'x') ;
 		return rootState
 	end
 	
@@ -264,7 +265,7 @@ begin
 	end
 	
 	# Generate next states recursively. Returns the state.
-	pair(pair, int) generateNextStates(pair(pair, int) state, char currentPlayer) is
+	async pair(pair, int) generateNextStates(pair(pair, int) state, char currentPlayer) is
 		pair(pair, pair) front = fst state ;
 		
 		pair(pair, pair) board = fst front ;
@@ -278,14 +279,14 @@ begin
 			# The game ends. The winner is known.
 			return state 
 		else
-			bool _ = call generateNextStatesBoard(board, pointers, currentPlayer) ;
+			bool _ = await generateNextStatesBoard(board, pointers, currentPlayer) ;
 			return state
 		fi
 		
 	end
 	
 	# Generate Just the next states for every possible point on the board. Update the pointers accordingly. Return true.
-	bool generateNextStatesBoard(pair(pair, pair) board, pair(pair, pair) pointers, char currentPlayer) is
+	async bool generateNextStatesBoard(pair(pair, pair) board, pair(pair, pair) pointers, char currentPlayer) is
 		pair(pair, pair) front = fst board ;
 		
 		pair(pair, char) row1 = fst front ;
@@ -298,15 +299,15 @@ begin
 		pair(pair, pair) row2P = snd frontP ;
 		pair(pair, pair) row3P = snd pointers ;
 		
-		bool _ = call generateNextStatesRow(board, row1, row1P, currentPlayer, 1) ;
-		_ = call generateNextStatesRow(board, row2, row2P, currentPlayer, 2) ;
-		_ = call generateNextStatesRow(board, row3, row3P, currentPlayer, 3) ;
+		bool _ = await generateNextStatesRow(board, row1, row1P, currentPlayer, 1) ;
+		_ = await generateNextStatesRow(board, row2, row2P, currentPlayer, 2) ;
+		_ = await generateNextStatesRow(board, row3, row3P, currentPlayer, 3) ;
 		
 		return true
 	end
 	
 	# Generate Just the next states for every possible point on the row. Update the pointers accordingly. Return true.
-	bool generateNextStatesRow(pair(pair, pair) board, pair(pair, char) row, pair(pair, pair) pointerRow, char currentPlayer, int rowNumber) is
+	async bool generateNextStatesRow(pair(pair, pair) board, pair(pair, char) row, pair(pair, pair) pointerRow, char currentPlayer, int rowNumber) is
 		pair(char, char) front = fst row ;
 		
 		char cell1 = fst front ;
@@ -315,15 +316,15 @@ begin
 		
 		pair(pair, pair) frontP = fst pointerRow ;
 		
-		fst frontP = call generateNextStatesCell(board, cell1, currentPlayer, rowNumber, 1) ;
-		snd frontP = call generateNextStatesCell(board, cell2, currentPlayer, rowNumber, 2) ;
-		snd pointerRow = call generateNextStatesCell(board, cell3, currentPlayer, rowNumber, 3) ;
+		fst frontP = await generateNextStatesCell(board, cell1, currentPlayer, rowNumber, 1) ;
+		snd frontP = await generateNextStatesCell(board, cell2, currentPlayer, rowNumber, 2) ;
+		snd pointerRow = await generateNextStatesCell(board, cell3, currentPlayer, rowNumber, 3) ;
 		
 		return true
 	end
 	
 	# Generate Just the next states for the cell on the board. Returns the pointer to the next state.
-  pair(pair, int) generateNextStatesCell(pair(pair, pair) board, char cell, char currentPlayer, int rowNumber, int columnNumber) is
+  async pair(pair, int) generateNextStatesCell(pair(pair, pair) board, char cell, char currentPlayer, int rowNumber, int columnNumber) is
 		if cell == '\0' then
 			# If the cell is empty, generate the next state.
 			pair(pair, pair) board2 = call cloneBoard(board) ;
@@ -332,7 +333,8 @@ begin
 			char nextPlayer = call oppositeSymbol(currentPlayer) ;
 			
 			# Generate next states recursively and return it out.
-			state = call generateNextStates(state, nextPlayer) ;
+                        await yield();
+			state = await generateNextStates(state, nextPlayer) ;
 			return state
 		else
 			# If the cell is not empty, return null.
@@ -528,7 +530,7 @@ begin
 	end
 	
 	# Ask the AI for a new move. Return true.
-	async void askForAMoveAI(pair(pair, pair) board, char currentTurn, char playerSymbol, pair(pair, pair) aiData, int[] move, chan(string) ch) is
+	async void askForAMoveAI(pair(pair, pair) board, char currentTurn, char playerSymbol, pair(pair, pair) aiData, int[] move, chan(string) inCh, chan(string) outCh) is
 		
 		pair(char, pair) info = fst aiData ;
  		pair(pair, int) stateTree = snd aiData ;
@@ -540,7 +542,7 @@ begin
 		
 		bool _ = call findTheBestMove(pointers, stateValue, move) ;		
 		
-		ch <- "AI is cleaning up its memory...\n" ;
+		outCh <- "AI is cleaning up its memory...\n" ;
 		# Update the state tree by using the new move.
 		snd aiData = call deleteAllOtherChildren(pointers, move[0], move[1]) ;
 	
@@ -645,7 +647,7 @@ begin
 	end
 	
 	# Notify a move made by a human player to the AI. Return true.
-	async bool notifyMoveAI(pair(pair, pair) board, char currentTurn, char playerSymbol, pair(pair, pair) aiData, int moveRow, int moveColumn, chan(string) ch) is
+	async bool notifyMoveAI(pair(pair, pair) board, char currentTurn, char playerSymbol, pair(pair, pair) aiData, int moveRow, int moveColumn, chan(string) inCh, chan(string) outCh) is
 		
 		#pair(char, pair) info = fst aiData ; #unused
 		pair(pair, int) stateTree = snd aiData ;
@@ -655,7 +657,7 @@ begin
 		#pair(pair, pair) board = fst front ; #unused
 		pair(pair, pair) pointers = snd front ;
 		
-		ch <- "AI is cleaning up its memory..." ;
+		outCh <- "AI is cleaning up its memory..." ;
 		
 		# Set new state tree, remove all other children created by making other moves.
 		snd aiData = call deleteAllOtherChildren(pointers, moveRow, moveColumn) ;
@@ -819,11 +821,11 @@ begin
 	############################### Game Engine Functions ##################################
 	
 	# Ask for a move from the current player. The valid move is stored in the move array. Return true.
-	async void askForAMove(pair(pair, pair) board, char currentTurn, char playerSymbol, pair(pair, pair) aiData, int[] move, chan(string) ch) is
+	async void askForAMove(pair(pair, pair) board, char currentTurn, char playerSymbol, pair(pair, pair) aiData, int[] move, chan(string) inCh, chan(string) outCh) is
 		if currentTurn == playerSymbol then
-			await askForAMoveHuman(board, move, ch)
+			await askForAMoveHuman(board, move, inCh, outCh)
 		else 
-			await askForAMoveAI(board, currentTurn, playerSymbol, aiData, move, ch)
+			await askForAMoveAI(board, currentTurn, playerSymbol, aiData, move, inCh, outCh)
 		fi 
 	end
 	
@@ -864,11 +866,11 @@ begin
 	
 	# Notify the opponent about a move of another party. Return true.
 	async void notifyMove(pair(pair, pair) board, char currentTurn, char playerSymbol, 
-      pair(pair, pair) aiData, int moveRow, int moveColumn, chan(string) ch) is
+      pair(pair, pair) aiData, int moveRow, int moveColumn, chan(string) inCh, chan(string) outCh) is
 		if currentTurn == playerSymbol then
-			await notifyMoveAI(board, currentTurn, playerSymbol, aiData, moveRow, moveColumn, ch)
+			await notifyMoveAI(board, currentTurn, playerSymbol, aiData, moveRow, moveColumn, inCh, outCh)
 		else 
-			await notifyMoveHuman(board, currentTurn, playerSymbol, moveRow, moveColumn, ch)
+			await notifyMoveHuman(board, currentTurn, playerSymbol, moveRow, moveColumn, inCh, outCh)
 		fi 
 	end
 	
@@ -1026,16 +1028,16 @@ begin
 	end
 	
 	# For debugging purpose.
-	async void printAiData(pair(pair, pair) aiData, chan(string) ch) is
+	async void printAiData(pair(pair, pair) aiData, chan(string) inCh, chan(string) outCh) is
 		
 		pair(char, pair) info = fst aiData ;
 		pair(pair, int) stateTree = snd aiData ;
 		
-		await printStateTreeRecursively(stateTree, ch) ;
+		await printStateTreeRecursively(stateTree, inCh, outCh) ;
 		exit 0
 	end
 	
-	async void printStateTreeRecursively(pair(pair, int) stateTree, chan(string) ch) is
+	async void printStateTreeRecursively(pair(pair, int) stateTree, chan(string) inCh, chan(string) outCh) is
 
 		if stateTree != null then
 			pair(pair, pair) front = fst stateTree ;
@@ -1045,42 +1047,42 @@ begin
 			int value = snd stateTree ;
 			
 			# Print the value
-			ch <- "v" ;
-			ch <- "=" ;
+			outCh <- "v" ;
+			outCh <- "=" ;
       let valueStr = call intToString(value);
-			ch <- valueStr ;
+			outCh <- valueStr ;
 			
-			await printBoard(board, ch) ;
-			await printChildrenStateTree(pointers, ch) ;
+			await printBoard(board, inCh, outCh) ;
+			await printChildrenStateTree(pointers, inCh, outCh) ;
 			
-			ch <- "p" 
+			outCh <- "p" 
 		else 
       skip
 		fi
 	end
 	
-	async void printChildrenStateTree(pair(pair, pair) pointers, chan(string) ch) is
+	async void printChildrenStateTree(pair(pair, pair) pointers, chan(string) inCh, chan(string) outCh) is
 		pair(pair, pair) front = fst pointers ;
 		
 		pair(pair, pair) row1 = fst front ;
 		pair(pair, pair) row2 = snd front ;
 		pair(pair, pair) row3 = snd pointers ;
 		
-		await printChildrenStateTreeRow(row1, ch) ;
-		await printChildrenStateTreeRow(row2, ch) ;
-		await printChildrenStateTreeRow(row3, ch) 
+		await printChildrenStateTreeRow(row1, inCh, outCh) ;
+		await printChildrenStateTreeRow(row2, inCh, outCh) ;
+		await printChildrenStateTreeRow(row3, inCh, outCh) 
 	end
 	
-  async void printChildrenStateTreeRow(pair(pair, pair) rowPointers, chan(string) ch) is
+  async void printChildrenStateTreeRow(pair(pair, pair) rowPointers, chan(string) inCh, chan(string) outCh) is
 		pair(pair, pair) front = fst rowPointers ;
 		
 		pair(pair, int) cell1 = fst front ;
 		pair(pair, int) cell2 = snd front ;
 		pair(pair, int) cell3 = snd rowPointers ;
 		
-		await printStateTreeRecursively(cell1, ch) ;
-		await printStateTreeRecursively(cell2, ch) ;
-		await printStateTreeRecursively(cell3, ch) 
+		await printStateTreeRecursively(cell1, inCh, outCh) ;
+		await printStateTreeRecursively(cell2, inCh, outCh) ;
+		await printStateTreeRecursively(cell3, inCh, outCh) 
 		
 	end
   	
@@ -1088,27 +1090,30 @@ begin
 	############################## Main Function ############################
 	
 
-  async void instance(chan(string) ch) is
-    char playerSymbol = await chooseSymbol(ch) ;
+  async void instance(communication comm) is
+    let inCh = comm.inCh;
+    let outCh = comm.outCh;
+
+    char playerSymbol = await chooseSymbol(inCh, outCh) ;
     char aiSymbol = call oppositeSymbol(playerSymbol) ;
     char currentTurn = 'x' ;
     pair(pair, pair) board = call allocateNewBoard() ;
     
-    ch <- "Initialising AI. Please wait, this may take a few minutes.\n" ;
-    pair(pair, pair) aiData = await initAI(aiSymbol, ch) ;
+    outCh <- "Initialising AI. Please wait, this may take a few minutes.\n" ;
+    pair(pair, pair) aiData = await initAI(aiSymbol, inCh, outCh) ;
    
     int turnCount = 0 ;
     char winner = '\0' ;
     
     bool _ = true; #
-    await printBoard(board, ch) ;
+    await printBoard(board, inCh, outCh) ;
     
     while winner == '\0' && turnCount < 9 do
       int[] move = [0, 0] ;
-      await askForAMove(board, currentTurn, playerSymbol, aiData, move, ch) ;
+      await askForAMove(board, currentTurn, playerSymbol, aiData, move, inCh, outCh) ;
       _ = call placeMove(board, currentTurn, move[0], move[1]) ;
-      await notifyMove(board, currentTurn, playerSymbol, aiData, move[0], move[1], ch) ;
-      await printBoard(board, ch) ;
+      await notifyMove(board, currentTurn, playerSymbol, aiData, move[0], move[1], inCh, outCh) ;
+      await printBoard(board, inCh, outCh) ;
       bool won = call hasWon(board, currentTurn) ;
       if won then
         winner = currentTurn
@@ -1126,55 +1131,17 @@ begin
     
     let winnerC = call charToString(winner);
     if winner != '\0' then
-      ch <- winnerC ;
-      ch <- " has won!\n" 
+      outCh <- winnerC ;
+      outCh <- " has won!\n" 
     else 
-      ch <- "Stalemate!\n" 
+      outCh <- "Stalemate!\n" 
     fi
    
   end
-  #async void count() is
-  #  let x = 0;
-  #  while true do
-  #    println x;
-  #    x = x + 1;
-  #    await sleep_ms(1000)
-  #  done
-  #end
-
-  #async void handle(socket connection) is
-  #  println "New connection.";
-  #  await send(connection, "Welcome !\r\n");
-
-  #  await send(connection, "> ");
-  #  let msg = await recv(connection);
-
-  #  while len msg > 0 do
-  #    await send(connection, msg);
-  #    await send(connection, "> ");
-  #    msg = await recv(connection)
-  #  done;
-
-  #  println "Connection closed."
-  #end
-
-  #fire count();
-
-  #socket fd = call socket();
-  #call bind(fd, 5050);
-  #call listen(fd);
-
-  #println "Waiting for connections";
-
-  #while true do
-  #  let connection = await accept(fd);
-  #  fire handle(connection)
-  #done
-
 
   async void sender(communication comm) is
     let connection = comm.connection;
-    let ch = comm.ch;
+    let ch = comm.outCh;
     while true do
       let msg = <- ch;
       await send(connection, msg)
@@ -1184,7 +1151,7 @@ begin
 
   async void receiver(communication comm) is
       let connection = comm.connection;
-      let ch = comm.ch;
+      let ch = comm.inCh;
 
     while true do
       let msg = await recv(connection);
@@ -1206,19 +1173,19 @@ begin
   call bind(fd, 5050);
   call listen(fd);
 
+  fire count();
   while true do
-    fire count();
     let con = await accept(fd);
-    let channel : chan(string) = chan();
+    let outCh : chan(string) = chan();
+    let inCh : chan(string) = chan();
     let comm = {
       connection = con,
-      ch = channel
+      inCh = inCh,
+      outCh = outCh
     };
     
     fire receiver(comm);
     fire sender(comm);
-    fire instance(channel)
+    fire instance(comm)
   done
-
-	
-	end
+end

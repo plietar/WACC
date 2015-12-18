@@ -33,9 +33,11 @@ data Context = Context
 type SemCheck = ReaderT Context (WriterT (Set Identifier, Set Type) (WACCResultT WACCArguments))
 type SemCheckState = StateT Context (WriterT (Set Identifier, Set Type) (WACCResultT WACCArguments))
 
+emitMemberNames :: [String] -> SemCheck ()
 emitMemberNames names
   = tell (Set.fromList names, Set.empty)
 
+emitTypeTag :: Type -> SemCheck ()
 emitTypeTag ty
   = tell (Set.empty, Set.singleton ty)
 
@@ -480,13 +482,14 @@ checkCall fname args = do
 checkAwait :: Identifier -> [Annotated Expr SpanA] -> SemCheck (Identifier, [Annotated Expr TypeA], Type)
 checkAwait fname args = do
   unlessM (asks asyncContext)
-          (semanticError ("Cannot await from within a synchronous function"))
+          (semanticError ("Cannot await " ++ fname ++ " from within a synchronous function"))
 
   (symbolName, async, expectedArgsType, returnType) <- getFunction fname
   unless async (semanticError ("Cannot await synchronous function " ++ fname))
 
   args' <- mapM checkExpr args
-  checkArgs expectedArgsType (map fst args')
+  withErrorContext ("In await to function "++fname)
+    (checkArgs expectedArgsType (map fst args'))
 
   return (symbolName, args', returnType)
 
@@ -500,7 +503,8 @@ checkFire fname args = do
   when (length args > 1) (semanticError ("Function " ++ fname ++ " with more than one argument cannot be fired"))
 
   args' <- mapM checkExpr args
-  checkArgs expectedArgsType (map fst args')
+  withErrorContext ("In fire to function "++fname)
+    (checkArgs expectedArgsType (map fst args'))
 
   return (symbolName, args', returnType)
 
