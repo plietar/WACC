@@ -29,13 +29,19 @@ graphNMapM f gr = do
   nodes <- mapM (\(l, n) -> (l,) <$> f n) (Graph.labNodes gr)
   return (Graph.mkGraph nodes (Graph.labEdges gr))
 
+isSpillable :: Var -> Bool
+isSpillable v
+  = case v of
+    (Reg _) -> False
+    GeneratorState -> False
+    _ -> True
 spillNode :: DynGraph gr => Map Var Int -> Map Int Var -> gr [IRL] () -> gr Var () -> gr Var () -> gr Var () -> [Var -> Var]
              -> (Var, Map Var Int, Map Int Var, gr [IRL] (), gr Var (), gr Var (), gr Var (), [Var -> Var])
 spillNode allVars allNodes cfg oRig rig moves spill
   = (spilledVar, allVars', allNodes', cfg'', oRig', rig', moves', spill')
   where
     (spilledNode, spilledVar) = head lnodes
-    lnodes = sortWith (\(n, _) -> Down (Graph.deg rig n)) $ filter (\(_,l) -> not (isPrecoloured l)) (Graph.labNodes rig)
+    lnodes = sortWith (\(n, _) -> Down (Graph.deg rig n)) $ filter (\(_,l) -> isSpillable l) (Graph.labNodes rig)
 
     (cfg', spill', newVars) = runRWS (graphNMapM (mapM findUses) cfg) () spill
 
