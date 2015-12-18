@@ -180,19 +180,19 @@ process will be collected and freed. Collection starts by scanning the stack and
 that are ambiguously referenced from them into the Grey set. The collector gains access to the stack and registers by pushing all registers into the stack and then calling the allocator with the stack pointer as a parameter. The Garbage Collector must be initialised at the beginning of the program by giving it the top stack pointer. This defines the portion of the stack that must be scanned. After the stack and registers are scanned, Grey pages are scanned for pointer references to other heap objects. When one such pointer is found, if it references a White page, then the object is copied into a Grey page to avoid it getting destroyed, otherwise the reference is already in a Grey page and nothing needs to be done. After a full page is scanned, it is promoted to a Black (stable) page, representing that it contains live objects with no pointers to a White page. When the Grey Set is empty, all objects that are still ``alive'' or are referenced by ``alive'' objects are in Black pages. We thus free all remaining White pages and proceed with normal allocation. 
 
 
-If we had more time we would have liked to upgrade the GC into an Incremental Collector, since the STW pause is quite noticeable when the memory demands are very large, such as in the TicTacToe WACC program. None the less, the total time to run TicTacToe is still less with Garbage Collection than without it, although the memory usage is much higher.
+If we had more time we would have liked to upgrade the GC into an Incremental Collector, since the STW pause is quite noticeable when the memory demands are very large, such as in the TicTacToe WACC program. Nonetheless, the real time to run TicTacToe is 7 seconds faster using Garbage Collection than not using it, although the memory usage is much higher. 
 
-\begin{figure}    
-  \textbf{Gargage Collected}
-  \begin{minipage}{.49\textwidth}
-     \includegraphics[width=\linewidth]{TicTacToeGC.png}
-  \end{minipage}
+% \begin{figure}    
+%   \textbf{Gargage Collected}
+%   \begin{minipage}{.49\textwidth}
+%      \includegraphics[width=\linewidth]{TicTacToeGC.png}
+%   \end{minipage}
 
-  \textbf{Non-Gargage Collected}
-  \begin{minipage}{.49\textwidth}
-      \includegraphics[width=\linewidth]{TicTacToeNoGC.png}
-  \end{minipage}
-\end{figure}
+%   \textbf{Non-Gargage Collected}
+%   \begin{minipage}{.49\textwidth}
+%       \includegraphics[width=\linewidth]{TicTacToeNoGC.png}
+%   \end{minipage}
+% \end{figure}
 
 
 \subsection{Improving If Statements}
