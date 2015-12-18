@@ -100,10 +100,9 @@ isSubtypeOf (TyArray t1) (TyArray TyAny)
   = return True
 isSubtypeOf (TyArray t1) (TyArray t2)
   = isSubtypeOf t1 t2
-
+isSubtypeOf (TyChan _) (TyChan TyAny) = return True
 isSubtypeOf (TyChan t1) (TyChan t2)
   = isSubtypeOf t1 t2
-
 isSubtypeOf (TyTuple _) TyNull = not <$> lift (lift (lift (getArgument noNullPair)))
 
 isSubtypeOf (TyTuple [_,_]) (TyTuple [TyAny, TyAny]) = return True
